@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as React from "react";
+import { getAuth, signOut } from "firebase/auth";
 import {
   SidebarProvider,
   Sidebar,
@@ -12,12 +14,21 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { UserRoleSwitcher } from "@/components/user-role-switcher";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Icons } from "@/components/icons";
 import type { UserRole } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Bell, Settings } from "lucide-react";
+import { Bell, LogOut, Settings } from "lucide-react";
+import { app } from "@/lib/firebase";
 
 export default function DashboardLayout({
   children,
@@ -25,9 +36,22 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [role, setRole] = React.useState<UserRole>("PLAYER");
+  const router = useRouter();
+  const auth = getAuth(app);
+
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/login");
+    } catch (error) {
+      console.error("Error signing out: ", error);
+      // Optionally, show a toast message to the user
+    }
   };
   
   // Pass role to children that are React components
@@ -54,17 +78,34 @@ export default function DashboardLayout({
           <SidebarContent>
             <DashboardNav role={role} />
           </SidebarContent>
-          <SidebarFooter className="items-center gap-4 group-data-[collapsible=icon]:flex-col">
-            <div className="flex items-center gap-3 group-data-[collapsible=icon]:flex-col">
-              <Avatar className="size-10">
-                <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" data-ai-hint="male profile"/>
-                <AvatarFallback>FP</AvatarFallback>
-              </Avatar>
-              <div className="group-data-[collapsible=icon]:hidden">
-                <p className="font-semibold font-headline">First Player</p>
-                <p className="text-sm text-muted-foreground">{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</p>
-              </div>
-            </div>
+          <SidebarFooter>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
+                   <Avatar className="size-10">
+                    <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" data-ai-hint="male profile"/>
+                    <AvatarFallback>FP</AvatarFallback>
+                  </Avatar>
+                  <div className="group-data-[collapsible=icon]:hidden">
+                    <p className="font-semibold font-headline">First Player</p>
+                    <p className="text-sm text-muted-foreground">{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</p>
+                  </div>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 mb-2 ml-2" side="right" align="end">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-500 focus:text-red-500 focus:bg-red-50">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
 
