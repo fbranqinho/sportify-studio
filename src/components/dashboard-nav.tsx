@@ -22,6 +22,7 @@ import {
   Contact,
   CalendarCheck,
   Gamepad2,
+  Settings,
 } from "lucide-react";
 
 const navItems: NavItem[] = [
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "My Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
+  { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
   // Owner specific ordered items
   { title: "My Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
@@ -53,6 +55,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
     navItems.find(item => item.href === "/dashboard/fields")!,
     navItems.find(item => item.href === "/dashboard/payments")!,
     navItems.find(item => item.href === "/dashboard/promos")!,
+    navItems.find(item => item.href === "/dashboard/settings")!,
   ]
 
   let filteredNavItems: NavItem[];
