@@ -24,7 +24,7 @@ export default function SchedulePage() {
 
   // Effect to get Owner Profile ID if user is an OWNER
   React.useEffect(() => {
-    if (user?.role === 'OWNER') {
+    if (user?.role === 'OWNER' && user.id) {
       const profilesQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
       getDocs(profilesQuery).then(profileSnapshot => {
         if (!profileSnapshot.empty) {
@@ -37,7 +37,8 @@ export default function SchedulePage() {
           console.error("Error fetching owner profile: ", error);
           setLoading(false);
       });
-    } else {
+    } else if (user) { // For other roles, no need to fetch owner profile
+        setOwnerProfileId(null); // Explicitly set to null if not an owner
         setLoading(false);
     }
   }, [user]);
@@ -46,17 +47,14 @@ export default function SchedulePage() {
   React.useEffect(() => {
     if (!user) return;
     
-    // For non-owners, we can start loading immediately.
-    // For owners, we wait until we have the ownerProfileId.
-    if (user.role !== 'OWNER') {
-        setLoading(true);
-    }
+    // For non-owners, loading starts immediately if user is present.
+    // For owners, loading depends on ownerProfileId being fetched.
+    setLoading(true);
 
     let unsubscribe = () => {};
 
     if (user.role === 'OWNER') {
       if (ownerProfileId) {
-        setLoading(true);
         const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
         unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
           const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
@@ -67,6 +65,10 @@ export default function SchedulePage() {
           toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
           setLoading(false);
         });
+      } else {
+        // If ownerProfileId is null for an owner, it means it's still loading or not found.
+        // We set loading to false only if we are sure there's no profile.
+        if (ownerProfileId === null) setLoading(false);
       }
     } else { // For PLAYER, MANAGER, etc.
       const roleField = `${user.role.toLowerCase()}Ref`;
@@ -101,11 +103,10 @@ export default function SchedulePage() {
           status: "Scheduled",
           teamARef: reservation.teamRef || null, // The team that made the reservation
           teamBRef: null, // Opponent to be defined later
-          scoreA: 0,
-          scoreB: 0,
-          playersStats: [],
           teamAPlayers: [],
           teamBPlayers: [],
+          scoreA: 0,
+          scoreB: 0,
           refereeId: null,
           attendance: 0,
         });
@@ -191,10 +192,17 @@ export default function SchedulePage() {
   )
 
   const LoadingSkeleton = () => (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-          <Skeleton className="h-52" />
-          <Skeleton className="h-52" />
-          <Skeleton className="h-52" />
+      <div className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+        </div>
+         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+            <Skeleton className="h-52" />
+        </div>
       </div>
   )
 

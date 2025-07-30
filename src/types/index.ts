@@ -246,7 +246,6 @@ export interface Match {
     pitchRef: string;
     status: MatchStatus;
     attendance?: number;
-    playersStats: MatchPlayerStat[];
     refereeId: string | null;
 }
 
