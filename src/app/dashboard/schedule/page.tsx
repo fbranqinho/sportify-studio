@@ -3,9 +3,9 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation } from "@/types";
+import type { Reservation, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,13 +87,13 @@ export default function SchedulePage() {
     try {
       await updateDoc(reservationRef, { status });
 
-      // If confirmed, create a new match
-      if (status === "Confirmed") {
-        await addDoc(collection(db, "matches"), {
+      // If confirmed, create a new match and invitations
+      if (status === "Confirmed" && reservation.teamRef) {
+        const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
           status: "Scheduled",
-          teamARef: reservation.teamRef || null,
+          teamARef: reservation.teamRef,
           teamBRef: null,
           teamAPlayers: [],
           teamBPlayers: [],
@@ -103,10 +103,31 @@ export default function SchedulePage() {
           attendance: 0,
           managerRef: reservation.managerRef || null,
         });
+
+        // Get players from the team to create invitations
+        const teamDocRef = doc(db, "teams", reservation.teamRef);
+        const teamDoc = await getDoc(teamDocRef);
+        if (teamDoc.exists()) {
+            const teamData = teamDoc.data() as Team;
+            const playerIds = teamData.playerIds || [];
+
+            for (const playerId of playerIds) {
+                await addDoc(collection(db, "matchInvitations"), {
+                    matchId: matchDoc.id,
+                    teamId: reservation.teamRef,
+                    playerId: playerId,
+                    managerId: reservation.managerRef,
+                    status: "pending",
+                    invitedAt: serverTimestamp(),
+                });
+            }
+        }
+        
         toast({
           title: "Reservation Confirmed!",
-          description: `The reservation has been confirmed and a match has been scheduled.`,
+          description: `A match has been scheduled and invitations sent.`,
         });
+
       } else {
          toast({
           title: "Reservation Canceled",

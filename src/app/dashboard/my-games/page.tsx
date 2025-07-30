@@ -3,15 +3,15 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team } from "@/types";
+import type { Match, Team, MatchInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, History, Gamepad2, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
+import { Calendar, Users, Shield, MapPin, History, Gamepad2, AlertCircle, Check, X, Mail } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
 
@@ -20,6 +20,7 @@ export default function MyGamesPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const [matches, setMatches] = React.useState<Match[]>([]);
+  const [invitations, setInvitations] = React.useState<MatchInvitation[]>([]);
   const [teams, setTeams] = React.useState<Map<string, Team>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
@@ -38,10 +39,22 @@ export default function MyGamesPage() {
         });
         return teamsMap;
     }
+    
+    // Listener for Match Invitations (for players)
+    let unsubscribeInvitations = () => {};
+    if (user.role === 'PLAYER') {
+        const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
+        unsubscribeInvitations = onSnapshot(invQuery, (snapshot) => {
+            const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
+            setInvitations(invs);
+        });
+    }
 
     const setupListeners = async () => {
         let matchesQuery;
         let matchesQueryB; // For teamBRef
+        
+        let allTeamIds: string[] = [];
 
         if (user.role === 'MANAGER') {
             matchesQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
@@ -49,6 +62,7 @@ export default function MyGamesPage() {
             const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
             const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
             const playerTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
+            allTeamIds = playerTeamIds;
             
             if (playerTeamIds.length === 0) {
                 setMatches([]);
@@ -73,7 +87,7 @@ export default function MyGamesPage() {
                 combinedMatches.set(match.id, match);
             });
             
-            const teamIds = new Set<string>();
+            const teamIds = new Set<string>(allTeamIds);
             combinedMatches.forEach((match: Match) => {
                 if (match.teamARef) teamIds.add(match.teamARef);
                 if (match.teamBRef) teamIds.add(match.teamBRef);
@@ -102,6 +116,7 @@ export default function MyGamesPage() {
         return () => {
           unsubscribeA();
           unsubscribeB();
+          unsubscribeInvitations();
         };
     }
 
@@ -112,6 +127,11 @@ export default function MyGamesPage() {
     };
 
   }, [user, toast]);
+
+  const handleInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
+     // TODO: Implement logic to accept/decline match invitation
+     toast({ title: "Response Recorded", description: "This feature is coming soon." });
+  }
 
 
   const now = new Date();
@@ -156,6 +176,29 @@ export default function MyGamesPage() {
         </Card>
     )
   }
+
+  const InvitationCard = ({ invitation, teamName }: { invitation: MatchInvitation, teamName: string }) => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-headline">Game Invitation: {teamName}</CardTitle>
+        <CardDescription>
+          Invited {invitation.invitedAt ? formatDistanceToNow(new Date(invitation.invitedAt.seconds * 1000), { addSuffix: true }) : 'recently'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm">You have been invited to play in an upcoming game.</p>
+      </CardContent>
+       <CardFooter className="gap-2">
+          <Button size="sm" onClick={() => handleInvitationResponse(invitation, true)}>
+             <Check className="mr-2 h-4 w-4" /> Accept
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => handleInvitationResponse(invitation, false)}>
+             <X className="mr-2 h-4 w-4" /> Decline
+          </Button>
+        </CardFooter>
+    </Card>
+  )
+
 
   const MatchList = ({ matches }: { matches: Match[] }) => (
      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
@@ -203,10 +246,28 @@ export default function MyGamesPage() {
           View your upcoming and past games.
         </p>
       </div>
+      
+       {/* Invitations Section (for players) */}
+       {user?.role === 'PLAYER' && (
+        <div className="space-y-4">
+            <h2 className="text-2xl font-bold font-headline text-primary">Game Invitations ({invitations.length})</h2>
+             {invitations.length > 0 ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {invitations.map(inv => {
+                        const team = teams.get(inv.teamId);
+                        return <InvitationCard key={inv.id} invitation={inv} teamName={team?.name || 'a team'} />
+                    })}
+                </div>
+            ) : (
+                <EmptyState icon={Mail} title="No Game Invitations" description="You don't have any new invitations to play." />
+            )}
+        </div>
+       )}
+
 
       {/* Upcoming Games Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold font-headline text-primary">Upcoming Games ({upcomingMatches.length})</h2>
+      <div className="border-t pt-8 space-y-4">
+        <h2 className="text-2xl font-bold font-headline">Upcoming Games ({upcomingMatches.length})</h2>
         {upcomingMatches.length > 0 ? (
             <MatchList matches={upcomingMatches} />
         ) : (

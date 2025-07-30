@@ -2,7 +2,8 @@
 "use client";
 
 // This page is no longer in use and can be deleted.
-// The logic has been moved to /dashboard/teams/page.tsx for players.
+// Team invitations are handled in /dashboard/teams
+// Match invitations are handled in /dashboard/my-games
 
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -12,7 +13,7 @@ export default function DeprecatedInvitationsPage() {
       <CardHeader>
         <CardTitle>This page is no longer in use.</CardTitle>
         <CardDescription>
-            Team invitations are now handled directly within the &quot;My Teams&quot; section.
+            Please check &quot;My Teams&quot; for team invitations or &quot;My Games&quot; for match invitations.
         </CardDescription>
       </CardHeader>
     </Card>
