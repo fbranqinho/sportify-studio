@@ -1,7 +1,7 @@
 
 
 import type { LucideIcon } from "lucide-react";
-import type { FieldValue } from "firebase/firestore";
+import type { FieldValue, Timestamp } from "firebase/firestore";
 
 export type UserRole = "PLAYER" | "MANAGER" | "OWNER" | "PROMOTER" | "REFEREE" | "ADMIN";
 
@@ -279,6 +279,16 @@ export interface Promo {
     validFrom: string; // ISO 8601 string
     validTo: string; // ISO 8601 string
     validHours: number[]; // e.g., [8, 9, 10] for 8h-10h
+}
+
+
+export interface Notification {
+    id: string;
+    userId: string;
+    message: string;
+    link: string;
+    read: boolean;
+    createdAt: Timestamp;
 }
 
 // For UI components
