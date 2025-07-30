@@ -91,7 +91,7 @@ export function PitchesMap({
             position={pitch.coords}
             title={pitch.name}
             onClick={() => setSelectedPitch(pitch)}
-            animation={isHovered ? window.google.maps.Animation.BOUNCE : undefined}
+            animation={isHovered ? (window.google.maps.Animation.BOUNCE) : undefined}
             icon={isNearest ? {
                 url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
             } : undefined}

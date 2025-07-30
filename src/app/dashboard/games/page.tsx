@@ -14,7 +14,7 @@ import { PitchesMap } from "@/components/pitches-map";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { haversineDistance } from "@/lib/utils";
 
-const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export default function GamesPage() {
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
@@ -93,11 +93,11 @@ export default function GamesPage() {
             <CardHeader>
                 <CardTitle className="text-destructive">Configuration Error</CardTitle>
                 <CardDescription>
-                    The Google Maps API key is missing. Please add it to your environment variables.
+                    The Google Maps API key is missing. Please add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to your environment variables.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <p>Follow the instructions in the documentation to get and set up your API key.</p>
+                <p>If you have already added the key, please restart the development server for the changes to take effect.</p>
             </CardContent>
         </Card>
     )
