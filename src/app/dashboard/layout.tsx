@@ -47,9 +47,12 @@ export default function DashboardLayout({
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-          setUser({ id: userDoc.id, ...userDoc.data() } as User);
+          const userData = { id: userDoc.id, ...userDoc.data() } as User;
+          setUser(userData);
+          if (!userData.profileCompleted) {
+            router.push("/complete-profile");
+          }
         } else {
-          // Handle case where user exists in Auth but not in Firestore
           console.error("No user document found in Firestore, logging out.");
           await signOut(auth);
           router.push("/login");
@@ -65,12 +68,8 @@ export default function DashboardLayout({
 
 
   const handleRoleChange = (newRole: UserRole) => {
-    // In a real app, you might have logic here to switch roles if a user
-    // has multiple profiles. For now, we'll just update the state.
     if (user) {
       setUser({ ...user, role: newRole });
-      // Potentially force a reload or navigate to ensure data is fresh
-      // window.location.reload();
     }
   };
 
@@ -90,19 +89,13 @@ export default function DashboardLayout({
     return child;
   });
 
-  if (loading) {
+  if (loading || !user || (user && !user.profileCompleted)) {
       return (
           <div className="flex items-center justify-center min-h-screen">
               <p>Loading...</p>
           </div>
       )
   }
-
-  if (!user) {
-    // This case should be handled by the redirect in useEffect, but as a fallback
-    return null;
-  }
-
 
   return (
     <SidebarProvider>
