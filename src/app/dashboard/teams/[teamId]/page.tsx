@@ -14,11 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, Trash2, UserPlus, Users, Search, X, ShieldCheck, Goal, Square, MapPin } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 
 interface EnrichedTeamPlayer extends TeamPlayer {
   profile?: PlayerProfile;
+  user?: User;
 }
 
 // --- Shared Components ---
@@ -105,7 +107,7 @@ function PlayerTeamView({ team, players }: { team: Team, players: EnrichedTeamPl
                 <TableBody>
                    {players.map(({ playerId, number, profile }) => (
                       <TableRow key={playerId}>
-                         <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : "Unknown"}</TableCell>
+                         <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (user?.name || "Unknown")}</TableCell>
                          <TableCell className="text-center font-mono">{number ?? "-"}</TableCell>
                          <TableCell className="text-right">{profile?.position ?? "N/A"}</TableCell>
                       </TableRow>
@@ -132,6 +134,16 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
   const [isSearching, setIsSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<EnrichedPlayerSearchResult[]>([]);
   const { toast } = useToast();
+
+  const assignedNumbers = React.useMemo(() => 
+    players.map(p => p.number).filter((n): n is number => n !== null),
+  [players]);
+
+  const getAvailableNumbers = (currentNumber: number | null) => {
+    const available = Array.from({ length: 99 }, (_, i) => i + 1);
+    const otherAssignedNumbers = assignedNumbers.filter(n => n !== currentNumber);
+    return available.filter(n => !otherAssignedNumbers.includes(n));
+  };
   
   const handleSearchPlayers = async (queryText: string) => {
     setSearchQuery(queryText);
@@ -214,16 +226,24 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {players.length > 0 ? players.map(({ playerId, number, profile }) => (
+                        {players.length > 0 ? players.map(({ playerId, number, profile, user }) => (
                             <TableRow key={playerId}>
-                                <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : "Unknown Player"}</TableCell>
+                                <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (user?.name || "Unknown Player")}</TableCell>
                                 <TableCell>
-                                    <Input 
-                                        type="number" 
-                                        defaultValue={number ?? ""}
-                                        onBlur={(e) => onNumberUpdated(playerId, e.target.value ? parseInt(e.target.value) : null)}
-                                        className="h-8"
-                                    />
+                                    <Select
+                                        value={number?.toString() ?? ""}
+                                        onValueChange={(value) => onNumberUpdated(playerId, value ? parseInt(value) : null)}
+                                    >
+                                        <SelectTrigger className="h-8">
+                                            <SelectValue placeholder="-" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">-</SelectItem>
+                                            {getAvailableNumbers(number).map(n => (
+                                                <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </TableCell>
                                 <TableCell>
                                     <Badge variant="outline">Up to date</Badge>
@@ -333,21 +353,34 @@ export default function TeamDetailsPage() {
       // Robust player fetching logic
       if (teamData.playerIds && teamData.playerIds.length > 0) {
           const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", teamData.playerIds));
-          const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
+          const usersQuery = query(collection(db, "users"), where(documentId(), "in", teamData.playerIds));
+
+          const [playerProfilesSnapshot, usersSnapshot] = await Promise.all([
+            getDocs(playerProfilesQuery),
+            getDocs(usersQuery)
+          ]);
+          
           const playerProfilesMap = new Map<string, PlayerProfile>();
           playerProfilesSnapshot.forEach(doc => {
               const profile = {id: doc.id, ...doc.data()} as PlayerProfile;
               playerProfilesMap.set(profile.userRef, profile);
           });
+
+          const usersMap = new Map<string, User>();
+          usersSnapshot.forEach(doc => {
+            usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+          });
           
           // Use playerIds as the source of truth for the roster
           const enrichedPlayers = teamData.playerIds.map(userId => {
               const profile = playerProfilesMap.get(userId);
+              const userInfo = usersMap.get(userId);
               const teamPlayerInfo = teamData.players.find(p => p.playerId === userId);
               return {
                   playerId: userId,
                   number: teamPlayerInfo?.number ?? null,
-                  profile: profile
+                  profile: profile,
+                  user: userInfo,
               };
           }).sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
           
@@ -373,15 +406,29 @@ export default function TeamDetailsPage() {
     const updatedPlayers = team.players.map(p => 
       p.playerId === playerId ? { ...p, number: newNumber } : p
     );
+
+    // If player wasn't in the array, add them
+    if (!updatedPlayers.some(p => p.playerId === playerId)) {
+        updatedPlayers.push({ playerId, number: newNumber });
+    }
+
     try {
       const teamDocRef = doc(db, "teams", teamId);
       await updateDoc(teamDocRef, { players: updatedPlayers });
-      setPlayers(current => current.map(p => p.playerId === playerId ? { ...p, number: newNumber } : p).sort((a,b) => (a.number ?? 999) - (b.number ?? 999)));
+      
+      // Update local state to re-render immediately
+      setPlayers(current => {
+          const newPlayers = current.map(p => p.playerId === playerId ? { ...p, number: newNumber } : p);
+          return newPlayers.sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
+      });
       setTeam(prev => prev ? { ...prev, players: updatedPlayers } : null);
+
       toast({ title: "Success", description: "Player number updated." });
     } catch (error) {
       console.error("Error updating player number:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to update player number." });
+      // Re-fetch data to revert optimistic update on failure
+      fetchTeamData();
     }
   };
 
