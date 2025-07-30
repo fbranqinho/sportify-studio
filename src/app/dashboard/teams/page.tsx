@@ -5,8 +5,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, arrayUnion, getDocs, arrayRemove } from "firebase/firestore";
-import type { Team, TeamInvitation, ManagerProfile, User } from "@/types";
+import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp } from "firebase/firestore";
+import type { Team, TeamInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, MapPin, ChevronRight, Check, X, Mail } from "lucide-react";
@@ -79,7 +79,7 @@ function ManagerTeamsView() {
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" />
                   <span>
-                    <span className="font-semibold">{team.playerIds.length}</span> players
+                    <span className="font-semibold">{team.playerIds?.length || 0}</span> players
                   </span>
                 </div>
                  <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
@@ -122,57 +122,71 @@ function PlayerTeamsView() {
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  // Fetch Invitations
   React.useEffect(() => {
     if (!user) return;
-    const q = query(
+    
+    setLoading(true);
+    let activeSubscriptions = 2; // We have two listeners
+
+    const onDataLoaded = () => {
+        activeSubscriptions -= 1;
+        if (activeSubscriptions === 0) {
+            setLoading(false);
+        }
+    };
+
+    // Fetch Invitations
+    const invitationsQuery = query(
       collection(db, "teamInvitations"),
       where("playerId", "==", user.id),
       where("status", "==", "pending")
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeInvitations = onSnapshot(invitationsQuery, (snapshot) => {
       setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamInvitation)));
-    });
-    return unsubscribe;
-  }, [user]);
+      onDataLoaded();
+    }, () => { onDataLoaded(); });
 
-  // Fetch Teams
-  React.useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    const q2 = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
-
-    const unsubscribe = onSnapshot(q2, (snapshot) => {
+    // Fetch Teams
+    const teamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
+    const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return unsubscribe;
+      onDataLoaded();
+    }, () => { onDataLoaded(); });
+    
+    return () => {
+        unsubscribeInvitations();
+        unsubscribeTeams();
+    };
   }, [user]);
 
 
   const handleInvitationResponse = async (invitation: TeamInvitation, accepted: boolean) => {
     if (!user) return;
-    const { id: invitationId, teamId } = invitation;
+    const { id: invitationId, teamId, teamName } = invitation;
+    
+    const batch = writeBatch(db);
+    
+    // Update invitation status
     const invitationRef = doc(db, "teamInvitations", invitationId);
-    const teamRef = doc(db, "teams", teamId);
+    batch.update(invitationRef, { status: accepted ? "accepted" : "declined", respondedAt: serverTimestamp() });
+    
+    // If accepted, add player to team
+    if (accepted) {
+      const teamRef = doc(db, "teams", teamId);
+      batch.update(teamRef, {
+        playerIds: arrayUnion(user.id),
+        players: arrayUnion({ playerId: user.id, number: null })
+      });
+    }
     
     try {
-      const batch = writeBatch(db);
-      
-      batch.update(invitationRef, { status: accepted ? "accepted" : "declined", respondedAt: new Date() });
-
-      if (accepted) {
-        batch.update(teamRef, {
-          playerIds: arrayUnion(user.id),
-          players: arrayUnion({playerId: user.id, number: null})
-        });
-        toast({ title: "Invitation Accepted!", description: `You have joined ${invitation.teamName}.` });
-      } else {
-        toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${invitation.teamName}.` });
-      }
-      
       await batch.commit();
-
+      if (accepted) {
+        toast({ title: "Invitation Accepted!", description: `You have joined ${teamName}.` });
+        // The onSnapshot listener will automatically update the UI with the new team.
+      } else {
+        toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${teamName}.` });
+      }
     } catch (error) {
       console.error("Error responding to invitation:", error);
       toast({ variant: "destructive", title: "Error", description: "There was a problem responding." });
@@ -249,7 +263,7 @@ function PlayerTeamsView() {
                                 <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-primary" />
                                 <span>
-                                    <span className="font-semibold">{team.playerIds.length}</span> players
+                                    <span className="font-semibold">{team.playerIds?.length || 0}</span> players
                                 </span>
                                 </div>
                                 <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
