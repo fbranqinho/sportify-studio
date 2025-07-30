@@ -269,7 +269,9 @@ function PlayerTeamsView() {
                                 <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
                             </CardContent>
                             <CardFooter>
-                                 <Button variant="outline" className="w-full">View Team</Button>
+                                 <Button asChild variant="outline" className="w-full">
+                                    <Link href={`/dashboard/teams/${team.id}`}>View Team</Link>
+                                 </Button>
                             </CardFooter>
                          </Card>
                     ))}
