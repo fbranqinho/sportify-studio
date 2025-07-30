@@ -129,17 +129,18 @@ export default function SchedulePage() {
           managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
-        // Step 3: Use a batch to update the reservation and create all invitations atomically.
+        // Step 3: Use a batch to update the reservation and create all invitations and notifications atomically.
         const batch = writeBatch(db);
 
         // Operation 1: Update the reservation status.
         batch.update(reservationRef, { status: "Confirmed" });
 
-        // Operation 2: Create invitations for all players in the team.
+        // Operation 2: Create invitations and notifications for all players in the team.
         const invitationsCollection = collection(db, "matchInvitations");
         const notificationsCollection = collection(db, 'notifications');
 
         for (const playerId of playerIds) {
+            // Create the invitation
             const newInvitationRef = doc(invitationsCollection);
             batch.set(newInvitationRef, {
                 matchId: matchDoc.id,
@@ -150,14 +151,14 @@ export default function SchedulePage() {
                 invitedAt: serverTimestamp(),
             });
             
-            // Also create a notification for the player
+            // Create the notification for the player
             const newNotificationRef = doc(notificationsCollection);
             const notification: Omit<Notification, 'id'> = {
                  userId: playerId,
-                 message: `You have been invited to a game with ${teamData.name}!`,
+                 message: `You've been called up for a game with ${teamData.name}!`,
                  link: '/dashboard/my-games',
                  read: false,
-                 createdAt: serverTimestamp() as any, // Let server set the timestamp
+                 createdAt: serverTimestamp() as any,
             };
             batch.set(newNotificationRef, notification);
         }
@@ -167,7 +168,7 @@ export default function SchedulePage() {
         
         toast({
           title: "Reservation Confirmed!",
-          description: `A match has been scheduled and invitations sent to ${playerIds.length} players.`,
+          description: `A match has been scheduled and invitations and notifications sent to ${playerIds.length} players.`,
         });
 
       } catch (error) {
@@ -331,5 +332,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    

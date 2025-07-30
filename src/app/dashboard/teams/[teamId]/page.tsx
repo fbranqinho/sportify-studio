@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult } from "@/types";
+import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult, Notification } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -415,6 +415,8 @@ export default function TeamDetailsPage() {
             toast({ variant: "destructive", title: "Invitation Exists", description: `An invitation has already been sent to ${playerToInvite.user.name}.` });
             return;
         }
+
+        // Create Invitation
         await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
@@ -424,6 +426,17 @@ export default function TeamDetailsPage() {
             status: "pending",
             invitedAt: serverTimestamp(),
         });
+
+        // Create Notification
+        const notification: Omit<Notification, 'id'> = {
+            userId: invitedUserId,
+            message: `You've been invited to join the team: ${team.name}.`,
+            link: '/dashboard/teams',
+            read: false,
+            createdAt: serverTimestamp() as any,
+        };
+        await addDoc(collection(db, "notifications"), notification);
+        
         toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${playerToInvite.user.name}.` });
     } catch (error) {
          console.error("Error inviting player:", error);
@@ -481,5 +494,3 @@ export default function TeamDetailsPage() {
     </div>
   );
 }
-
-    
