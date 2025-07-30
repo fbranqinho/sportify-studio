@@ -28,12 +28,15 @@ export default function SeedPage() {
         ownerProfiles: mockData.ownerProfiles,
         promoterProfiles: mockData.promoterProfiles,
         refereeProfiles: mockData.refereeProfiles,
-        adminProfiles: mockData.adminProfiles,
+        adminProfiles: mock.adminProfiles,
         teams: mockData.teams,
         pitches: mockData.pitches,
         competitions: mockData.competitions,
         matches: mockData.matches,
         payments: mockData.payments,
+        reservations: mockData.reservations,
+        teamInvitations: mockData.teamInvitations,
+        promos: mockData.promos,
       };
 
       // Firestore allows a maximum of 500 operations in a single batch.
@@ -41,6 +44,10 @@ export default function SeedPage() {
       const batchPromises = [];
       
       for (const [collectionName, data] of Object.entries(collections)) {
+        if (!Array.isArray(data)) {
+          console.warn(`Skipping non-array data for collection: ${collectionName}`);
+          continue;
+        }
         let batch = writeBatch(db);
         let operationCount = 0;
         console.log(`Preparing collection: ${collectionName}...`);

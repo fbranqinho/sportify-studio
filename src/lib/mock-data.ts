@@ -13,6 +13,9 @@ import type {
   Competition,
   Match,
   Payment,
+  Reservation,
+  TeamInvitation,
+  Promo,
   UserRole,
 } from "@/types";
 
@@ -105,6 +108,18 @@ const payments: Payment[] = [
   { id: "payment-1", playerRef: "pp-1", teamRef: "team-1", type: "fine", amount: 15, date: "2024-05-01", expirationDate: "2024-05-31", status: "Overdue", reminder: true },
 ];
 
+const reservations: Reservation[] = [
+    { id: "res-1", date: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString(), status: "Confirmed", pitchRef: "pitch-2", ownerRef: "op-1", managerRef: "mp-1", paymentRefs: [], totalAmount: 75 },
+];
+
+const teamInvitations: TeamInvitation[] = [
+    { id: "inv-1", teamId: "team-1", playerId: "user-player-1-placeholder", managerId: "mp-1", status: "pending", invitedAt: new Date().toISOString() },
+];
+
+const promos: Promo[] = [
+    { id: "promo-1", name: "Early Bird Discount", discountPercent: 20, validFrom: "2024-01-01T00:00:00Z", validTo: "2024-12-31T23:59:59Z", validHours: [8, 9, 10] },
+];
+
 
 export const mockData = {
     users,
@@ -119,4 +134,7 @@ export const mockData = {
     competitions,
     matches,
     payments,
+    reservations,
+    teamInvitations,
+    promos,
 };
