@@ -9,7 +9,7 @@ import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface DashboardPageProps {
-  role: UserRole;
+  role?: UserRole;
 }
 
 const WelcomeHeader = ({ role, name }: { role: UserRole, name: string }) => (

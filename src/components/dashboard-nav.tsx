@@ -10,24 +10,20 @@ import {
 import { cn } from "@/lib/utils";
 import type { NavItem, UserRole } from "@/types";
 import {
+  LayoutDashboard,
   BarChart3,
   Users,
-  Swords,
   Landmark,
   Ticket,
-  Map,
   Shield,
-  Star,
   Sparkles,
   Award,
   Calendar,
   Contact,
-  ShieldCheck,
-  Trophy,
 } from "lucide-react";
 
 const navItems: NavItem[] = [
-  { title: "Find a Game", href: "/dashboard", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE"] },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
   { title: "AI Recommendations", href: "/dashboard/recommendations", icon: Sparkles, roles: ["PLAYER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
