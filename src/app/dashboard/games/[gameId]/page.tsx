@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2 } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -259,6 +259,8 @@ export default function GameDetailsPage() {
     const [match, setMatch] = React.useState<Match | null>(null);
     const [teamA, setTeamA] = React.useState<Team | null>(null);
     const [teamB, setTeamB] = React.useState<Team | null>(null);
+    const [pitch, setPitch] = React.useState<Pitch | null>(null);
+    const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
 
@@ -277,17 +279,41 @@ export default function GameDetailsPage() {
             const matchData = { id: matchSnap.id, ...matchSnap.data() } as Match;
             setMatch(matchData);
 
+            // Fetch related data in parallel
+            const promises = [];
+
+            // Team A
             if (matchData.teamARef) {
-                const teamADoc = await getDoc(doc(db, "teams", matchData.teamARef));
-                if (teamADoc.exists()) setTeamA({ id: teamADoc.id, ...teamADoc.data() } as Team);
+                promises.push(getDoc(doc(db, "teams", matchData.teamARef)).then(d => d.exists() ? setTeamA({id: d.id, ...d.data()} as Team) : null));
             }
-            if (matchData.teamBRef) {
-                const teamBDoc = await getDoc(doc(db, "teams", matchData.teamBRef));
-                if (teamBDoc.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
-            } else if (matchData.invitedTeamId) {
-                 const teamBDoc = await getDoc(doc(db, "teams", matchData.invitedTeamId));
-                if (teamBDoc.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
+
+            // Team B (or Invited Team)
+            const teamBId = matchData.teamBRef || matchData.invitedTeamId;
+            if (teamBId) {
+                promises.push(getDoc(doc(db, "teams", teamBId)).then(d => d.exists() ? setTeamB({id: d.id, ...d.data()} as Team) : null));
             }
+            
+            // Pitch and Owner
+            if (matchData.pitchRef) {
+                const pitchRef = doc(db, "pitches", matchData.pitchRef);
+                const pitchPromise = getDoc(pitchRef).then(async (pitchDoc) => {
+                    if (pitchDoc.exists()) {
+                        const pitchData = { id: pitchDoc.id, ...pitchDoc.data() } as Pitch;
+                        setPitch(pitchData);
+                        if (pitchData.ownerRef) {
+                            const ownerRef = doc(db, "ownerProfiles", pitchData.ownerRef);
+                            const ownerDoc = await getDoc(ownerRef);
+                            if (ownerDoc.exists()) {
+                                setOwner({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
+                            }
+                        }
+                    }
+                });
+                promises.push(pitchPromise);
+            }
+
+            await Promise.all(promises);
+
         } catch (error) {
             console.error("Error fetching game details: ", error);
             toast({ variant: "destructive", title: "Error", description: "Failed to load game details." });
@@ -319,7 +345,7 @@ export default function GameDetailsPage() {
     }
 
     const getMatchTitle = () => {
-        if (teamA && !teamB) return `${teamA.name} (treino)`;
+        if (teamA && !teamB && match.status !== 'PendingOpponent') return `${teamA.name} (treino)`;
         if (teamA && teamB && match.status === 'PendingOpponent') return `${teamA.name} vs ${teamB.name} (Pending)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
@@ -340,16 +366,37 @@ export default function GameDetailsPage() {
                 </Button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Match Details</CardTitle>
-                    <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <p>Status: {match.status}</p>
-                    <p>Pitch: Placeholder Pitch Name</p>
-                </CardContent>
-            </Card>
+            <div className="grid md:grid-cols-3 gap-6">
+                <Card className="md:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Match Details</CardTitle>
+                        <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p>Status: {match.status}</p>
+                        {pitch && <p>Pitch: {pitch.name}</p>}
+                    </CardContent>
+                </Card>
+
+                {owner && pitch && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base font-semibold">Pitch Information</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-sm space-y-2">
+                             <div className="flex items-center gap-2">
+                                <Building className="h-4 w-4 text-muted-foreground"/>
+                                <span>{owner.companyName}</span>
+                            </div>
+                             <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4 text-muted-foreground"/>
+                                <span>{pitch.address}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+            
 
             {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
 
@@ -360,5 +407,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    
