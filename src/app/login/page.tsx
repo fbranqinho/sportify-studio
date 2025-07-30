@@ -62,9 +62,10 @@ export default function LoginPage() {
           description: "Redirecting you to the dashboard.",
         });
         
-        // Store mock user role to simulate session
+        // Store mock user data to simulate session
         const user = mockData.users.find(u => u.email === values.email);
         if (user) {
+            localStorage.setItem('mockUserId', user.id);
             localStorage.setItem('mockUserRole', user.role);
             localStorage.setItem('mockUserName', user.name);
         }
@@ -76,6 +77,7 @@ export default function LoginPage() {
          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
             const user = mockData.users.find(u => u.email === values.email);
             if (user) {
+              localStorage.setItem('mockUserId', user.id);
               localStorage.setItem('mockUserRole', user.role);
               localStorage.setItem('mockUserName', user.name);
               toast({
@@ -96,6 +98,7 @@ export default function LoginPage() {
         // For real users, use Firebase Auth
         try {
             await signInWithEmailAndPassword(auth, values.email, values.password);
+            localStorage.removeItem('mockUserId');
             localStorage.removeItem('mockUserRole');
             localStorage.removeItem('mockUserName');
             toast({

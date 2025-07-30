@@ -71,11 +71,23 @@ export default function DashboardLayout({
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
     localStorage.setItem('mockUserRole', newRole);
+    // This is a simple mock implementation, a real app would update the user in the DB
+    // and might require re-authentication or a page reload to get new data.
+    // For now, we find the first user with the new role and switch to them.
+    const newUser = mockData.users.find(u => u.role === newRole);
+    if (newUser) {
+        localStorage.setItem('mockUserId', newUser.id);
+        localStorage.setItem('mockUserName', newUser.name);
+        setName(newUser.name);
+        // Force a reload of the page to fetch new data for the new user role.
+        window.location.reload();
+    }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      localStorage.removeItem('mockUserId');
       localStorage.removeItem('mockUserRole');
       localStorage.removeItem('mockUserName');
       router.push("/login");

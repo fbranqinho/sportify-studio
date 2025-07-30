@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -8,6 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { UserRole } from "@/types";
+import { mockData } from "@/lib/mock-data";
+
 
 interface UserRoleSwitcherProps {
   role: UserRole;

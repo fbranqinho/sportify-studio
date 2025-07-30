@@ -1,6 +1,46 @@
+
+"use client";
+
+import * as React from "react";
 import { PlayerStatsChart } from "@/components/player-stats-chart";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import type { PlayerProfile } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StatsPage() {
+  const [playerProfile, setPlayerProfile] = React.useState<PlayerProfile | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchPlayerProfile = async () => {
+      setLoading(true);
+      const userId = localStorage.getItem("mockUserId");
+      if (!userId) {
+        setLoading(false);
+        console.error("No user ID found in local storage.");
+        return;
+      }
+
+      try {
+        const q = query(collection(db, "playerProfiles"), where("userRef", "==", userId));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const docData = querySnapshot.docs[0].data() as PlayerProfile;
+          setPlayerProfile(docData);
+        } else {
+          console.log("No such player profile!");
+        }
+      } catch (error) {
+        console.error("Error fetching player profile:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlayerProfile();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -9,7 +49,16 @@ export default function StatsPage() {
           An overview of your performance and attributes.
         </p>
       </div>
-      <PlayerStatsChart />
+      {loading ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+            <Skeleton className="lg:col-span-3 h-[500px]" />
+            <Skeleton className="lg:col-span-2 h-[500px]" />
+        </div>
+      ) : playerProfile ? (
+        <PlayerStatsChart playerProfile={playerProfile} />
+      ) : (
+        <p>No player data found.</p>
+      )}
     </div>
   );
 }

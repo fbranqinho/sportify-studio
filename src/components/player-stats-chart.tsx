@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -12,26 +13,32 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { PlayerProfile } from "@/types";
 
-const statsData = [
-  { subject: "Pace", A: 86, fullMark: 100 },
-  { subject: "Shooting", A: 90, fullMark: 100 },
-  { subject: "Passing", A: 75, fullMark: 100 },
-  { subject: "Dribbling", A: 95, fullMark: 100 },
-  { subject: "Defense", A: 60, fullMark: 100 },
-  { subject: "Physical", A: 78, fullMark: 100 },
-];
+interface PlayerStatsChartProps {
+  playerProfile: PlayerProfile;
+}
 
-const detailedStats = [
-    { metric: "Games Played", value: 25 },
-    { metric: "Goals", value: 18 },
-    { metric: "Assists", value: 12 },
-    { metric: "Tackles Won", value: "78%" },
-    { metric: "Pass Accuracy", value: "85%" },
-    { metric: "Distance Covered (avg)", value: "9.2 km" },
-]
+export function PlayerStatsChart({ playerProfile }: PlayerStatsChartProps) {
+  const statsData = [
+    { subject: "Pace", A: playerProfile.pace, fullMark: 100 },
+    { subject: "Shooting", A: Math.round((playerProfile.finishing + playerProfile.shotPower + playerProfile.longShots) / 3), fullMark: 100 },
+    { subject: "Passing", A: Math.round((playerProfile.shortPassing + playerProfile.longPassing + playerProfile.vision) / 3), fullMark: 100 },
+    { subject: "Dribbling", A: Math.round((playerProfile.dribbling + playerProfile.ballControl + playerProfile.agility) / 3), fullMark: 100 },
+    { subject: "Defense", A: playerProfile.defending, fullMark: 100 },
+    { subject: "Physical", A: Math.round((playerProfile.strength + playerProfile.stamina + playerProfile.jumping) / 3), fullMark: 100 },
+  ];
 
-export function PlayerStatsChart() {
+  const detailedStats = [
+      { metric: "Games Played", value: (playerProfile.victories + playerProfile.defeats + playerProfile.draws) },
+      { metric: "Goals", value: playerProfile.goals },
+      { metric: "Assists", value: playerProfile.assists },
+      { metric: "Yellow Cards", value: playerProfile.yellowCards },
+      { metric: "Red Cards", value: playerProfile.redCards },
+      { metric: "MVPs", value: playerProfile.mvps },
+      { metric: "Overall Rating", value: playerProfile.overall },
+  ]
+
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
       <Card className="lg:col-span-3">
