@@ -258,6 +258,7 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
     React.useEffect(() => {
         const fetchApplicants = async () => {
             if (!match.playerApplications || match.playerApplications.length === 0) {
+                setApplicants([]);
                 setLoading(false);
                 return;
             }
@@ -316,9 +317,10 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
     };
 
 
-    if (!match.playerApplications || match.playerApplications.length === 0) {
-        return null; // Don't render anything if there are no applications
+    if (!match.allowExternalPlayers || (!match.playerApplications || match.playerApplications.length === 0 && applicants.length === 0)) {
+        return null;
     }
+
 
     if (loading) {
         return (
@@ -391,7 +393,7 @@ export default function GameDetailsPage() {
     const { toast } = useToast();
 
     const fetchGameDetails = React.useCallback(async () => {
-        setLoading(true);
+        // setLoading(true); // Don't set loading on re-fetch to avoid flicker
         try {
             const matchRef = doc(db, "matches", gameId);
             const matchSnap = await getDoc(matchRef);
@@ -427,9 +429,11 @@ export default function GameDetailsPage() {
                         const pitchData = { id: pitchDoc.id, ...pitchDoc.data() } as Pitch;
                         setPitch(pitchData);
                         if (pitchData.ownerRef) {
-                            const ownerDocRef = doc(db, "ownerProfiles", pitchData.ownerRef);
-                            const ownerDoc = await getDoc(ownerDocRef);
-                            if (ownerDoc.exists()) {
+                            // Assuming ownerRef points to the user ID of the owner
+                            const ownerQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", pitchData.ownerRef));
+                            const ownerSnapshot = await getDocs(ownerQuery);
+                            if (!ownerSnapshot.empty) {
+                                const ownerDoc = ownerSnapshot.docs[0];
                                 setOwner({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
                             }
                         }
@@ -471,10 +475,21 @@ export default function GameDetailsPage() {
     }
 
     const getMatchTitle = () => {
-        if (teamA && !teamB && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
-        if (teamA && teamB && match.status === 'PendingOpponent') return `${teamA.name} vs ${teamB.name} (Pending)`;
+        if (teamA && !teamB && !match.invitedTeamId && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
+        if (teamA && match.invitedTeamId && !teamB) {
+             const invitedTeam = teamB; // This is a bit of a hack, teamB state holds the invited team
+             return `${teamA.name} vs ${invitedTeam?.name || 'Invited Team'} (Pending)`;
+        }
         return 'Match Details';
+    };
+
+    const getMatchStatus = () => {
+        if (match.status === 'PendingOpponent') {
+            if (match.invitedTeamId) return 'Awaiting Opponent Confirmation';
+            return 'Open for applications';
+        }
+        return match.status;
     };
     
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
@@ -504,7 +519,7 @@ export default function GameDetailsPage() {
                        <div className="text-sm space-y-2">
                             <div className="flex items-center gap-2">
                                 <Shield className="h-4 w-4 text-muted-foreground"/>
-                                <span>Status: <span className="font-semibold">{match.status}</span></span>
+                                <span>Status: <span className="font-semibold">{getMatchStatus()}</span></span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground"/>
@@ -514,8 +529,8 @@ export default function GameDetailsPage() {
                     </CardContent>
                 </Card>
 
-                {owner && pitch && (
-                    <Card>
+                {pitch && (
+                     <Card>
                         <CardHeader>
                             <CardTitle className="text-base font-semibold">Venue Information</CardTitle>
                         </CardHeader>
@@ -534,13 +549,13 @@ export default function GameDetailsPage() {
                                     <p className="text-xs text-muted-foreground">Address</p>
                                 </div>
                             </div>
-                              <div className="flex items-start gap-3">
+                              {owner && <div className="flex items-start gap-3">
                                 <Building className="h-4 w-4 text-muted-foreground mt-0.5"/>
                                  <div>
                                     <p className="font-semibold">{owner.companyName}</p>
                                     <p className="text-xs text-muted-foreground">Managed by</p>
                                 </div>
-                            </div>
+                            </div>}
                         </CardContent>
                     </Card>
                 )}
@@ -557,3 +572,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
