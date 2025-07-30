@@ -189,8 +189,6 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
   
   return (
     <div className="space-y-6">
-        <TeamHeader team={team} />
-        <TeamStats team={team} />
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline flex items-center justify-between">
@@ -454,12 +452,16 @@ export default function TeamDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" size="sm" asChild>
-        <Link href="/dashboard/teams">
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Back to Teams
-        </Link>
-      </Button>
+        <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold font-headline">{team.name}</h1>
+            <Button variant="outline" size="sm" asChild>
+                <Link href="/dashboard/teams">
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Back to Teams
+                </Link>
+            </Button>
+        </div>
+
 
       {isManager ? (
         <ManagerTeamView 
@@ -476,5 +478,7 @@ export default function TeamDetailsPage() {
     </div>
   );
 }
+
+    
 
     
