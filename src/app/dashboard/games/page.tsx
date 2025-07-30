@@ -2,8 +2,8 @@
 "use client";
 
 import * as React from "react";
-import { GamesMap } from "@/components/games-map";
-import type { Pitch } from "@/types";
+import { OwnersMap } from "@/components/owners-map";
+import type { OwnerProfile } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,23 +29,23 @@ const deg2rad = (deg: number) => {
 
 
 export default function GamesPage() {
-  const [pitches, setPitches] = React.useState<Pitch[]>([]);
+  const [owners, setOwners] = React.useState<OwnerProfile[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
+  const [hoveredOwnerId, setHoveredOwnerId] = React.useState<string | null>(null);
   const [userLocation, setUserLocation] = React.useState<{ lat: number; lng: number } | null>(null);
-  const [nearestPitchId, setNearestPitchId] = React.useState<string | null>(null);
+  const [nearestOwnerId, setNearestOwnerId] = React.useState<string | null>(null);
   const { toast } = useToast();
   
-  // Fetch pitches from Firestore
+  // Fetch owners from Firestore
   React.useEffect(() => {
     setLoading(true);
-    const unsubscribe = onSnapshot(collection(db, "pitches"), (snapshot) => {
-        const pitchesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
-        setPitches(pitchesData);
+    const unsubscribe = onSnapshot(collection(db, "ownerProfiles"), (snapshot) => {
+        const ownersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OwnerProfile));
+        setOwners(ownersData);
         setLoading(false);
     }, (error) => {
-        console.error("Error fetching pitches:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch fields data."})
+        console.error("Error fetching owners:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch owners data."})
         setLoading(false);
     });
 
@@ -66,34 +66,34 @@ export default function GamesPage() {
           toast({
             variant: "destructive",
             title: "Location Access Denied",
-            description: "Please enable location access to find the nearest fields.",
+            description: "Please enable location access to find the nearest owners.",
           });
         }
       );
     }
   }, [toast]);
   
-  // Find the nearest pitch once user location and pitches are available
+  // Find the nearest owner once user location and owners are available
   React.useEffect(() => {
-    if (userLocation && pitches.length > 0) {
-      let closestPitch: Pitch | null = null;
+    if (userLocation && owners.length > 0) {
+      let closestOwner: OwnerProfile | null = null;
       let minDistance = Infinity;
 
-      pitches.forEach(pitch => {
-        if (pitch.coords) {
-            const distance = getDistance(userLocation.lat, userLocation.lng, pitch.coords.lat, pitch.coords.lng);
+      owners.forEach(owner => {
+        if (owner.latitude && owner.longitude) {
+            const distance = getDistance(userLocation.lat, userLocation.lng, owner.latitude, owner.longitude);
             if (distance < minDistance) {
                 minDistance = distance;
-                closestPitch = pitch;
+                closestOwner = owner;
             }
         }
       });
       
-      if (closestPitch) {
-          setNearestPitchId(closestPitch.id);
+      if (closestOwner) {
+          setNearestOwnerId(closestOwner.id);
       }
     }
-  }, [userLocation, pitches]);
+  }, [userLocation, owners]);
 
 
   if (loading) {
@@ -102,12 +102,12 @@ export default function GamesPage() {
 
   return (
     <div className="w-full h-full rounded-lg overflow-hidden border">
-        <GamesMap 
-            pitches={pitches} 
-            hoveredPitchId={hoveredPitchId} 
-            setHoveredPitchId={setHoveredPitchId}
+        <OwnersMap 
+            owners={owners} 
+            hoveredOwnerId={hoveredOwnerId} 
+            setHoveredOwnerId={setHoveredOwnerId}
             userLocation={userLocation}
-            nearestPitchId={nearestPitchId}
+            nearestOwnerId={nearestOwnerId}
         />
     </div>
   );

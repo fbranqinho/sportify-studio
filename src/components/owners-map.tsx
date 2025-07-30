@@ -4,7 +4,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Pitch } from "@/types";
+import type { OwnerProfile } from "@/types";
 import {
   Tooltip,
   TooltipContent,
@@ -14,12 +14,12 @@ import {
 import { User, Star } from "lucide-react";
 
 
-interface GamesMapProps {
-  pitches: Pitch[];
-  hoveredPitchId: string | null;
-  setHoveredPitchId: (id: string | null) => void;
+interface OwnersMapProps {
+  owners: OwnerProfile[];
+  hoveredOwnerId: string | null;
+  setHoveredOwnerId: (id: string | null) => void;
   userLocation: { lat: number; lng: number } | null;
-  nearestPitchId: string | null;
+  nearestOwnerId: string | null;
 }
 
 // A simple function to normalize coordinates to a 0-1 scale
@@ -31,7 +31,7 @@ const normalizeCoords = (coords: { lat: number; lng: number }, bounds: any) => {
 };
 
 
-export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId, userLocation, nearestPitchId }: GamesMapProps) {
+export function OwnersMap({ owners, hoveredOwnerId, setHoveredOwnerId, userLocation, nearestOwnerId }: OwnersMapProps) {
     
   // Define the geographical bounds for Lisbon to position the markers
   const lisbonBounds = {
@@ -74,19 +74,20 @@ export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId, userLocat
           )
         })()}
 
-        {/* Render Pitches */}
-        {pitches.map((pitch) => {
-            if (!pitch.coords) return null;
-            const {x, y} = normalizeCoords(pitch.coords, lisbonBounds);
-            const isNearest = pitch.id === nearestPitchId;
-            const isHovered = pitch.id === hoveredPitchId;
+        {/* Render Owners */}
+        {owners.map((owner) => {
+            if (!owner.latitude || !owner.longitude) return null;
+            const coords = { lat: owner.latitude, lng: owner.longitude };
+            const {x, y} = normalizeCoords(coords, lisbonBounds);
+            const isNearest = owner.id === nearestOwnerId;
+            const isHovered = owner.id === hoveredOwnerId;
 
             return (
-                 <Tooltip key={pitch.id}>
+                 <Tooltip key={owner.id}>
                     <TooltipTrigger asChild>
                         <button
-                            onMouseEnter={() => setHoveredPitchId(pitch.id)}
-                            onMouseLeave={() => setHoveredPitchId(null)}
+                            onMouseEnter={() => setHoveredOwnerId(owner.id)}
+                            onMouseLeave={() => setHoveredOwnerId(null)}
                             style={{ left: `${x}%`, top: `${y}%` }}
                             className={cn(
                                 "absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-lg transition-all duration-300",
@@ -99,8 +100,8 @@ export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId, userLocat
                         </button>
                     </TooltipTrigger>
                     <TooltipContent>
-                        <p className="font-semibold">{pitch.name}</p>
-                        <p className="text-sm text-muted-foreground">{pitch.address}</p>
+                        <p className="font-semibold">{owner.companyName}</p>
+                        <p className="text-sm text-muted-foreground">{owner.companyAddress}</p>
                          {isNearest && <p className="text-xs text-green-600 font-bold mt-1">Nearest to you!</p>}
                     </TooltipContent>
                 </Tooltip>
