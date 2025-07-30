@@ -43,28 +43,22 @@ function NotificationBell() {
   React.useEffect(() => {
     if (!user) return;
 
-    // The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/sportify-ge7ao/firestore/indexes?create_composite=ClRwcm9qZWN0cy9zcG9ydGlmeS1nZTdhby9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvbm90aWZpY2F0aW9ucy9pbmRleGVzL18QARoKCgZ1c2VySWQQARoNCgljcmVhdGVkQXQQAhoMCghfX25hbWVfXxAC
+    // The query requires an index on userId (asc) and createdAt (desc).
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", user.id),
-      // Temporarily removed orderBy to prevent crash without the index.
-      // orderBy("createdAt", "desc"), 
-      limit(20) // Increased limit to sort on client
+      orderBy("createdAt", "desc"),
+      limit(10)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
       
-      // Sort on the client side
-      notifs.sort((a, b) => {
-        const dateA = a.createdAt?.seconds ?? 0;
-        const dateB = b.createdAt?.seconds ?? 0;
-        return dateB - dateA;
-      });
-
-      setNotifications(notifs.slice(0, 10)); // Keep original limit for display
+      setNotifications(notifs);
       const unread = notifs.filter(n => !n.read).length;
       setUnreadCount(unread);
+    }, (error) => {
+        console.error("Error fetching notifications (check Firestore indexes):", error);
     });
 
     return () => unsubscribe();
