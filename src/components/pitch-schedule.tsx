@@ -199,7 +199,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                     <Button
                                         key={slot}
                                         variant="default"
-                                        className="h-12 flex-col bg-blue-600 hover:bg-blue-700"
+                                        className="h-12 flex-col bg-accent hover:bg-accent/90 text-accent-foreground"
                                         onClick={() => handleApplyToGame(slotInfo.match!)}
                                     >
                                         <span className="font-bold text-base">{slot}</span>
