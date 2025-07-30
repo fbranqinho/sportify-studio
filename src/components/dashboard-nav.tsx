@@ -22,6 +22,7 @@ import {
   Contact,
   CalendarCheck,
   Gamepad2,
+  Mail,
 } from "lucide-react";
 
 const navItems: NavItem[] = [
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
+  { title: "My Invitations", href: "/dashboard/invitations", icon: Mail, roles: ["PLAYER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },

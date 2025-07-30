@@ -4,9 +4,9 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Team, PlayerProfile, TeamPlayer } from "@/types";
+import type { Team, PlayerProfile, TeamPlayer, User } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Trash2, UserPlus, Users } from "lucide-react";
+import { useUser } from "@/hooks/use-user";
 
 interface EnrichedTeamPlayer extends TeamPlayer {
   profile?: PlayerProfile;
@@ -24,6 +25,7 @@ export default function ManageTeamPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useUser();
   const teamId = params.teamId as string;
 
   const [team, setTeam] = React.useState<Team | null>(null);
@@ -51,19 +53,23 @@ export default function ManageTeamPage() {
       // Fetch player profiles
       if (teamData.players.length > 0) {
         const playerIds = teamData.players.map(p => p.playerId);
-        const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerIds));
-        const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
-        const playerProfilesMap = new Map<string, PlayerProfile>();
-        playerProfilesSnapshot.forEach(doc => {
-            const profile = {id: doc.id, ...doc.data()} as PlayerProfile;
-            playerProfilesMap.set(profile.userRef, profile);
-        });
-        
-        const enrichedPlayers = teamData.players.map(p => ({
-            ...p,
-            profile: playerProfilesMap.get(p.playerId)
-        }));
-        setPlayers(enrichedPlayers);
+        if (playerIds.length === 0) {
+            setPlayers([]);
+        } else {
+            const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerIds));
+            const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
+            const playerProfilesMap = new Map<string, PlayerProfile>();
+            playerProfilesSnapshot.forEach(doc => {
+                const profile = {id: doc.id, ...doc.data()} as PlayerProfile;
+                playerProfilesMap.set(profile.userRef, profile);
+            });
+            
+            const enrichedPlayers = teamData.players.map(p => ({
+                ...p,
+                profile: playerProfilesMap.get(p.playerId)
+            }));
+            setPlayers(enrichedPlayers);
+        }
       } else {
         setPlayers([]);
       }
@@ -112,9 +118,9 @@ export default function ManageTeamPage() {
      }
   };
 
-  const handleAddPlayer = async (e: React.FormEvent) => {
+  const handleInvitePlayer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPlayerEmail.trim() || !team) return;
+    if (!newPlayerEmail.trim() || !team || !user) return;
 
     try {
         // 1. Find user by email
@@ -126,29 +132,48 @@ export default function ManageTeamPage() {
             return;
         }
 
-        const userDoc = userSnapshot.docs[0];
-        const userId = userDoc.id;
+        const invitedUserDoc = userSnapshot.docs[0];
+        const invitedUserId = invitedUserDoc.id;
+        const invitedUserData = invitedUserDoc.data() as User;
+
 
         // 2. Check if player is already in the team
-        if (team.players.some(p => p.playerId === userId)) {
-            toast({ variant: "destructive", title: "Already exists", description: "This player is already on your team." });
+        if (team.players.some(p => p.playerId === invitedUserId)) {
+            toast({ variant: "destructive", title: "Already on Team", description: "This player is already on your team." });
+            return;
+        }
+        
+        // 3. Check for existing pending invitation
+        const invitationQuery = query(
+            collection(db, "teamInvitations"),
+            where("teamId", "==", teamId),
+            where("playerId", "==", invitedUserId),
+            where("status", "==", "pending")
+        );
+        const invitationSnapshot = await getDocs(invitationQuery);
+        if (!invitationSnapshot.empty) {
+            toast({ variant: "destructive", title: "Invitation exists", description: "An invitation has already been sent to this player." });
             return;
         }
 
-        // 3. Add player to team
-        const newPlayer: TeamPlayer = { playerId: userId, number: null };
-        const updatedPlayers = [...team.players, newPlayer];
+        // 4. Create invitation document
+        await addDoc(collection(db, "teamInvitations"), {
+            teamId: teamId,
+            teamName: team.name, // denormalize for easier display
+            playerId: invitedUserId,
+            playerName: invitedUserData.name, // denormalize
+            managerId: user.id,
+            status: "pending",
+            invitedAt: serverTimestamp(),
+        });
 
-        const teamDocRef = doc(db, "teams", teamId);
-        await updateDoc(teamDocRef, { players: updatedPlayers });
 
-        toast({ title: "Player Added!", description: `${userDoc.data().name} has been added to the team.` });
+        toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${invitedUserData.name}.` });
         setNewPlayerEmail("");
-        fetchTeamData(); // Refresh data
 
     } catch (error) {
-         console.error("Error adding player:", error);
-         toast({ variant: "destructive", title: "Error", description: "Failed to add player." });
+         console.error("Error inviting player:", error);
+         toast({ variant: "destructive", title: "Error", description: "Failed to send invitation." });
     }
   };
 
@@ -184,7 +209,7 @@ export default function ManageTeamPage() {
                 <span>{players.length} Players</span>
             </div>
           </CardTitle>
-          <CardDescription>Add or remove players, edit their numbers, and view their status.</CardDescription>
+          <CardDescription>Invite players, edit their numbers, and view their status.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
             {/* Player List */}
@@ -229,10 +254,10 @@ export default function ManageTeamPage() {
                 </TableBody>
             </Table>
             
-            {/* Add Player Form */}
+            {/* Invite Player Form */}
             <div>
-                <h3 className="text-lg font-semibold font-headline mb-2">Add New Player</h3>
-                <form onSubmit={handleAddPlayer} className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold font-headline mb-2">Invite New Player</h3>
+                <form onSubmit={handleInvitePlayer} className="flex items-center gap-2">
                     <Input 
                         type="email" 
                         placeholder="Enter player's email address..."
@@ -240,7 +265,7 @@ export default function ManageTeamPage() {
                         onChange={(e) => setNewPlayerEmail(e.target.value)}
                     />
                     <Button type="submit">
-                        <UserPlus className="mr-2" /> Add Player
+                        <UserPlus className="mr-2" /> Invite Player
                     </Button>
                 </form>
             </div>
@@ -249,4 +274,3 @@ export default function ManageTeamPage() {
     </div>
   );
 }
-

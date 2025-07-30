@@ -1,6 +1,7 @@
 
 
 import type { LucideIcon } from "lucide-react";
+import type { FieldValue } from "firebase/firestore";
 
 export type UserRole = "PLAYER" | "MANAGER" | "OWNER" | "PROMOTER" | "REFEREE" | "ADMIN";
 
@@ -160,11 +161,13 @@ export type InvitationStatus = "pending" | "accepted" | "declined";
 export interface TeamInvitation {
     id: string;
     teamId: string;
+    teamName: string;
     playerId: string;
+    playerName: string;
     managerId: string;
     status: InvitationStatus;
-    invitedAt: string; // ISO 8601 string
-    respondedAt?: string; // ISO 8601 string
+    invitedAt: FieldValue;
+    respondedAt?: FieldValue;
 }
 
 
