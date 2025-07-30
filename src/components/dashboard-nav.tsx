@@ -26,7 +26,7 @@ import {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
+  { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
@@ -53,7 +53,6 @@ export function DashboardNav({ role }: DashboardNavProps) {
     navItems.find(item => item.href === "/dashboard/fields")!,
     navItems.find(item => item.href === "/dashboard/payments")!,
     navItems.find(item => item.href === "/dashboard/promos")!,
-    navItems.find(item => item.href === "/dashboard/games")!,
   ]
 
   let filteredNavItems: NavItem[];
