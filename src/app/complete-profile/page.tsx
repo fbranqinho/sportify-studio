@@ -8,6 +8,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { app, db } from "@/lib/firebase";
 import type { User } from "@/types";
 import { PlayerProfileForm } from "@/components/forms/player-profile-form";
+import { OwnerProfileForm } from "@/components/forms/owner-profile-form";
 import { Icons } from "@/components/icons";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +55,7 @@ export default function CompleteProfilePage() {
       case "PLAYER":
         return <PlayerProfileForm userId={user.id} />;
       case "OWNER":
-        // Placeholder for Owner form
-        return <p>Owner profile form coming soon.</p>;
+        return <OwnerProfileForm userId={user.id} />;
       case "MANAGER":
         // Placeholder for Manager form
         return <p>Manager profile form coming soon.</p>;
