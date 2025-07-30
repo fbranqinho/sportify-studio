@@ -17,8 +17,8 @@ export default function StatsPage() {
       setLoading(true);
       const userId = localStorage.getItem("mockUserId");
       if (!userId) {
-        setLoading(false);
         console.error("No user ID found in local storage.");
+        setLoading(false);
         return;
       }
 
