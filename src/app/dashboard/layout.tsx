@@ -30,6 +30,7 @@ import type { UserRole } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Bell, LogOut, Settings } from "lucide-react";
 import { app } from "@/lib/firebase";
+import { mockData } from "@/lib/mock-data";
 
 export default function DashboardLayout({
   children,
