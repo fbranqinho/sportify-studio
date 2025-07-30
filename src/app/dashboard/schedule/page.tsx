@@ -88,96 +88,100 @@ export default function SchedulePage() {
     }
 
     // Handle Confirmed status
-    if (status === "Confirmed" && reservation.teamRef) {
+    if (status === "Confirmed") {
       try {
-        // Step 1: Get team data to ensure it exists and to get player list
-        const teamDocRef = doc(db, "teams", reservation.teamRef);
-        const teamDoc = await getDoc(teamDocRef);
+        // --- Manager Booking ---
+        if (reservation.teamRef) {
+            const teamDocRef = doc(db, "teams", reservation.teamRef);
+            const teamDoc = await getDoc(teamDocRef);
 
-        if (!teamDoc.exists()) {
-             toast({ variant: "destructive", title: "Error", description: "Team associated with reservation not found." });
-             return;
-        }
-        const teamData = teamDoc.data() as Team;
-        const playerIds = teamData.playerIds || [];
+            if (!teamDoc.exists()) {
+                toast({ variant: "destructive", title: "Error", description: "Team associated with reservation not found." });
+                return;
+            }
+            const teamData = teamDoc.data() as Team;
+            const playerIds = teamData.playerIds || [];
 
-        // Step 2: Create the Match document first to get its ID.
-        // If it's a booking for just one team, it's a practice, so allow external players by default.
-        const matchDoc = await addDoc(collection(db, "matches"), {
-          date: reservation.date,
-          pitchRef: reservation.pitchId,
-          status: "PendingOpponent", // A practice session is essentially pending an opponent or players
-          teamARef: reservation.teamRef,
-          teamBRef: null,
-          teamAPlayers: [],
-          teamBPlayers: [],
-          playerApplications: [],
-          allowExternalPlayers: true, // Default to true for practices
-          scoreA: 0,
-          scoreB: 0,
-          refereeId: null,
-          attendance: 0,
-          managerRef: teamData.managerId || reservation.managerRef || null,
-        });
-
-        // Step 3: Use a batch to update the reservation and create all invitations and notifications atomically.
-        const batch = writeBatch(db);
-
-        // Operation 1: Update the reservation status.
-        batch.update(reservationRef, { status: "Confirmed" });
-
-        // Operation 2: Create invitations and notifications for all players in the team.
-        const invitationsCollection = collection(db, "matchInvitations");
-        const notificationsCollection = collection(db, 'notifications');
-
-        for (const playerId of playerIds) {
-            // Create the invitation
-            const newInvitationRef = doc(invitationsCollection);
-            batch.set(newInvitationRef, {
-                matchId: matchDoc.id,
-                teamId: reservation.teamRef,
-                playerId: playerId,
-                managerId: teamData.managerId,
-                status: "pending",
-                invitedAt: serverTimestamp(),
+            const matchDoc = await addDoc(collection(db, "matches"), {
+                date: reservation.date,
+                pitchRef: reservation.pitchId,
+                status: "PendingOpponent", 
+                teamARef: reservation.teamRef,
+                teamBRef: null,
+                teamAPlayers: [],
+                teamBPlayers: [],
+                playerApplications: [],
+                allowExternalPlayers: true,
+                scoreA: 0,
+                scoreB: 0,
+                refereeId: null,
+                attendance: 0,
+                managerRef: teamData.managerId || reservation.managerRef || null,
             });
-            
-            // Create the notification for the player
+
+            const batch = writeBatch(db);
+            batch.update(reservationRef, { status: "Confirmed" });
+            const notificationsCollection = collection(db, 'notifications');
             const newNotificationRef = doc(notificationsCollection);
             const notification: Omit<Notification, 'id'> = {
-                 userId: playerId,
-                 message: `You've been called up for a game with ${teamData.name}!`,
-                 link: '/dashboard/my-games',
-                 read: false,
-                 createdAt: serverTimestamp() as any,
+                userId: teamData.managerId,
+                message: `Your booking for ${reservation.pitchName} was confirmed. A practice match has been created.`,
+                link: `/dashboard/games/${matchDoc.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any,
             };
             batch.set(newNotificationRef, notification);
-        }
-        
-        // Step 4: Commit the batch.
-        await batch.commit(); 
-        
-        toast({
-          title: "Reservation Confirmed!",
-          description: `A match has been scheduled and invitations and notifications sent to ${playerIds.length} players.`,
-        });
 
+            await batch.commit(); 
+            
+            toast({
+            title: "Reservation Confirmed!",
+            description: `A practice match has been scheduled for ${teamData.name}.`,
+            });
+        
+        // --- Player Booking (Pick-up Game) ---
+        } else if (reservation.playerRef) {
+             const matchDoc = await addDoc(collection(db, "matches"), {
+                date: reservation.date,
+                pitchRef: reservation.pitchId,
+                status: "PendingOpponent", // This status means it's open for players
+                teamARef: null, // No teams in a pick-up game initially
+                teamBRef: null,
+                teamAPlayers: [reservation.playerRef], // The creator is the first player
+                teamBPlayers: [],
+                playerApplications: [],
+                allowExternalPlayers: true,
+                scoreA: 0,
+                scoreB: 0,
+                refereeId: null,
+                attendance: 0,
+                managerRef: null, // No manager for pick-up games
+            });
+
+            const batch = writeBatch(db);
+            batch.update(reservationRef, { status: "Confirmed" });
+            const notificationsCollection = collection(db, 'notifications');
+            const newNotificationRef = doc(notificationsCollection);
+            const notification: Omit<Notification, 'id'> = {
+                userId: reservation.playerRef,
+                message: `Your booking for ${reservation.pitchName} was confirmed. Your pick-up game is ready!`,
+                link: `/dashboard/games/${matchDoc.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            batch.set(newNotificationRef, notification);
+            
+            await batch.commit();
+
+             toast({
+                title: "Reservation Confirmed!",
+                description: `A new pick-up game has been created and is open for players.`,
+            });
+        }
       } catch (error) {
-        console.error("Error confirming reservation and creating match/invitations: ", error);
+        console.error("Error confirming reservation and creating match: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not confirm reservation." });
       }
-    } else {
-        // Fallback for reservations without a team (which is now deprecated)
-        try {
-            await updateDoc(reservationRef, { status: "Confirmed" });
-            toast({
-                title: "Reservation Confirmed!",
-                description: `The reservation has been confirmed.`,
-            });
-        } catch(error) {
-             console.error("Error updating reservation status: ", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
-        }
     }
   };
 

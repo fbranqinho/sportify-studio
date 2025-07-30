@@ -93,10 +93,10 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         
         if (match) {
              const isPlayerInGame = (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id));
+             if (isPlayerInGame) {
+                 return { status: 'Booked', match }; // User is already in, show as booked
+             }
             if (match.allowExternalPlayers) {
-                if(isPlayerInGame) {
-                    return { status: 'Booked', match }; // User is already in, show as booked
-                }
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                 if (totalPlayers < 10) { // Assuming Fut5 capacity
                     return { status: 'Open', match };
@@ -172,7 +172,6 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     }
     
     const today = startOfDay(new Date());
-    const isManager = user.role === 'MANAGER';
 
     return (
         <Card>
@@ -244,32 +243,18 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             
                              if (slotInfo.status === 'Available') {
                                 return (
-                                    isManager ? (
-                                        <DialogTrigger asChild key={slot}>
-                                            <Button
-                                                variant="outline"
-                                                className="h-12 flex-col"
-                                                onClick={() => setSelectedSlot(slot)}
-                                            >
-                                                <span className="font-bold text-base">{slot}</span>
-                                                <div className="text-xs flex items-center gap-1">
-                                                    <CheckCircle className="h-3 w-3 text-green-500" /> Available
-                                                </div>
-                                            </Button>
-                                        </DialogTrigger>
-                                    ) : (
+                                    <DialogTrigger asChild key={slot}>
                                         <Button
-                                            key={slot}
                                             variant="outline"
-                                            disabled
                                             className="h-12 flex-col"
+                                            onClick={() => setSelectedSlot(slot)}
                                         >
                                             <span className="font-bold text-base">{slot}</span>
                                             <div className="text-xs flex items-center gap-1">
                                                 <CheckCircle className="h-3 w-3 text-green-500" /> Available
                                             </div>
                                         </Button>
-                                    )
+                                    </DialogTrigger>
                                 )
                             }
                             
