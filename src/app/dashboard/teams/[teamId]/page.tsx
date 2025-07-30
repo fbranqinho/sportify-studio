@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, arrayRemove } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -146,9 +146,14 @@ export default function ManageTeamPage() {
         }
 
         const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef);
+        if(playerUserRefs.length === 0){
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
         
         // Fetch corresponding users to get name and email
-        const usersQuery = query(collection(db, "users"), where("id", "in", playerUserRefs));
+        const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerUserRefs));
         const usersSnapshot = await getDocs(usersQuery);
         const usersMap = new Map<string, User>();
         usersSnapshot.forEach(doc => usersMap.set(doc.id, {id: doc.id, ...doc.data()} as User));
