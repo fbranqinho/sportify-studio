@@ -1,105 +1,66 @@
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { LocationCard } from "@/components/location-card";
-import type { Location } from "@/types";
-import { Search } from "lucide-react";
+"use client";
 
-const mockLocations: Location[] = [
-  {
-    locationId: "1",
-    locationName: "City Arena",
-    description: "State-of-the-art indoor football facility with 5G turf.",
-    sportsOffered: "Football, Futsal",
-    address: "123 Main Street, Downtown",
-    availableTimes: "09:00-23:00",
-    pricing: "$50/hr",
-    suitabilityScore: 0.9,
-    imageHint: "indoor soccer"
-  },
-  {
-    locationId: "2",
-    locationName: "Greenfield Park",
-    description: "Spacious outdoor fields perfect for 11-a-side matches.",
-    sportsOffered: "Football, Rugby",
-    address: "456 Park Avenue, Suburbia",
-    availableTimes: "08:00-20:00",
-    pricing: "$40/hr",
-    suitabilityScore: 0.75,
-    imageHint: "outdoor football"
-  },
-  {
-    locationId: "3",
-    locationName: "Riverside Sports Complex",
-    description: "Versatile complex with multiple courts and fields.",
-    sportsOffered: "Football, Basketball, Tennis",
-    address: "789 River Road, West End",
-    availableTimes: "07:00-22:00",
-    pricing: "$60/hr",
-    suitabilityScore: 0.82,
-    imageHint: "sports complex"
-  },
-];
+import type { UserRole } from "@/types";
+import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
+import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
+import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
+import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
+import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+interface DashboardPageProps {
+  role: UserRole;
+}
+
+const WelcomeHeader = ({ role, name }: { role: UserRole, name: string }) => (
+  <div>
+    <h1 className="text-3xl font-bold font-headline">
+      Welcome, {name}!
+    </h1>
+    <p className="text-muted-foreground">
+      Here's your {role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()} dashboard overview.
+    </p>
+  </div>
+);
+
+const AdminDashboard = () => (
+    <Card>
+        <CardHeader>
+            <CardTitle>Admin Dashboard</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <p>Full implementation coming soon.</p>
+        </CardContent>
+    </Card>
+);
 
 
-export default function DashboardPage() {
+export default function DashboardPage({ role }: DashboardPageProps) {
+  const name = "First Player"; // This would come from user data
+
+  const renderDashboard = () => {
+    switch (role) {
+      case "PLAYER":
+        return <PlayerDashboard />;
+      case "MANAGER":
+        return <ManagerDashboard />;
+      case "OWNER":
+        return <OwnerDashboard />;
+      case "PROMOTER":
+        return <PromoterDashboard />;
+      case "REFEREE":
+        return <RefereeDashboard />;
+      case "ADMIN":
+        return <AdminDashboard />;
+      default:
+        return <PlayerDashboard />;
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold font-headline">Find a Game</h1>
-          <p className="text-muted-foreground">Search for available fields near you.</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardContent className="p-2">
-          <div className="relative w-full h-[400px] rounded-lg overflow-hidden">
-            <Image
-              src="https://placehold.co/1200x400.png"
-              alt="Map of nearby fields"
-              data-ai-hint="map satellite"
-              layout="fill"
-              objectFit="cover"
-            />
-             <div className="absolute inset-0 bg-black/20"></div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-1">
-          <Input type="text" placeholder="Search by location..." className="h-10"/>
-        </div>
-        <div className="md:col-span-1">
-          <Select>
-            <SelectTrigger className="h-10">
-              <SelectValue placeholder="Filter by sport" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="football">Football</SelectItem>
-              <SelectItem value="basketball">Basketball</SelectItem>
-              <SelectItem value="futsal">Futsal</SelectItem>
-              <SelectItem value="tennis">Tennis</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button className="h-10 md:col-span-1 font-semibold">
-          <Search className="mr-2 h-4 w-4"/>
-          Search
-        </Button>
-      </div>
-      
-      <div>
-        <h2 className="text-2xl font-bold font-headline mb-4">Nearby Fields</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockLocations.map((location) => (
-            <LocationCard key={location.locationId} location={location} />
-          ))}
-        </div>
-      </div>
+      <WelcomeHeader role={role} name={name} />
+      {renderDashboard()}
     </div>
   );
 }

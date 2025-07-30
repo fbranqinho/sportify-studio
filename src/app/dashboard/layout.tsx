@@ -29,6 +29,15 @@ export default function DashboardLayout({
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
   };
+  
+  // Pass role to children that are React components
+  const childrenWithProps = React.Children.map(children, child => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { role } as any);
+    }
+    return child;
+  });
+
 
   return (
     <SidebarProvider>
@@ -76,7 +85,7 @@ export default function DashboardLayout({
               </Button>
             </div>
           </header>
-          <main className="flex-1 flex-col p-4 sm:p-6">{children}</main>
+          <main className="flex-1 flex-col p-4 sm:p-6">{childrenWithProps}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>
