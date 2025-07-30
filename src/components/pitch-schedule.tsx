@@ -163,6 +163,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     }
     
     const today = startOfDay(new Date());
+    const isManager = user.role === 'MANAGER';
 
     return (
         <Card>
@@ -234,18 +235,32 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             
                              if (slotInfo.status === 'Available') {
                                 return (
-                                     <DialogTrigger asChild key={slot}>
+                                    isManager ? (
+                                        <DialogTrigger asChild key={slot}>
+                                            <Button
+                                                variant="outline"
+                                                className="h-12 flex-col"
+                                                onClick={() => setSelectedSlot(slot)}
+                                            >
+                                                <span className="font-bold text-base">{slot}</span>
+                                                <div className="text-xs flex items-center gap-1">
+                                                    <CheckCircle className="h-3 w-3 text-green-500" /> Available
+                                                </div>
+                                            </Button>
+                                        </DialogTrigger>
+                                    ) : (
                                         <Button
+                                            key={slot}
                                             variant="outline"
+                                            disabled
                                             className="h-12 flex-col"
-                                            onClick={() => setSelectedSlot(slot)}
                                         >
                                             <span className="font-bold text-base">{slot}</span>
                                             <div className="text-xs flex items-center gap-1">
                                                 <CheckCircle className="h-3 w-3 text-green-500" /> Available
                                             </div>
                                         </Button>
-                                    </DialogTrigger>
+                                    )
                                 )
                             }
                             

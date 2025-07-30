@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -37,37 +38,22 @@ export default function SchedulePage() {
           console.error("Error fetching owner profile: ", error);
           setLoading(false);
       });
-    } else if (user) { // For other roles, no need to fetch owner profile
-        setOwnerProfileId(null); // Explicitly set to null if not an owner
+    } else { // For other roles, no need to fetch owner profile
+        setLoading(false);
     }
   }, [user]);
 
   // Effect to fetch reservations based on user role
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || user.role !== 'OWNER' || !ownerProfileId) {
+        setLoading(false);
+        return;
+    }
     
-    // For non-owners, loading starts immediately if user is present.
-    // For owners, loading depends on ownerProfileId being fetched.
     setLoading(true);
 
     let unsubscribe = () => {};
-    let reservationsQuery;
-
-    if (user.role === 'OWNER') {
-      if (ownerProfileId) {
-        reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
-      } else {
-        // If ownerProfileId is null for an owner, it means it's still loading or not found.
-        // We set loading to false only if we are sure there's no profile.
-        if (user.role === 'OWNER' && ownerProfileId === null) {
-          setLoading(false);
-        }
-        return;
-      }
-    } else { // For PLAYER, MANAGER, etc.
-      const roleField = `${user.role.toLowerCase()}Ref`;
-      reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
-    }
+    let reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
     
     unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
       const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
@@ -181,7 +167,7 @@ export default function SchedulePage() {
         toast({ variant: "destructive", title: "Error", description: "Could not confirm reservation." });
       }
     } else {
-        // Fallback for reservations without a team (e.g., booked by a player)
+        // Fallback for reservations without a team (which is now deprecated)
         try {
             await updateDoc(reservationRef, { status: "Confirmed" });
             toast({
@@ -288,6 +274,20 @@ export default function SchedulePage() {
         </div>
     )
   }
+  
+  if (user?.role !== 'OWNER') {
+    return (
+       <div className="space-y-8">
+            <div>
+                <h1 className="text-3xl font-bold font-headline">My Schedule</h1>
+                <p className="text-muted-foreground">
+                This page is for pitch owners to manage their reservations.
+                </p>
+            </div>
+             <EmptyState icon={Ban} title="Access Denied" description="You must be an Owner to view this page." />
+        </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -339,5 +339,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
