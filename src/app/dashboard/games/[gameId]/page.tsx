@@ -36,7 +36,6 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
 
         setIsSearching(true);
         try {
-            // First, try the efficient query on the lowercase field
             const teamsQuery = query(
                 collection(db, "teams"),
                 where("name_lowercase", ">=", searchTerm),
@@ -46,17 +45,6 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
             let teams = querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
                 .filter(team => team.id !== match.teamARef); // Exclude own team
-
-            // Fallback for older data without name_lowercase field
-            if (teams.length === 0) {
-                const allTeamsSnapshot = await getDocs(collection(db, "teams"));
-                teams = allTeamsSnapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                    .filter(team => 
-                        team.name.toLowerCase().includes(searchTerm) && 
-                        team.id !== match.teamARef
-                    );
-            }
                 
             setSearchResults(teams);
         } catch (error) {
@@ -79,10 +67,10 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
         const homeTeamName = homeTeamDoc.data().name;
 
         try {
-            // Update the match with the opponent
+            // Update the match with the invitation details
             await updateDoc(matchRef, {
-                teamBRef: opponentTeam.id,
-                status: "Scheduled" // Or another status to indicate invitation sent
+                invitedTeamId: opponentTeam.id,
+                status: "PendingOpponent"
             });
 
             // Create a notification for the opponent's manager
@@ -198,6 +186,9 @@ export default function GameDetailsPage() {
             if (matchData.teamBRef) {
                 const teamBDoc = await getDoc(doc(db, "teams", matchData.teamBRef));
                 if (teamBDoc.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
+            } else if (matchData.invitedTeamId) {
+                 const teamBDoc = await getDoc(doc(db, "teams", matchData.invitedTeamId));
+                if (teamBDoc.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
             }
         } catch (error) {
             console.error("Error fetching game details: ", error);
@@ -225,6 +216,7 @@ export default function GameDetailsPage() {
 
     const getMatchTitle = () => {
         if (teamA && !teamB) return `${teamA.name} (treino)`;
+        if (teamA && teamB && match.status === 'PendingOpponent') return `${teamA.name} vs ${teamB.name} (Pending)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
     };
@@ -252,8 +244,8 @@ export default function GameDetailsPage() {
                 </CardContent>
             </Card>
 
-            {/* Invite Opponent section, shown only for training matches */}
-            {match.teamARef && !match.teamBRef && (
+            {/* Invite Opponent section, shown only if there's no opponent and no invitation sent */}
+            {match.teamARef && !match.teamBRef && !match.invitedTeamId && (
                 <InviteOpponent match={match} onOpponentInvited={() => fetchGameDetails()} />
             )}
         </div>

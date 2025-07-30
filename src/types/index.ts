@@ -68,6 +68,7 @@ export interface PlayerProfile {
   injuries: number;
   goals: number;
   assists: number;
+
   victories: number;
   defeats: number;
   draws: number;
@@ -224,13 +225,14 @@ export interface Reservation {
 }
 
 
-export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
+export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled" | "PendingOpponent";
 
 export interface Match {
     id: string;
     date: string; // ISO 8601 string
     teamARef: string | null;
     teamBRef: string | null;
+    invitedTeamId?: string | null; // ID of the team invited, used with PendingOpponent status
     teamAPlayers: string[]; // Array of User IDs
     teamBPlayers: string[]; // Array of User IDs
     scoreA: number;
