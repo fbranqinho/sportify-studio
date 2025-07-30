@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Reservation, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -87,7 +87,6 @@ export default function SchedulePage() {
     try {
       await updateDoc(reservationRef, { status });
 
-      // If confirmed, create a new match and invitations
       if (status === "Confirmed" && reservation.teamRef) {
         const teamDocRef = doc(db, "teams", reservation.teamRef);
         const teamDoc = await getDoc(teamDocRef);
@@ -99,6 +98,7 @@ export default function SchedulePage() {
         
         const teamData = teamDoc.data() as Team;
 
+        // Step 1: Create the Match document to get its ID
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
@@ -114,23 +114,29 @@ export default function SchedulePage() {
           managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
-        // Get players from the team to create invitations
+        // Step 2: Create invitations for all players in the team using a batch write
         const playerIds = teamData.playerIds || [];
+        if (playerIds.length > 0) {
+            const batch = writeBatch(db);
+            const invitationsCollection = collection(db, "matchInvitations");
 
-        for (const playerId of playerIds) {
-            await addDoc(collection(db, "matchInvitations"), {
-                matchId: matchDoc.id,
-                teamId: reservation.teamRef,
-                playerId: playerId,
-                managerId: teamData.managerId, // Use managerId from team data
-                status: "pending",
-                invitedAt: serverTimestamp(),
-            });
+            for (const playerId of playerIds) {
+                const newInvitationRef = doc(invitationsCollection); // Create a new doc reference
+                batch.set(newInvitationRef, {
+                    matchId: matchDoc.id,
+                    teamId: reservation.teamRef,
+                    playerId: playerId,
+                    managerId: teamData.managerId,
+                    status: "pending",
+                    invitedAt: serverTimestamp(),
+                });
+            }
+            await batch.commit(); // Commit all invitations at once
         }
         
         toast({
           title: "Reservation Confirmed!",
-          description: `A match has been scheduled and invitations sent.`,
+          description: `A match has been scheduled and invitations sent to ${playerIds.length} players.`,
         });
 
       } else if (status === "Canceled") {
@@ -287,3 +293,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
