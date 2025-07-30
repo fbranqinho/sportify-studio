@@ -4,9 +4,9 @@
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
-import type { Pitch, Reservation, User, Match } from "@/types";
+import type { Pitch, Reservation, User, Match, Notification } from "@/types";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus } from "lucide-react";
@@ -27,7 +27,7 @@ interface PitchScheduleProps {
 }
 
 interface SlotInfo {
-  status: 'Available' | 'Pending' | 'Confirmed' | 'Open' | 'Booked';
+  status: 'Available' | 'Pending' | 'Booked' | 'Open';
   match?: Match;
   reservation?: Reservation;
 }
@@ -127,10 +127,29 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         }
 
         try {
-            await updateDoc(matchRef, {
+            const batch = new (await import('firebase/firestore')).WriteBatch(db);
+
+            // Step 1: Update match with the application
+            batch.update(matchRef, {
                 playerApplications: arrayUnion(user.id)
             });
-            // TODO: Create a notification for the match/team manager
+
+            // Step 2: Create a notification for the match manager
+            if (match.managerRef) {
+                const notification: Omit<Notification, 'id'> = {
+                    userId: match.managerRef,
+                    message: `${user.name} has applied to play in your game.`,
+                    link: `/dashboard/games/${match.id}`,
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                const notificationsCollection = collection(db, "notifications");
+                const newNotificationRef = doc(notificationsCollection);
+                batch.set(newNotificationRef, notification);
+            }
+            
+            await batch.commit();
+
             toast({ title: "Application sent!", description: "The team manager has been notified of your interest." });
         } catch(error) {
             console.error("Error applying to game:", error);
