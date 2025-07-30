@@ -9,6 +9,7 @@ import { app, db } from "@/lib/firebase";
 import type { User } from "@/types";
 import { PlayerProfileForm } from "@/components/forms/player-profile-form";
 import { OwnerProfileForm } from "@/components/forms/owner-profile-form";
+import { ManagerProfileForm } from "@/components/forms/manager-profile-form";
 import { Icons } from "@/components/icons";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,8 +58,7 @@ export default function CompleteProfilePage() {
       case "OWNER":
         return <OwnerProfileForm userId={user.id} />;
       case "MANAGER":
-        // Placeholder for Manager form
-        return <p>Manager profile form coming soon.</p>;
+        return <ManagerProfileForm userId={user.id} userName={user.name} />;
       // Add other roles as needed
       default:
         return <p>No profile form available for your role yet.</p>;
