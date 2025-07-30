@@ -26,7 +26,7 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
 
     const handleSearch = async () => {
         const searchTerm = searchQuery.trim().toLowerCase();
-        if (searchTerm.length < 2) {
+        if (!searchTerm) {
             setSearchResults([]);
             return;
         }
