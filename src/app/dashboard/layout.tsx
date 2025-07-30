@@ -84,6 +84,7 @@ export default function DashboardLayout({
   
   const childrenWithProps = React.Children.map(children, child => {
     if (React.isValidElement(child) && user) {
+      // Pass user role and id to child components
       return React.cloneElement(child, { role: user.role, userId: user.id } as any);
     }
     return child;
