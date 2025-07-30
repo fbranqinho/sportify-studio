@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Reservation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -82,14 +82,31 @@ export default function SchedulePage() {
   }, [user, ownerProfileId, toast]);
   
 
-  const handleUpdateStatus = async (reservationId: string, status: "Confirmed" | "Canceled") => {
-    const reservationRef = doc(db, "reservations", reservationId);
+  const handleUpdateStatus = async (reservation: Reservation, status: "Confirmed" | "Canceled") => {
+    const reservationRef = doc(db, "reservations", reservation.id);
     try {
       await updateDoc(reservationRef, { status });
-      toast({
-        title: "Reservation Updated",
-        description: `The reservation has been ${status === "Confirmed" ? "confirmed" : "canceled"}.`,
-      });
+
+      // If confirmed, create a new match
+      if (status === "Confirmed") {
+        await addDoc(collection(db, "matches"), {
+          date: reservation.date,
+          pitchRef: reservation.pitchId,
+          managerRef: reservation.managerRef, // Assumes a manager made the reservation
+          status: "Scheduled",
+          playersStats: [],
+          // TeamA and TeamB can be set later by the manager
+        });
+        toast({
+          title: "Reservation Confirmed!",
+          description: `The reservation has been confirmed and a match has been scheduled.`,
+        });
+      } else {
+         toast({
+          title: "Reservation Canceled",
+          description: `The reservation has been canceled.`,
+        });
+      }
     } catch (error) {
       console.error("Error updating reservation status: ", error);
       toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
@@ -136,10 +153,10 @@ export default function SchedulePage() {
       </CardContent>
       {user?.role === 'OWNER' && reservation.status === 'Pending' && (
         <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => handleUpdateStatus(reservation.id, 'Confirmed')}>
+          <Button size="sm" onClick={() => handleUpdateStatus(reservation, 'Confirmed')}>
              <CheckCircle className="mr-2 h-4 w-4" /> Approve
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation.id, 'Canceled')}>
+          <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation, 'Canceled')}>
              <XCircle className="mr-2 h-4 w-4" /> Reject
           </Button>
         </CardFooter>

@@ -48,6 +48,7 @@ const formSchema = z.object({
   time: z.string({
     required_error: "A time for the booking is required.",
   }),
+  teamRef: z.string().optional(), // Optional team selection
 });
 
 interface CreateReservationFormProps {
@@ -96,6 +97,10 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
       // Add role-specific reference
       const roleField = `${user.role.toLowerCase()}Ref`;
       reservationData[roleField] = user.id;
+
+      if (values.teamRef) {
+        reservationData.teamRef = values.teamRef;
+      }
 
       await addDoc(collection(db, "reservations"), reservationData);
 

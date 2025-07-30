@@ -207,6 +207,7 @@ export interface Reservation {
   // Add refs for different roles who can book
   managerRef?: string;
   playerRef?: string;
+  teamRef?: string; // Optional: To associate reservation with a specific team
 }
 
 
@@ -227,6 +228,7 @@ export interface Match {
     date: string; // ISO 8601 string
     teamARef?: string; // Team ID
     teamBRef?: string; // Team ID
+    managerRef?: string; // User ID of the manager
     scoreA?: number;
     scoreB?: number;
     pitchRef?: string; // Pitch ID
