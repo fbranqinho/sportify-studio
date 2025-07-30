@@ -247,6 +247,7 @@ export interface Match {
     status: MatchStatus;
     attendance?: number;
     refereeId: string | null;
+    managerRef?: string | null;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

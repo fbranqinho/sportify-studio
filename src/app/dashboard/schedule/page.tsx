@@ -68,7 +68,7 @@ export default function SchedulePage() {
       } else {
         // If ownerProfileId is null for an owner, it means it's still loading or not found.
         // We set loading to false only if we are sure there's no profile.
-        if (ownerProfileId === null) setLoading(false);
+        if (ownerProfileId === null && !user) setLoading(false);
       }
     } else { // For PLAYER, MANAGER, etc.
       const roleField = `${user.role.toLowerCase()}Ref`;
@@ -101,14 +101,15 @@ export default function SchedulePage() {
           date: reservation.date,
           pitchRef: reservation.pitchId,
           status: "Scheduled",
-          teamARef: reservation.teamRef || null, // The team that made the reservation
-          teamBRef: null, // Opponent to be defined later
+          teamARef: reservation.teamRef || null,
+          teamBRef: null,
           teamAPlayers: [],
           teamBPlayers: [],
           scoreA: 0,
           scoreB: 0,
           refereeId: null,
           attendance: 0,
+          managerRef: reservation.managerRef || null,
         });
         toast({
           title: "Reservation Confirmed!",
