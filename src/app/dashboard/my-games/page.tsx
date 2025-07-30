@@ -26,17 +26,12 @@ export default function MyGamesPage() {
 
   // Effect to fetch teams and matches based on user role
   React.useEffect(() => {
-    if (!user) return;
+    if (!user) {
+        setLoading(false);
+        return;
+    }
+    
     setLoading(true);
-
-    let activeListeners = 0;
-
-    const doneLoading = () => {
-        activeListeners -= 1;
-        if (activeListeners === 0) {
-            setLoading(false);
-        }
-    };
 
     const fetchTeamDetails = async (teamIds: string[]) => {
         if (teamIds.length === 0) return new Map();
@@ -51,35 +46,32 @@ export default function MyGamesPage() {
         });
         return teamsMap;
     }
-    
-    // Listener for Match Invitations (for players)
-    let unsubscribeInvitations = () => {};
+
+    const listeners: (() => void)[] = [];
+
+    // --- Listener for Match Invitations (for players) ---
     if (user.role === 'PLAYER') {
-        activeListeners++;
         const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
-        unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
+        const unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
             const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
             setInvitations(invs);
-            
             if (invs.length > 0) {
                  const teamIds = invs.map(inv => inv.teamId);
                  const teamsMap = await fetchTeamDetails(teamIds);
                  setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
-            doneLoading();
         }, (error) => {
             console.error("Error fetching invitations:", error);
-            doneLoading();
         });
+        listeners.push(unsubscribeInvitations);
     }
 
+    // --- Listener for Matches ---
     const setupMatchListeners = async () => {
-        activeListeners++;
-        let matchesQuery;
-        let matchesQueryB; // For teamBRef
+        let matchesQuery: any;
+        let matchesQueryB: any;
         
         let userTeamIds: string[] = [];
-        let combinedMatches = new Map<string, Match>();
 
         if (user.role === 'MANAGER') {
             matchesQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
@@ -88,23 +80,21 @@ export default function MyGamesPage() {
             const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
             userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
             
-            if (userTeamIds.length === 0) {
-                setMatches([]);
-                doneLoading();
-                return () => {};
+            if (userTeamIds.length > 0) {
+                matchesQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+                matchesQueryB = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
             }
-            
-            matchesQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
-            matchesQueryB = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-
-        } else {
-             doneLoading();
-            return () => {};
         }
 
+        if (!matchesQuery) {
+            setLoading(false);
+            return;
+        }
 
-        const handleSnapshot = async (querySnapshot: DocumentData, isInitialLoad: boolean) => {
-            const newMatches = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
+        const combinedMatches = new Map<string, Match>();
+
+        const handleSnapshot = async (snapshot: DocumentData) => {
+            const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
             
             newMatches.forEach(match => {
                 combinedMatches.set(match.id, match);
@@ -124,41 +114,35 @@ export default function MyGamesPage() {
             }
             
             setMatches(Array.from(combinedMatches.values()));
-            if(isInitialLoad) doneLoading();
         };
         
-        let isInitialA = true;
-        const unsubscribeA = onSnapshot(matchesQuery, (snapshot) => handleSnapshot(snapshot, isInitialA), (error) => {
+        const unsubscribeA = onSnapshot(matchesQuery, handleSnapshot, (error) => {
             console.error("Error fetching matches (Team A): ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch matches." });
-            if(isInitialA) doneLoading();
         });
-        if(isInitialA) isInitialA = false;
+        listeners.push(unsubscribeA);
 
-        let unsubscribeB = () => {};
         if (matchesQueryB) {
-            let isInitialB = true;
-            unsubscribeB = onSnapshot(matchesQueryB, (snapshot) => handleSnapshot(snapshot, isInitialB), (error) => {
+            const unsubscribeB = onSnapshot(matchesQueryB, handleSnapshot, (error) => {
                 console.error("Error fetching matches (Team B): ", error);
             });
-             if(isInitialB) isInitialB = false;
+            listeners.push(unsubscribeB);
         }
+
+        // Set loading to false after initial data is loaded from both queries if they exist
+        const initialLoadA = getDocs(matchesQuery);
+        const initialLoadB = matchesQueryB ? getDocs(matchesQueryB) : Promise.resolve(null);
         
-        return () => {
-          unsubscribeA();
-          unsubscribeB();
-        };
-    }
+        Promise.all([initialLoadA, initialLoadB]).then(() => {
+            setLoading(false);
+        }).catch(() => setLoading(false));
 
-    const unsubscribeMatchesPromise = setupMatchListeners();
-
-    if (activeListeners === 0) {
-      setLoading(false);
-    }
+    };
+    
+    setupMatchListeners();
     
     return () => {
-        unsubscribeMatchesPromise.then(unsub => unsub && unsub());
-        unsubscribeInvitations();
+        listeners.forEach(unsub => unsub());
     };
 
   }, [user, toast]);
