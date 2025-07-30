@@ -59,9 +59,9 @@ export default function SchedulePage() {
           toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
           setLoading(false);
         });
+      } else if (user.role === 'OWNER' && !ownerProfileId) {
+        setLoading(false);
       }
-      // If ownerProfileId is still null, we wait for the other effect to set it.
-      // If it has run and found no profile, loading would already be false.
     } else { // For PLAYER, MANAGER, etc.
       const roleField = `${user.role.toLowerCase()}Ref`;
       const reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
@@ -94,8 +94,12 @@ export default function SchedulePage() {
           pitchRef: reservation.pitchId,
           managerRef: reservation.managerRef, // Assumes a manager made the reservation
           status: "Scheduled",
+          teamARef: reservation.teamRef, // The team that made the reservation
+          teamBRef: null, // Opponent to be defined later
           playersStats: [],
-          // TeamA and TeamB can be set later by the manager
+          refereeId: null,
+          scoreA: 0,
+          scoreB: 0,
         });
         toast({
           title: "Reservation Confirmed!",
@@ -198,7 +202,7 @@ export default function SchedulePage() {
       {/* Pending Requests Section */}
       <div className="space-y-4">
         <h2 className="text-2xl font-bold font-headline text-primary">Pending Requests ({pendingReservations.length})</h2>
-        {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
+        {loading ? (
             <LoadingSkeleton />
         ) : pendingReservations.length > 0 ? (
             <ReservationList reservations={pendingReservations} />
@@ -209,7 +213,7 @@ export default function SchedulePage() {
 
       <div className="border-t pt-8 space-y-4">
         <h2 className="text-2xl font-bold font-headline">Upcoming Schedule ({upcomingReservations.length})</h2>
-         {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
+         {loading ? (
             <LoadingSkeleton />
         ) : upcomingReservations.length > 0 ? (
             <ReservationList reservations={upcomingReservations} />
@@ -225,7 +229,7 @@ export default function SchedulePage() {
                     <h2 className="text-2xl font-bold font-headline">Reservation History ({pastReservations.length})</h2>
                 </AccordionTrigger>
                 <AccordionContent>
-                    {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
+                    {loading ? (
                         <LoadingSkeleton />
                     ) : pastReservations.length > 0 ? (
                         <ReservationList reservations={pastReservations} />

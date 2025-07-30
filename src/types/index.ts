@@ -237,8 +237,8 @@ export interface MatchPlayerStat {
 export interface Match {
     id: string;
     date: string; // ISO 8601 string
-    teamARef?: string; // Team ID
-    teamBRef?: string; // Team ID
+    teamARef?: string | null; // Team ID
+    teamBRef?: string | null; // Team ID
     managerRef?: string; // User ID of the manager
     scoreA?: number;
     scoreB?: number;
@@ -246,7 +246,7 @@ export interface Match {
     status?: MatchStatus;
     attendance?: number;
     playersStats: MatchPlayerStat[];
-    refereeId?: string;
+    refereeId?: string | null;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";
