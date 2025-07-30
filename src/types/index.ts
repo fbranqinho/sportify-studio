@@ -1,4 +1,5 @@
 
+
 import type { LucideIcon } from "lucide-react";
 
 export type UserRole = "PLAYER" | "MANAGER" | "OWNER" | "PROMOTER" | "REFEREE" | "ADMIN";
@@ -178,7 +179,7 @@ export interface Pitch {
   photoUrl?: string;
   ownerRef: string; // OwnerProfile ID
   sport: PitchSport;
-  coords?: { lat: number; lng: number }; // Optional coordinates
+  coords: { lat: number; lng: number };
 }
 
 export type ReservationStatus = "Pending" | "Confirmed" | "Cancelled";

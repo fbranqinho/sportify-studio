@@ -22,6 +22,8 @@ export default function GamesPage() {
   const [nearestPitchId, setNearestPitchId] = React.useState<string | null>(null);
   const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   React.useEffect(() => {
     // Get user location
     if (navigator.geolocation) {
@@ -34,8 +36,13 @@ export default function GamesPage() {
         },
         (error) => {
           console.error("Error getting user location:", error);
+           // Fallback location (e.g., center of Lisbon) if user denies permission
+          setUserLocation({ lat: 38.7223, lng: -9.1393 });
         }
       );
+    } else {
+       // Fallback location if geolocation is not supported
+       setUserLocation({ lat: 38.7223, lng: -9.1393 });
     }
 
     // Fetch pitches
@@ -76,9 +83,25 @@ export default function GamesPage() {
 
   const filteredPitches = pitches.filter(pitch =>
     pitch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pitch.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (pitch.city && pitch.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
     pitch.sport.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (!googleMapsApiKey) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-destructive">Configuration Error</CardTitle>
+                <CardDescription>
+                    The Google Maps API key is missing. Please add it to your environment variables.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p>Follow the instructions in the documentation to get and set up your API key.</p>
+            </CardContent>
+        </Card>
+    )
+  }
 
   return (
     <div className="h-[calc(100vh-10rem)] grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -167,11 +190,11 @@ export default function GamesPage() {
            <Skeleton className="w-full h-full" />
          ) : (
             <PitchesMap 
+                apiKey={googleMapsApiKey}
                 pitches={filteredPitches} 
                 userLocation={userLocation}
                 nearestPitchId={nearestPitchId}
                 hoveredPitchId={hoveredPitchId}
-                setHoveredPitchId={setHoveredPitchId}
              />
          )}
       </div>
