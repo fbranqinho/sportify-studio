@@ -158,6 +158,7 @@ export default function MyGamesPage() {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
     const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
     const isFinished = match.status === "Finished";
+    const isManager = user?.id === teamA?.managerId;
     
     const getMatchTitle = () => {
       if (teamA && !teamB) {
@@ -192,10 +193,10 @@ export default function MyGamesPage() {
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
                  </div>
             </CardContent>
-            {!isFinished && (
+            {!isFinished && isManager && (
             <CardFooter>
                 <Button variant="outline" className="w-full" asChild>
-                    <Link href="#">View Game Details</Link>
+                    <Link href={`/dashboard/games/${match.id}`}>View Game Details</Link>
                 </Button>
             </CardFooter>
             )}
