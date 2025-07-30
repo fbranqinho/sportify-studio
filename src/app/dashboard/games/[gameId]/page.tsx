@@ -345,7 +345,7 @@ export default function GameDetailsPage() {
     }
 
     const getMatchTitle = () => {
-        if (teamA && !teamB && match.status !== 'PendingOpponent') return `${teamA.name} (Practice)`;
+        if (teamA && !teamB && match.status === 'PendingOpponent') return `${teamA.name} (Practice)`;
         if (teamA && teamB && match.status === 'PendingOpponent') return `${teamA.name} vs ${teamB.name} (Pending)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
@@ -430,3 +430,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    

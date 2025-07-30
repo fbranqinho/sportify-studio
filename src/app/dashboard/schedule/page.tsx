@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -60,7 +59,9 @@ export default function SchedulePage() {
       } else {
         // If ownerProfileId is null for an owner, it means it's still loading or not found.
         // We set loading to false only if we are sure there's no profile.
-        setLoading(false);
+        if (user.role === 'OWNER' && ownerProfileId === null) {
+          setLoading(false);
+        }
         return;
       }
     } else { // For PLAYER, MANAGER, etc.
@@ -115,16 +116,17 @@ export default function SchedulePage() {
         const playerIds = teamData.playerIds || [];
 
         // Step 2: Create the Match document first to get its ID.
+        // If it's a booking for just one team, it's a practice, so allow external players by default.
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
-          status: "Scheduled",
+          status: "PendingOpponent", // A practice session is essentially pending an opponent or players
           teamARef: reservation.teamRef,
           teamBRef: null,
           teamAPlayers: [],
           teamBPlayers: [],
           playerApplications: [],
-          allowExternalPlayers: false, // Default value
+          allowExternalPlayers: true, // Default to true for practices
           scoreA: 0,
           scoreB: 0,
           refereeId: null,
@@ -297,14 +299,16 @@ export default function SchedulePage() {
       </div>
 
       {/* Pending Requests Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold font-headline text-primary">Pending Requests ({pendingReservations.length})</h2>
-        {pendingReservations.length > 0 ? (
-            <ReservationList reservations={pendingReservations} />
-        ) : (
-            <EmptyState icon={Clock} title="No Pending Reservations" description="You don't have any new booking requests right now." />
-        )}
-      </div>
+      {user?.role === 'OWNER' &&
+        <div className="space-y-4">
+            <h2 className="text-2xl font-bold font-headline text-primary">Pending Requests ({pendingReservations.length})</h2>
+            {pendingReservations.length > 0 ? (
+                <ReservationList reservations={pendingReservations} />
+            ) : (
+                <EmptyState icon={Clock} title="No Pending Reservations" description="You don't have any new booking requests right now." />
+            )}
+        </div>
+      }
 
       <div className="border-t pt-8 space-y-4">
         <h2 className="text-2xl font-bold font-headline">Upcoming Schedule ({upcomingReservations.length})</h2>
@@ -335,3 +339,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
