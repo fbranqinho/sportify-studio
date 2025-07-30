@@ -554,5 +554,3 @@ export default function TeamDetailsPage() {
     </div>
   );
 }
-
-    
