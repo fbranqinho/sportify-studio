@@ -102,8 +102,10 @@ export default function TeamsPage() {
                  <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
               </CardContent>
               <CardFooter>
-                 <Button variant="outline" className="w-full justify-between">
-                    Manage Team <ChevronRight className="h-4 w-4" />
+                 <Button asChild variant="outline" className="w-full justify-between">
+                    <Link href={`/dashboard/teams/${team.id}`}>
+                      Manage Team <ChevronRight className="h-4 w-4" />
+                    </Link>
                  </Button>
               </CardFooter>
             </Card>
