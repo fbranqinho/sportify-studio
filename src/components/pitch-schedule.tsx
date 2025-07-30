@@ -27,7 +27,7 @@ interface PitchScheduleProps {
 }
 
 interface SlotInfo {
-  status: 'Available' | 'Pending' | 'Confirmed' | 'Open';
+  status: 'Available' | 'Pending' | 'Confirmed' | 'Open' | 'Booked';
   match?: Match;
   reservation?: Reservation;
 }
@@ -83,25 +83,29 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const [hours, minutes] = slot.split(':').map(Number);
         slotDateTime.setHours(hours, minutes, 0, 0);
 
+        const match = matches.find(m => {
+            const matchDate = new Date(m.date);
+            return matchDate.getTime() === slotDateTime.getTime();
+        });
+
+        if (match) {
+             if (match.allowExternalPlayers) {
+                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0) + (match.playerApplications?.length || 0);
+                if (totalPlayers < 10) { // Example: fut5 game size, including applicants
+                    return { status: 'Open', match };
+                }
+            }
+            return { status: 'Booked', match };
+        }
+
         const reservation = reservations.find(r => {
             const reservationDate = new Date(r.date);
-            return reservationDate.getTime() === slotDateTime.getTime() && (r.status === 'Confirmed' || r.status === 'Pending');
+            return reservationDate.getTime() === slotDateTime.getTime();
         });
 
         if (reservation) {
-            const match = matches.find(m => {
-                const matchDate = new Date(m.date);
-                return matchDate.getTime() === slotDateTime.getTime();
-            });
-            
-            if (match?.allowExternalPlayers) {
-                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (totalPlayers < 10) { // Example: fut5 game size
-                    return { status: 'Open', match, reservation };
-                }
-            }
-
-            return { status: reservation.status as 'Confirmed' | 'Pending', reservation };
+            if (reservation.status === 'Confirmed') return { status: 'Booked', reservation };
+            if (reservation.status === 'Pending') return { status: 'Pending', reservation };
         }
         
         return { status: 'Available' };
@@ -173,9 +177,22 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             const [hours] = slot.split(':').map(Number);
                             slotDateTime.setHours(hours, 0, 0, 0);
                             const isPast = isBefore(slotDateTime, new Date());
-                            const isDisabled = (slotInfo.status !== 'Available' && slotInfo.status !== 'Open') || isPast;
-
-                             if (slotInfo.status === 'Open' && slotInfo.match && !isPast) {
+                            
+                            if (isPast) {
+                                return (
+                                     <Button
+                                        key={slot}
+                                        variant="secondary"
+                                        disabled
+                                        className="h-12 flex-col"
+                                    >
+                                        <span className="font-bold text-base">{slot}</span>
+                                        <div className="text-xs">Unavailable</div>
+                                    </Button>
+                                )
+                            }
+                            
+                            if (slotInfo.status === 'Open' && slotInfo.match) {
                                 return (
                                     <Button
                                         key={slot}
@@ -190,24 +207,38 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                     </Button>
                                 );
                             }
-
+                            
+                             if (slotInfo.status === 'Available') {
+                                return (
+                                     <DialogTrigger asChild key={slot}>
+                                        <Button
+                                            variant="outline"
+                                            className="h-12 flex-col"
+                                            onClick={() => setSelectedSlot(slot)}
+                                        >
+                                            <span className="font-bold text-base">{slot}</span>
+                                            <div className="text-xs flex items-center gap-1">
+                                                <CheckCircle className="h-3 w-3 text-green-500" /> Available
+                                            </div>
+                                        </Button>
+                                    </DialogTrigger>
+                                )
+                            }
+                            
+                            // For Booked or Pending slots
                             return (
-                                <DialogTrigger asChild key={slot}>
-                                    <Button
-                                        variant={slotInfo.status === 'Available' ? "outline" : "secondary"}
-                                        disabled={isDisabled}
-                                        className="h-12 flex-col"
-                                        onClick={() => setSelectedSlot(slot)}
-                                    >
-                                        <span className="font-bold text-base">{slot}</span>
-                                        <div className="text-xs flex items-center gap-1">
-                                            {slotInfo.status === 'Available' && !isPast && <><CheckCircle className="h-3 w-3 text-green-500" /> Available</>}
-                                            {slotInfo.status === 'Pending' && <><Clock className="h-3 w-3 text-amber-500" /> Pending</>}
-                                            {slotInfo.status === 'Confirmed' && <><Ban className="h-3 w-3 text-red-500" /> Booked</>}
-                                            {isPast && slotInfo.status === 'Available' && 'Unavailable'}
-                                        </div>
-                                    </Button>
-                                </DialogTrigger>
+                                 <Button
+                                    key={slot}
+                                    variant="secondary"
+                                    disabled
+                                    className="h-12 flex-col"
+                                >
+                                    <span className="font-bold text-base">{slot}</span>
+                                    <div className="text-xs flex items-center gap-1">
+                                        {slotInfo.status === 'Pending' && <><Clock className="h-3 w-3 text-amber-500" /> Pending</>}
+                                        {slotInfo.status === 'Booked' && <><Ban className="h-3 w-3 text-red-500" /> Booked</>}
+                                    </div>
+                                </Button>
                             )
                         })}
                     </div>
