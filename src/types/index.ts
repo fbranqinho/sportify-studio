@@ -281,3 +281,8 @@ export type NavItem = {
   roles: UserRole[];
   label?: string;
 };
+
+export interface EnrichedPlayerSearchResult {
+    profile: PlayerProfile;
+    user: User;
+}

@@ -4,9 +4,9 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Team, PlayerProfile, TeamPlayer, User } from "@/types";
+import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,12 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Trash2, UserPlus, Users } from "lucide-react";
+import { ChevronLeft, Trash2, UserPlus, Users, Search, X } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 
 interface EnrichedTeamPlayer extends TeamPlayer {
   profile?: PlayerProfile;
 }
+
 
 export default function ManageTeamPage() {
   const params = useParams();
@@ -31,7 +32,11 @@ export default function ManageTeamPage() {
   const [team, setTeam] = React.useState<Team | null>(null);
   const [players, setPlayers] = React.useState<EnrichedTeamPlayer[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [newPlayerEmail, setNewPlayerEmail] = React.useState("");
+  
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [searchResults, setSearchResults] = React.useState<EnrichedPlayerSearchResult[]>([]);
+
 
   const fetchTeamData = React.useCallback(async () => {
     if (!teamId) return;
@@ -118,32 +123,67 @@ export default function ManageTeamPage() {
      }
   };
 
-  const handleInvitePlayer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPlayerEmail.trim() || !team || !user) return;
-
+  const handleSearchPlayers = async (queryText: string) => {
+    setSearchQuery(queryText);
+    if (queryText.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
     try {
-        // 1. Find user by email
-        const userQuery = query(collection(db, "users"), where("email", "==", newPlayerEmail.trim()), where("role", "==", "PLAYER"));
-        const userSnapshot = await getDocs(userQuery);
-
-        if (userSnapshot.empty) {
-            toast({ variant: "destructive", title: "Not Found", description: "No player found with that email." });
+        // Query player profiles by nickname
+        const profilesQuery = query(
+            collection(db, "playerProfiles"),
+            where("nickname", ">=", queryText),
+            where("nickname", "<=", queryText + '\uf8ff')
+        );
+        const profilesSnapshot = await getDocs(profilesQuery);
+        
+        if (profilesSnapshot.empty) {
+            setSearchResults([]);
             return;
         }
 
-        const invitedUserDoc = userSnapshot.docs[0];
-        const invitedUserId = invitedUserDoc.id;
-        const invitedUserData = invitedUserDoc.data() as User;
+        const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef);
+        
+        // Fetch user data for the found profiles
+        const usersQuery = query(collection(db, "users"), where("id", "in", playerUserRefs));
+        const usersSnapshot = await getDocs(usersQuery);
+        const usersMap = new Map<string, User>();
+        usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data() as User));
 
+        const results: EnrichedPlayerSearchResult[] = profilesSnapshot.docs.map(doc => {
+            const profile = { id: doc.id, ...doc.data() } as PlayerProfile;
+            return {
+                profile,
+                user: usersMap.get(profile.userRef)
+            }
+        }).filter(item => item.user); // Filter out any profiles that don't have a matching user
 
-        // 2. Check if player is already in the team
+        setSearchResults(results as EnrichedPlayerSearchResult[]);
+
+    } catch (error) {
+        console.error("Error searching players:", error);
+        toast({ variant: "destructive", title: "Search Error", description: "Could not perform search." });
+    } finally {
+        setIsSearching(false);
+    }
+  };
+  
+  const handleInvitePlayer = async (playerToInvite: EnrichedPlayerSearchResult) => {
+    if (!team || !user) return;
+    
+    const invitedUserId = playerToInvite.user.id;
+
+    try {
+        // Check if player is already in the team
         if (team.players.some(p => p.playerId === invitedUserId)) {
-            toast({ variant: "destructive", title: "Already on Team", description: "This player is already on your team." });
+            toast({ variant: "destructive", title: "Already on Team", description: `${playerToInvite.user.name} is already on your team.` });
             return;
         }
         
-        // 3. Check for existing pending invitation
+        // Check for existing pending invitation
         const invitationQuery = query(
             collection(db, "teamInvitations"),
             where("teamId", "==", teamId),
@@ -152,25 +192,24 @@ export default function ManageTeamPage() {
         );
         const invitationSnapshot = await getDocs(invitationQuery);
         if (!invitationSnapshot.empty) {
-            toast({ variant: "destructive", title: "Invitation exists", description: "An invitation has already been sent to this player." });
+            toast({ variant: "destructive", title: "Invitation Exists", description: `An invitation has already been sent to ${playerToInvite.user.name}.` });
             return;
         }
 
-        // 4. Create invitation document
+        // Create invitation document
         await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
-            teamName: team.name, // denormalize for easier display
+            teamName: team.name,
             playerId: invitedUserId,
-            playerName: invitedUserData.name, // denormalize
+            playerName: playerToInvite.user.name,
             managerId: user.id,
             status: "pending",
             invitedAt: serverTimestamp(),
         });
 
-
-        toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${invitedUserData.name}.` });
-        setNewPlayerEmail("");
-
+        toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${playerToInvite.user.name}.` });
+        setSearchQuery("");
+        setSearchResults([]);
     } catch (error) {
          console.error("Error inviting player:", error);
          toast({ variant: "destructive", title: "Error", description: "Failed to send invitation." });
@@ -254,20 +293,58 @@ export default function ManageTeamPage() {
                 </TableBody>
             </Table>
             
-            {/* Invite Player Form */}
-            <div>
+            {/* Invite Player */}
+             <div>
                 <h3 className="text-lg font-semibold font-headline mb-2">Invite New Player</h3>
-                <form onSubmit={handleInvitePlayer} className="flex items-center gap-2">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input 
-                        type="email" 
-                        placeholder="Enter player's email address..."
-                        value={newPlayerEmail}
-                        onChange={(e) => setNewPlayerEmail(e.target.value)}
+                        placeholder="Search for players by nickname..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchPlayers(e.target.value)}
+                        className="pl-10"
                     />
-                    <Button type="submit">
-                        <UserPlus className="mr-2" /> Invite Player
-                    </Button>
-                </form>
+                    {searchQuery && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6"
+                            onClick={() => {
+                                setSearchQuery("");
+                                setSearchResults([]);
+                            }}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+
+                {isSearching ? (
+                   <div className="mt-2 text-sm text-muted-foreground">Searching...</div>
+                ) : searchResults.length > 0 ? (
+                    <div className="mt-2 border rounded-md max-h-60 overflow-y-auto">
+                        <Table>
+                           <TableBody>
+                                {searchResults.map((result) => (
+                                    <TableRow key={result.user.id}>
+                                        <TableCell>
+                                            <div className="font-medium">{result.profile.nickname}</div>
+                                            <div className="text-xs text-muted-foreground">{result.user.name} ({result.user.email})</div>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button size="sm" onClick={() => handleInvitePlayer(result)}>
+                                                <UserPlus className="mr-2 h-4 w-4" />
+                                                Invite
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                           </TableBody>
+                        </Table>
+                    </div>
+                ) : searchQuery && !isSearching && (
+                     <div className="mt-2 text-sm text-muted-foreground text-center py-4">No players found.</div>
+                )}
             </div>
         </CardContent>
       </Card>
