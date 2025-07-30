@@ -176,7 +176,7 @@ export default function MyGamesPage() {
               toast({ title: "Match Accepted!", description: "The match is now scheduled."});
           } else {
               await updateDoc(matchRef, {
-                  status: "Scheduled", // Back to original state before invite
+                  status: "PendingOpponent", // Back to original state before invite
                   invitedTeamId: null,
               });
               toast({ title: "Match Declined", description: "The match invitation has been declined."});
@@ -189,7 +189,7 @@ export default function MyGamesPage() {
 
 
   const now = new Date();
-  const upcomingMatches = matches.filter(m => m.status === 'Scheduled' && new Date(m.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const pastMatches = matches.filter(m => new Date(m.date) < now).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   const MatchCard = ({ match }: { match: Match }) => {
@@ -231,7 +231,7 @@ export default function MyGamesPage() {
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
                  </div>
             </CardContent>
-            {!isFinished && isManager && (
+            {(!isFinished && isManager) && (
             <CardFooter>
                 <Button variant="outline" className="w-full" asChild>
                     <Link href={`/dashboard/games/${match.id}`}>Manage Game</Link>
