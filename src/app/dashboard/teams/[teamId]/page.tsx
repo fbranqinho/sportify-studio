@@ -158,6 +158,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
     
     setIsSearching(true);
     try {
+        // Search by nickname (which is stored in lowercase)
         const profilesQuery = query(
             collection(db, "playerProfiles"),
             where("nickname", ">=", searchTerm),
@@ -171,7 +172,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
             return;
         }
 
-        const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef);
+        const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef).filter(ref => ref);
         if(playerUserRefs.length === 0){
             setSearchResults([]);
             setIsSearching(false);
@@ -189,9 +190,9 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                 profile,
                 user: usersMap.get(profile.userRef)
             }
-        }).filter(item => item.user);
+        }).filter((item): item is EnrichedPlayerSearchResult => !!item.user);
 
-        setSearchResults(results as EnrichedPlayerSearchResult[]);
+        setSearchResults(results);
 
     } catch (error) {
         console.error("Error searching players:", error);
@@ -385,7 +386,7 @@ export default function TeamDetailsPage() {
               };
           }).sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
           
-          setPlayers(enrichedPlayers);
+          setPlayers(enrichedPlayers as EnrichedTeamPlayer[]);
       } else {
         setPlayers([]);
       }
@@ -473,7 +474,7 @@ export default function TeamDetailsPage() {
         }
 
         // Create Invitation
-        await addDoc(collection(db, "teamInvitations"), {
+        const invitationRef = await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
             playerId: invitedUserId,

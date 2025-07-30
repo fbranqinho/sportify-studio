@@ -139,6 +139,7 @@ export interface TeamPlayer {
 export interface Team {
   id: string;
   name: string;
+  name_lowercase: string;
   logoUrl?: string;
   managerId: string; // User ID of the manager
   players: TeamPlayer[];

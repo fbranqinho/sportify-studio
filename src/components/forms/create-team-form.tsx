@@ -55,6 +55,7 @@ export function CreateTeamForm({ managerId }: CreateTeamFormProps) {
     try {
       await addDoc(collection(db, "teams"), {
         ...values,
+        name_lowercase: values.name.toLowerCase(),
         managerId: managerId,
         players: [],
         playerIds: [],

@@ -25,7 +25,8 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
     const { user } = useUser();
 
     const handleSearch = async () => {
-        if (searchQuery.trim().length < 2) {
+        const searchTerm = searchQuery.trim().toLowerCase();
+        if (searchTerm.length < 2) {
             setSearchResults([]);
             return;
         }
@@ -33,8 +34,8 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
         try {
             const teamsQuery = query(
                 collection(db, "teams"),
-                where("name", ">=", searchQuery),
-                where("name", "<=", searchQuery + '\uf8ff')
+                where("name_lowercase", ">=", searchTerm),
+                where("name_lowercase", "<=", searchTerm + '\uf8ff')
             );
             const querySnapshot = await getDocs(teamsQuery);
             const teams = querySnapshot.docs
@@ -68,14 +69,16 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
             });
 
             // Create a notification for the opponent's manager
-            const notification: Omit<Notification, 'id'> = {
-                userId: opponentTeam.managerId,
-                message: `${homeTeamName} has invited your team, ${opponentTeam.name}, to a match!`,
-                link: `/dashboard/my-games`, // Link to their games page
-                read: false,
-                createdAt: serverTimestamp() as any,
-            };
-            await addDoc(collection(db, "notifications"), notification);
+             if (opponentTeam.managerId) {
+                const notification: Omit<Notification, 'id'> = {
+                    userId: opponentTeam.managerId,
+                    message: `${homeTeamName} has invited your team, ${opponentTeam.name}, to a match!`,
+                    link: `/dashboard/my-games`, // Link to their games page
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                await addDoc(collection(db, "notifications"), notification);
+            }
             
             toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${opponentTeam.name}.` });
             onOpponentInvited(opponentTeam.id);
@@ -212,7 +215,7 @@ export default function GameDetailsPage() {
             </Card>
 
             {/* Invite Opponent section, shown only for training matches */}
-            {!match.teamBRef && (
+            {match.teamARef && !match.teamBRef && (
                 <InviteOpponent match={match} onOpponentInvited={() => fetchGameDetails()} />
             )}
         </div>
