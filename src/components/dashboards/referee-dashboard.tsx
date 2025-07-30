@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Whistle, Map } from "lucide-react";
+import { Calendar, ShieldCheck, Map } from "lucide-react";
 
 export function RefereeDashboard() {
   return (
@@ -20,8 +20,8 @@ export function RefereeDashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Matches Officiated</CardTitle>
-          <Whistle className="h-4 w-4 text-muted-foreground" />
-        </Header>
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">78</div>
            <p className="text-xs text-muted-foreground">Total this season</p>

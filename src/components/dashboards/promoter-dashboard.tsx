@@ -20,7 +20,7 @@ export function PromoterDashboard() {
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Network Size</CardTitle>
           <Contact className="h-4 w-4 text-muted-foreground" />
-        </Header>
+        </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">1,200+</div>
            <p className="text-xs text-muted-foreground">Players, Managers & Teams</p>

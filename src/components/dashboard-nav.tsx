@@ -22,7 +22,8 @@ import {
   Award,
   Calendar,
   Contact,
-  Whistle,
+  ShieldCheck,
+  Trophy,
 } from "lucide-react";
 
 const navItems: NavItem[] = [

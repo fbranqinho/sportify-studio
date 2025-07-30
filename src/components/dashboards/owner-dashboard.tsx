@@ -20,7 +20,7 @@ export function OwnerDashboard() {
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Today's Bookings</CardTitle>
           <Calendar className="h-4 w-4 text-muted-foreground" />
-        </Header>
+        </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">8</div>
            <p className="text-xs text-muted-foreground">75% occupancy</p>
