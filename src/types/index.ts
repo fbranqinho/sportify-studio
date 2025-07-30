@@ -195,6 +195,10 @@ export interface Reservation {
   paymentRefs: string[]; // Payment IDs
   totalAmount: number;
   promoRef?: string; // Promo ID
+  // Actor details - denormalized for easier display
+  actorName: string;
+  actorRole: UserRole;
+  pitchName: string; // Denormalized for easier display
 }
 
 
