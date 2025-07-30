@@ -189,19 +189,10 @@ function PlayerTeamsView() {
     // If accepted, add player to team
     if (accepted) {
       try {
-        // Find playerProfileId from user.id
-        const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", user.id));
-        const playerProfileSnapshot = await getDocs(playerProfileQuery);
-
-        if (playerProfileSnapshot.empty) {
-            throw new Error("Player profile not found.");
-        }
-        const playerProfileId = playerProfileSnapshot.docs[0].id;
-        
         const teamRef = doc(db, "teams", teamId);
         batch.update(teamRef, {
           playerIds: arrayUnion(user.id),
-          players: arrayUnion({ playerId: playerProfileId, number: null })
+          players: arrayUnion({ playerId: user.id, number: null })
         });
         
         await batch.commit();

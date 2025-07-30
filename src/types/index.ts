@@ -132,7 +132,7 @@ export interface AdminProfile {
 }
 
 export interface TeamPlayer {
-  playerId: string; // This should be the ID from the PlayerProfile collection
+  playerId: string; // This is the userRef (User ID)
   number: number | null;
 }
 
