@@ -82,7 +82,7 @@ export default function SchedulePage() {
   const now = new Date();
   const pendingReservations = reservations.filter(r => r.status === "Pending");
   const upcomingReservations = reservations.filter(r => (r.status === "Accepted" || r.status === "Scheduled") && new Date(r.date) >= now);
-  const pastReservations = reservations.filter(r => new Date(r.date) < now);
+  const pastReservations = reservations.filter(r => new Date(r.date) < now || r.status === "Canceled");
   
   const getStatusIcon = (status: Reservation["status"]) => {
     switch(status) {
