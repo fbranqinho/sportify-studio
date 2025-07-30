@@ -53,47 +53,17 @@ export default function LoginPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // TEMPORARY: Bypass Firebase Auth for mock users for testing purposes.
     if (mockUsers.includes(values.email)) {
-      try {
-        // Attempt to sign in silently, if it fails, it's ok for mock users.
-        await signInWithEmailAndPassword(auth, values.email, values.password).catch(() => {});
-        
-        toast({
-          title: "Login Successful (Mock User)",
-          description: "Redirecting you to the dashboard.",
-        });
-        
-        // Store mock user data to simulate session
         const user = mockData.users.find(u => u.email === values.email);
         if (user) {
             localStorage.setItem('mockUserId', user.id);
             localStorage.setItem('mockUserRole', user.role);
             localStorage.setItem('mockUserName', user.name);
-        }
-
-        router.push("/dashboard");
-
-      } catch (error: any) {
-         // Even if auth fails, if it's a mock user, let them in for testing.
-         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            const user = mockData.users.find(u => u.email === values.email);
-            if (user) {
-              localStorage.setItem('mockUserId', user.id);
-              localStorage.setItem('mockUserRole', user.role);
-              localStorage.setItem('mockUserName', user.name);
-              toast({
+            toast({
                 title: `Logged in as ${user.name}`,
                 description: "Redirecting you to the dashboard.",
-              });
-              router.push("/dashboard");
-              return;
-            }
+            });
+            router.push("/dashboard");
         }
-        toast({
-          variant: "destructive",
-          title: "Login Failed",
-          description: error.message,
-        });
-      }
     } else {
         // For real users, use Firebase Auth
         try {
