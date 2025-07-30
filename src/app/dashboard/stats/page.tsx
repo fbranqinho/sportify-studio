@@ -18,6 +18,7 @@ export default function StatsPage({ userId }: StatsPageProps) {
 
   React.useEffect(() => {
     const fetchPlayerProfile = async () => {
+      // Don't do anything if we don't have a userId yet
       if (!userId) {
         setLoading(false);
         return;
@@ -25,24 +26,31 @@ export default function StatsPage({ userId }: StatsPageProps) {
       
       setLoading(true);
       try {
+        // This is the query to Firestore.
+        // It looks in the "playerProfiles" collection for a document
+        // where the "userRef" field matches the logged-in user's ID.
         const q = query(collection(db, "playerProfiles"), where("userRef", "==", userId));
         const querySnapshot = await getDocs(q);
+        
         if (!querySnapshot.empty) {
+          // If we find a document, we set it in our state.
           const docData = querySnapshot.docs[0].data() as PlayerProfile;
           setPlayerProfile(docData);
         } else {
+          // If no document is found for that userRef, we set the profile to null.
           console.log("No such player profile for userId:", userId);
           setPlayerProfile(null);
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
+        setPlayerProfile(null); // Also set to null in case of an error
       } finally {
         setLoading(false);
       }
     };
 
     fetchPlayerProfile();
-  }, [userId]);
+  }, [userId]); // This useEffect will re-run whenever the userId prop changes.
 
   return (
     <div className="space-y-6">
