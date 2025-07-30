@@ -85,6 +85,7 @@ function TeamStats({ team }: { team: Team }) {
 
 // --- Player-focused View Component ---
 function PlayerTeamView({ team, players }: { team: Team, players: EnrichedTeamPlayer[] }) {
+  const { user } = useUser();
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   return (
     <div className="space-y-6">
@@ -105,9 +106,9 @@ function PlayerTeamView({ team, players }: { team: Team, players: EnrichedTeamPl
                    </TableRow>
                 </TableHeader>
                 <TableBody>
-                   {players.map(({ playerId, number, profile }) => (
+                   {players.map(({ playerId, number, profile, user: playerUser }) => (
                       <TableRow key={playerId}>
-                         <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (user?.name || "Unknown")}</TableCell>
+                         <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (playerUser?.name || "Unknown")}</TableCell>
                          <TableCell className="text-center font-mono">{number ?? "-"}</TableCell>
                          <TableCell className="text-right">{profile?.position ?? "N/A"}</TableCell>
                       </TableRow>
@@ -231,14 +232,14 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                                 <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (user?.name || "Unknown Player")}</TableCell>
                                 <TableCell>
                                     <Select
-                                        value={number?.toString() ?? ""}
-                                        onValueChange={(value) => onNumberUpdated(playerId, value ? parseInt(value) : null)}
+                                        value={number?.toString() ?? "unassigned"}
+                                        onValueChange={(value) => onNumberUpdated(playerId, value === "unassigned" ? null : parseInt(value))}
                                     >
                                         <SelectTrigger className="h-8">
                                             <SelectValue placeholder="-" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">-</SelectItem>
+                                            <SelectItem value="unassigned">-</SelectItem>
                                             {getAvailableNumbers(number).map(n => (
                                                 <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
                                             ))}
@@ -407,7 +408,7 @@ export default function TeamDetailsPage() {
       p.playerId === playerId ? { ...p, number: newNumber } : p
     );
 
-    // If player wasn't in the array, add them
+    // If player wasn't in the array (due to data inconsistency), add them
     if (!updatedPlayers.some(p => p.playerId === playerId)) {
         updatedPlayers.push({ playerId, number: newNumber });
     }
