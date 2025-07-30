@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, arrayRemove } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -131,6 +131,7 @@ export default function ManageTeamPage() {
     
     setIsSearching(true);
     try {
+        // Query player profiles by nickname
         const profilesQuery = query(
             collection(db, "playerProfiles"),
             where("nickname", ">=", queryText.toLowerCase()),
@@ -146,6 +147,7 @@ export default function ManageTeamPage() {
 
         const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef);
         
+        // Fetch corresponding users to get name and email
         const usersQuery = query(collection(db, "users"), where("id", "in", playerUserRefs));
         const usersSnapshot = await getDocs(usersQuery);
         const usersMap = new Map<string, User>();
@@ -157,7 +159,7 @@ export default function ManageTeamPage() {
                 profile,
                 user: usersMap.get(profile.userRef)
             }
-        }).filter(item => item.user);
+        }).filter(item => item.user); // Filter out any profiles that didn't have a matching user
 
         setSearchResults(results as EnrichedPlayerSearchResult[]);
 

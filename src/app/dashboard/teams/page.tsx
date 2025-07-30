@@ -79,7 +79,7 @@ function ManagerTeamsView() {
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" />
                   <span>
-                    <span className="font-semibold">{team.players.length}</span> players
+                    <span className="font-semibold">{team.playerIds.length}</span> players
                   </span>
                 </div>
                  <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
@@ -140,12 +140,7 @@ function PlayerTeamsView() {
   React.useEffect(() => {
     if (!user) return;
     setLoading(true);
-    const q = query(
-      collection(db, "teams"),
-      where("players", "array-contains", { playerId: user.id, number: null }) // This is a limitation, we might need a subcollection
-    );
-     const q2 = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
-
+    const q2 = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
 
     const unsubscribe = onSnapshot(q2, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
@@ -160,22 +155,24 @@ function PlayerTeamsView() {
     const { id: invitationId, teamId } = invitation;
     const invitationRef = doc(db, "teamInvitations", invitationId);
     const teamRef = doc(db, "teams", teamId);
-    const userDocRef = doc(db, "users", user.id);
-
+    
     try {
       const batch = writeBatch(db);
+      
+      batch.update(invitationRef, { status: accepted ? "accepted" : "declined", respondedAt: new Date() });
+
       if (accepted) {
         batch.update(teamRef, {
-          players: arrayUnion({ playerId: user.id, number: null }),
-          playerIds: arrayUnion(user.id)
+          playerIds: arrayUnion(user.id),
+          players: arrayUnion({playerId: user.id, number: null})
         });
-        batch.update(invitationRef, { status: "accepted" });
         toast({ title: "Invitation Accepted!", description: `You have joined ${invitation.teamName}.` });
       } else {
-        batch.update(invitationRef, { status: "declined" });
         toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${invitation.teamName}.` });
       }
+      
       await batch.commit();
+
     } catch (error) {
       console.error("Error responding to invitation:", error);
       toast({ variant: "destructive", title: "Error", description: "There was a problem responding." });
@@ -252,13 +249,12 @@ function PlayerTeamsView() {
                                 <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-primary" />
                                 <span>
-                                    <span className="font-semibold">{team.players.length}</span> players
+                                    <span className="font-semibold">{team.playerIds.length}</span> players
                                 </span>
                                 </div>
                                 <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
                             </CardContent>
                             <CardFooter>
-                                {/* Add link to view team details if needed */}
                                  <Button variant="outline" className="w-full">View Team</Button>
                             </CardFooter>
                          </Card>

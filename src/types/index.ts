@@ -140,7 +140,7 @@ export interface Team {
   id: string;
   name: string;
   logoUrl?: string;
-  managerId?: string; // User ID of the manager
+  managerId: string; // User ID of the manager
   players: TeamPlayer[];
   playerIds: string[]; // For querying purposes
   city: string;
