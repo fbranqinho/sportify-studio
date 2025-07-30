@@ -14,6 +14,8 @@ import { PitchesMap } from "@/components/pitches-map";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { haversineDistance } from "@/lib/utils";
 
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
 export default function GamesPage() {
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -21,8 +23,6 @@ export default function GamesPage() {
   const [userLocation, setUserLocation] = React.useState<{ lat: number; lng: number } | null>(null);
   const [nearestPitchId, setNearestPitchId] = React.useState<string | null>(null);
   const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
-
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   React.useEffect(() => {
     // Get user location
