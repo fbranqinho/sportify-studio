@@ -8,6 +8,7 @@ export type UserRole = "PLAYER" | "MANAGER" | "OWNER" | "PROMOTER" | "REFEREE" |
 export interface User {
   id: string;
   name: string;
+  name_lowercase?: string;
   email: string;
   role: UserRole;
   profileCompleted: boolean;

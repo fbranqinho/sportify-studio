@@ -150,47 +150,46 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
     setSearchQuery(queryText);
     const searchTerm = queryText.trim().toLowerCase();
 
-    if (searchTerm.length < 2) {
+    if (!searchTerm) {
       setSearchResults([]);
-      setIsSearching(false);
       return;
     }
     
     setIsSearching(true);
     try {
-        // Search by nickname (which is stored in lowercase)
-        const profilesQuery = query(
-            collection(db, "playerProfiles"),
-            where("nickname", ">=", searchTerm),
-            where("nickname", "<=", searchTerm + '\uf8ff')
+        // Step 1: Search for users by their name_lowercase
+        const usersQuery = query(
+            collection(db, "users"),
+            where("role", "==", "PLAYER"),
+            where("name_lowercase", ">=", searchTerm),
+            where("name_lowercase", "<=", searchTerm + '\uf8ff')
         );
-        const profilesSnapshot = await getDocs(profilesQuery);
-        
-        if (profilesSnapshot.empty) {
-            setSearchResults([]);
-            setIsSearching(false);
-            return;
-        }
-
-        const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef).filter(ref => ref);
-        if(playerUserRefs.length === 0){
-            setSearchResults([]);
-            setIsSearching(false);
-            return;
-        }
-        
-        const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerUserRefs));
         const usersSnapshot = await getDocs(usersQuery);
-        const usersMap = new Map<string, User>();
-        usersSnapshot.forEach(doc => usersMap.set(doc.id, {id: doc.id, ...doc.data()} as User));
 
-        const results: EnrichedPlayerSearchResult[] = profilesSnapshot.docs.map(doc => {
+        if (usersSnapshot.empty) {
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+
+        const foundUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        const playerUserIds = foundUsers.map(u => u.id);
+
+        // Step 2: Fetch the player profiles for the found users
+        const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerUserIds));
+        const profilesSnapshot = await getDocs(profilesQuery);
+
+        const profilesMap = new Map<string, PlayerProfile>();
+        profilesSnapshot.forEach(doc => {
             const profile = { id: doc.id, ...doc.data() } as PlayerProfile;
-            return {
-                profile,
-                user: usersMap.get(profile.userRef)
-            }
-        }).filter((item): item is EnrichedPlayerSearchResult => !!item.user);
+            profilesMap.set(profile.userRef, profile);
+        });
+
+        // Step 3: Combine user and profile data
+        const results: EnrichedPlayerSearchResult[] = foundUsers.map(user => {
+            const profile = profilesMap.get(user.id);
+            return profile ? { user, profile } : null;
+        }).filter((item): item is EnrichedPlayerSearchResult => !!item);
 
         setSearchResults(results);
 
@@ -271,7 +270,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                         <Input 
-                            placeholder="Search for players by nickname..."
+                            placeholder="Search for players by name..."
                             value={searchQuery}
                             onChange={(e) => handleSearchPlayers(e.target.value)}
                             className="pl-10"
@@ -300,8 +299,8 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                                     {searchResults.map((result) => (
                                         <TableRow key={result.user.id}>
                                             <TableCell>
-                                                <div className="font-medium">{capitalize(result.profile.nickname)}</div>
-                                                <div className="text-xs text-muted-foreground">{result.user.name} ({result.user.email})</div>
+                                                <div className="font-medium">{result.user.name}</div>
+                                                <div className="text-xs text-muted-foreground">{capitalize(result.profile.nickname)} ({result.user.email})</div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button size="sm" onClick={() => onPlayerInvited(result)}>
@@ -384,9 +383,10 @@ export default function TeamDetailsPage() {
                   profile: profile,
                   user: userInfo,
               };
-          }).sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
+          }).filter((p): p is EnrichedTeamPlayer => !!p.user && !!p.profile)
+            .sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
           
-          setPlayers(enrichedPlayers as EnrichedTeamPlayer[]);
+          setPlayers(enrichedPlayers);
       } else {
         setPlayers([]);
       }
@@ -474,7 +474,7 @@ export default function TeamDetailsPage() {
         }
 
         // Create Invitation
-        const invitationRef = await addDoc(collection(db, "teamInvitations"), {
+        await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
             playerId: invitedUserId,
@@ -554,3 +554,5 @@ export default function TeamDetailsPage() {
     </div>
   );
 }
+
+    

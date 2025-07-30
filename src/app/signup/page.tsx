@@ -76,6 +76,7 @@ export default function SignupPage() {
       await setDoc(doc(db, "users", user.uid), {
         id: user.uid,
         name: values.name,
+        name_lowercase: values.name.toLowerCase(),
         email: values.email,
         role: values.role,
         profileCompleted: false,
@@ -192,3 +193,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
+    
