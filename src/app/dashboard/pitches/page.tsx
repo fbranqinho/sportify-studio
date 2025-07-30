@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -21,7 +22,7 @@ import { EditPitchForm } from "@/components/forms/edit-pitch-form";
 import { PlusCircle, MapPin, Users, Shield } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function FieldsPage() {
+export default function PitchesPage() {
   const { user } = useUser();
   const [ownerProfile, setOwnerProfile] = React.useState<OwnerProfile | null>(null);
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
@@ -81,21 +82,21 @@ export default function FieldsPage() {
     <div className="space-y-6">
        <div className="flex items-center justify-between">
          <div>
-            <h1 className="text-3xl font-bold font-headline">My Fields</h1>
-            <p className="text-muted-foreground">View, create, and manage your available fields.</p>
+            <h1 className="text-3xl font-bold font-headline">My Pitches</h1>
+            <p className="text-muted-foreground">View, create, and manage your available pitches.</p>
          </div>
          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button disabled={!ownerProfile}>
                 <PlusCircle className="mr-2" />
-                Add New Field
+                Add New Pitch
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
-                <DialogTitle className="font-headline">Add a New Field</DialogTitle>
+                <DialogTitle className="font-headline">Add a New Pitch</DialogTitle>
                 <DialogDescription>
-                  Fill in the details below to list a new field. The address will be inherited from your owner profile.
+                  Fill in the details below to list a new pitch. The address will be inherited from your owner profile.
                 </DialogDescription>
               </DialogHeader>
               <CreatePitchForm ownerProfile={ownerProfile} onPitchCreated={handlePitchCreated} />
@@ -138,13 +139,13 @@ export default function FieldsPage() {
       ) : (
         <Card className="flex flex-col items-center justify-center p-12 text-center">
             <CardHeader>
-                <CardTitle className="font-headline">No Fields Found</CardTitle>
-                <CardDescription>You haven't added any fields yet. Get started by adding your first one!</CardDescription>
+                <CardTitle className="font-headline">No Pitches Found</CardTitle>
+                <CardDescription>You haven't added any pitches yet. Get started by adding your first one!</CardDescription>
             </CardHeader>
             <CardContent>
                  <Button onClick={() => setIsCreateDialogOpen(true)} disabled={!ownerProfile}>
                     <PlusCircle className="mr-2" />
-                    Add Your First Field
+                    Add Your First Pitch
                 </Button>
             </CardContent>
         </Card>
@@ -154,9 +155,9 @@ export default function FieldsPage() {
       <Dialog open={!!editingPitch} onOpenChange={(isOpen) => !isOpen && setEditingPitch(null)}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="font-headline">Edit Field Details</DialogTitle>
+            <DialogTitle className="font-headline">Edit Pitch Details</DialogTitle>
             <DialogDescription>
-              Update the information for your field below.
+              Update the information for your pitch below.
             </DialogDescription>
           </DialogHeader>
           {editingPitch && (

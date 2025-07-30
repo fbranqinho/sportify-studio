@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Calendar as CalendarIcon } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -27,28 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Pitch, User, Team } from "@/types";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-
-// Generate hourly time slots from 08:00 to 22:00
-const timeSlots = Array.from({ length: 15 }, (_, i) => {
-    const hour = i + 8;
-    return `${hour.toString().padStart(2, '0')}:00`;
-});
-
 
 const formSchema = z.object({
-  date: z.date({
-    required_error: "A date for the booking is required.",
-  }),
-  time: z.string({
-    required_error: "A time for the booking is required.",
-  }),
   teamRef: z.string().optional(), // Optional team selection
 });
 
@@ -56,9 +34,11 @@ interface CreateReservationFormProps {
   user: User;
   pitch: Pitch;
   onReservationSuccess: () => void;
+  selectedDate: Date;
+  selectedTime: string;
 }
 
-export function CreateReservationForm({ user, pitch, onReservationSuccess }: CreateReservationFormProps) {
+export function CreateReservationForm({ user, pitch, onReservationSuccess, selectedDate, selectedTime }: CreateReservationFormProps) {
   const { toast } = useToast();
   const [managerTeams, setManagerTeams] = React.useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = React.useState(true);
@@ -94,7 +74,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
       return;
     }
     
-    if (user.role === 'MANAGER' && !values.teamRef) {
+    if (user.role === 'MANAGER' && managerTeams.length > 0 && !values.teamRef) {
         toast({
             variant: "destructive",
             title: "Team Required",
@@ -104,8 +84,8 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
     }
 
     try {
-        const [hour, minute] = values.time.split(':').map(Number);
-        const bookingDate = new Date(values.date);
+        const [hour, minute] = selectedTime.split(':').map(Number);
+        const bookingDate = new Date(selectedDate);
         bookingDate.setHours(hour, minute);
 
       const reservationData: any = {
@@ -113,16 +93,15 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
         status: "Pending",
         pitchId: pitch.id,
         pitchName: pitch.name,
-        ownerProfileId: pitch.ownerRef, // This is the ID of the owner's profile document
+        ownerProfileId: pitch.ownerRef,
         paymentRefs: [],
-        totalAmount: 0, // Assuming no cost for now
+        totalAmount: 0,
         actorId: user.id,
         actorName: user.name,
         actorRole: user.role,
         createdAt: serverTimestamp(),
       };
       
-      // Add role-specific reference
       const roleField = `${user.role.toLowerCase()}Ref`;
       reservationData[roleField] = user.id;
 
@@ -153,7 +132,8 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         {user.role === 'MANAGER' && (
-            loadingTeams ? <p className="text-sm text-muted-foreground">Loading teams...</p> : managerTeams.length > 0 &&
+            loadingTeams ? <p className="text-sm text-muted-foreground">Loading teams...</p> : 
+            managerTeams.length > 0 ? (
               <FormField
                 control={form.control}
                 name="teamRef"
@@ -178,79 +158,17 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
                   </FormItem>
                 )}
               />
+            ) : (
+                <p className="text-sm text-muted-foreground p-4 bg-muted rounded-md border">
+                    You don't have any teams to book for. You can still make a personal booking.
+                </p>
+            )
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-                <FormItem className="flex flex-col">
-                <FormLabel>Booking Date</FormLabel>
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <FormControl>
-                        <Button
-                        variant={"outline"}
-                        className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                        )}
-                        >
-                        {field.value ? (
-                            format(field.value, "PPP")
-                        ) : (
-                            <span>Pick a date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                    </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                        date < new Date(new Date().setHours(0, 0, 0, 0))
-                        }
-                        initialFocus
-                    />
-                    </PopoverContent>
-                </Popover>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
-             <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel>Booking Time</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a time" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {timeSlots.map((slot) => (
-                          <SelectItem key={slot} value={slot}>
-                            {slot}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-        </div>
         
-        <p className="text-xs text-muted-foreground">Note: For now, all bookings are for a default 1-hour slot.</p>
+        <p className="text-xs text-muted-foreground">Note: For now, all bookings are for a default 1-hour slot. The owner will confirm the request.</p>
 
         <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Requesting..." : "Request Reservation"}
+          {form.formState.isSubmitting ? "Requesting..." : "Confirm & Request Reservation"}
         </Button>
       </form>
     </Form>

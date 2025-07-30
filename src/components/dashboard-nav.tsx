@@ -23,11 +23,12 @@ import {
   CalendarCheck,
   Gamepad2,
   Settings,
+  Calendar,
 } from "lucide-react";
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
+  { title: "Find Pitch", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
@@ -36,7 +37,7 @@ const navItems: NavItem[] = [
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
   // Owner specific ordered items
   { title: "My Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
-  { title: "My Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
+  { title: "My Pitches", href: "/dashboard/pitches", icon: Shield, roles: ["OWNER"] },
   { title: "My Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
   // Promoter specific
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
@@ -52,7 +53,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
   const ownerNavOrder: NavItem[] = [
     navItems.find(item => item.href === "/dashboard")!,
     navItems.find(item => item.href === "/dashboard/schedule")!,
-    navItems.find(item => item.href === "/dashboard/fields")!,
+    navItems.find(item => item.href === "/dashboard/pitches")!,
     navItems.find(item => item.href === "/dashboard/payments")!,
     navItems.find(item => item.href === "/dashboard/promos")!,
     navItems.find(item => item.href === "/dashboard/settings")!,
@@ -66,6 +67,20 @@ export function DashboardNav({ role }: DashboardNavProps) {
       filteredNavItems = navItems.filter(item => item.roles.includes(role));
   }
 
+  // A bit of a hack to rename the nav item dynamically without changing the array structure
+  const findPitchItem = filteredNavItems.find(item => item.href === "/dashboard/games");
+  if (findPitchItem) {
+      if (role === 'PLAYER' || role === 'MANAGER') {
+          findPitchItem.title = "Find Pitch";
+          findPitchItem.icon = Map;
+      }
+  }
+  const myFieldsNavItem = navItems.find(item => item.title === "My Fields");
+  if (myFieldsNavItem) {
+      myFieldsNavItem.title = "My Pitches";
+      myFieldsNavItem.href = "/dashboard/pitches";
+  }
+
 
   return (
     <nav className="p-2">
@@ -74,7 +89,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
           <SidebarMenuItem key={item.href}>
             <Link href={item.href}>
               <SidebarMenuButton
-                isActive={pathname === item.href}
+                isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
                 className="font-semibold"
                 tooltip={item.title}
               >
