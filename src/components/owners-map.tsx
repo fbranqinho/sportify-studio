@@ -76,7 +76,8 @@ export function OwnersMap({ owners, hoveredOwnerId, setHoveredOwnerId, userLocat
 
         {/* Render Owners */}
         {owners.map((owner) => {
-            if (!owner.latitude || !owner.longitude) return null;
+            if (typeof owner.latitude !== 'number' || typeof owner.longitude !== 'number') return null;
+            
             const coords = { lat: owner.latitude, lng: owner.longitude };
             const {x, y} = normalizeCoords(coords, lisbonBounds);
             const isNearest = owner.id === nearestOwnerId;

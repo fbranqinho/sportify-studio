@@ -38,11 +38,10 @@ export default function GamesPage() {
   
   // Fetch owners from Firestore
   React.useEffect(() => {
-    setLoading(true);
     const unsubscribe = onSnapshot(collection(db, "ownerProfiles"), (snapshot) => {
         const ownersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OwnerProfile));
         setOwners(ownersData);
-        setLoading(false);
+        // We will set loading to false in the location useEffect
     }, (error) => {
         console.error("Error fetching owners:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch owners data."})
@@ -61,6 +60,7 @@ export default function GamesPage() {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
+          setLoading(false); // End loading after getting location
         },
         () => {
           toast({
@@ -68,8 +68,11 @@ export default function GamesPage() {
             title: "Location Access Denied",
             description: "Please enable location access to find the nearest owners.",
           });
+          setLoading(false); // End loading even if denied
         }
       );
+    } else {
+        setLoading(false); // End loading if geolocation is not supported
     }
   }, [toast]);
   
@@ -97,7 +100,7 @@ export default function GamesPage() {
 
 
   if (loading) {
-      return <Skeleton className="w-full h-full" />;
+      return <Skeleton className="w-full h-full rounded-lg border" />;
   }
 
   return (
