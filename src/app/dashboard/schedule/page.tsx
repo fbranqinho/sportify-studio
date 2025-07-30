@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, User, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban } from "lucide-react";
 import { format } from "date-fns";
 
 export default function SchedulePage() {
@@ -27,7 +27,6 @@ export default function SchedulePage() {
     let reservationsQuery;
   
     if (user.role === 'OWNER') {
-      // New logic: Query based on ownerProfile ID
       const profilesQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
       getDocs(profilesQuery).then(profileSnapshot => {
         if (!profileSnapshot.empty) {
@@ -49,7 +48,6 @@ export default function SchedulePage() {
         }
       });
     } else {
-      // For other roles, query based on user ID directly
       const roleField = `${user.role.toLowerCase()}Ref`;
       reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
       
@@ -81,13 +79,28 @@ export default function SchedulePage() {
     }
   };
 
+  const now = new Date();
   const pendingReservations = reservations.filter(r => r.status === "Pending");
-  const pastReservations = reservations.filter(r => r.status !== "Pending");
+  const upcomingReservations = reservations.filter(r => r.status === "Confirmed" && new Date(r.date) >= now);
+  const pastReservations = reservations.filter(r => new Date(r.date) < now);
   
+  const getStatusIcon = (status: Reservation["status"]) => {
+    switch(status) {
+        case "Confirmed":
+            return <CheckCheck className="h-4 w-4 text-green-600" />;
+        case "Cancelled":
+            return <Ban className="h-4 w-4 text-red-600" />;
+        case "Pending":
+             return <Clock className="h-4 w-4 text-amber-600" />;
+        default:
+            return <Clock className="h-4 w-4 text-primary" />;
+    }
+  }
+
   const ReservationCard = ({ reservation }: { reservation: Reservation }) => (
     <Card>
       <CardHeader>
-        <CardTitle>{reservation.pitchName}</CardTitle>
+        <CardTitle className="font-headline">{reservation.pitchName}</CardTitle>
         <CardDescription className="flex items-center gap-2 pt-1">
           <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
         </CardDescription>
@@ -98,7 +111,7 @@ export default function SchedulePage() {
             <span>Booked by: <span className="font-semibold">{reservation.actorName} ({reservation.actorRole})</span></span>
         </div>
         <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
+            {getStatusIcon(reservation.status)}
             <span>Status: <span className="font-semibold">{reservation.status}</span></span>
         </div>
       </CardContent>
@@ -115,6 +128,20 @@ export default function SchedulePage() {
     </Card>
   )
 
+  const ReservationList = ({ reservations }: { reservations: Reservation[] }) => (
+     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+      {reservations.map(res => <ReservationCard key={res.id} reservation={res} />)}
+     </div>
+  )
+
+  const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
+    <div className="text-center py-12">
+        <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-4 text-lg font-semibold font-headline">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
       <div>
@@ -127,37 +154,37 @@ export default function SchedulePage() {
       <Tabs defaultValue="pending">
         <TabsList>
           <TabsTrigger value="pending">Pending ({pendingReservations.length})</TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming ({upcomingReservations.length})</TabsTrigger>
           <TabsTrigger value="history">History ({pastReservations.length})</TabsTrigger>
         </TabsList>
         
         {loading ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                <Skeleton className="h-48" />
-                <Skeleton className="h-48" />
-                <Skeleton className="h-48" />
+                <Skeleton className="h-52" />
+                <Skeleton className="h-52" />
+                <Skeleton className="h-52" />
             </div>
         ) : (
           <>
             <TabsContent value="pending">
               {pendingReservations.length > 0 ? (
-                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                  {pendingReservations.map(res => <ReservationCard key={res.id} reservation={res} />)}
-                 </div>
+                 <ReservationList reservations={pendingReservations} />
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">No pending reservations found.</p>
-                </div>
+                <EmptyState icon={Clock} title="No Pending Reservations" description="You don't have any new booking requests right now." />
+              )}
+            </TabsContent>
+            <TabsContent value="upcoming">
+              {upcomingReservations.length > 0 ? (
+                 <ReservationList reservations={upcomingReservations} />
+              ) : (
+                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no confirmed bookings for the future." />
               )}
             </TabsContent>
             <TabsContent value="history">
               {pastReservations.length > 0 ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                   {pastReservations.map(res => <ReservationCard key={res.id} reservation={res} />)}
-                </div>
+                <ReservationList reservations={pastReservations} />
               ) : (
-                <div className="text-center py-12">
-                   <p className="text-muted-foreground">No reservation history found.</p>
-                </div>
+                <EmptyState icon={History} title="No Reservation History" description="Your past bookings will appear here." />
               )}
             </TabsContent>
           </>
