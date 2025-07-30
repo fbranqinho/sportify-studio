@@ -22,32 +22,50 @@ export default function SchedulePage() {
 
   React.useEffect(() => {
     if (!user) return;
-
+  
     setLoading(true);
     let reservationsQuery;
-
-    // Build the query based on the user's role
+  
     if (user.role === 'OWNER') {
-      // For owners, we get all reservations for their pitches
-      reservationsQuery = query(collection(db, "reservations"), where("ownerRef", "==", user.id));
+      // New logic: Query based on ownerProfile ID
+      const profilesQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+      getDocs(profilesQuery).then(profileSnapshot => {
+        if (!profileSnapshot.empty) {
+          const ownerProfileId = profileSnapshot.docs[0].id;
+          reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+  
+          const unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+            const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+            setReservations(reservationsData);
+            setLoading(false);
+          }, (error) => {
+            console.error("Error fetching reservations: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
+            setLoading(false);
+          });
+          return () => unsubscribe();
+        } else {
+          setLoading(false);
+        }
+      });
     } else {
-      // For other roles, we get reservations they created
+      // For other roles, query based on user ID directly
       const roleField = `${user.role.toLowerCase()}Ref`;
       reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
+      
+      const unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+        const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+        setReservations(reservationsData);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching reservations: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
+        setLoading(false);
+      });
+      return () => unsubscribe();
     }
-
-    const unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
-      const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
-      setReservations(reservationsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching reservations: ", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
   }, [user, toast]);
+  
 
   const handleUpdateStatus = async (reservationId: string, status: "Confirmed" | "Cancelled") => {
     const reservationRef = doc(db, "reservations", reservationId);
@@ -71,7 +89,7 @@ export default function SchedulePage() {
       <CardHeader>
         <CardTitle>{reservation.pitchName}</CardTitle>
         <CardDescription className="flex items-center gap-2 pt-1">
-          <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP p")}
+          <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">

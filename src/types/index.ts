@@ -192,18 +192,21 @@ export interface Reservation {
   id: string;
   date: string; // ISO 8601 string
   status: ReservationStatus;
-  pitchRef: string; // Pitch ID
-  ownerRef?: string; // OwnerProfile ID
-  managerRef?: string; // ManagerProfile ID
-  promoterRef?: string; // PromoterProfile ID
-  playerRef?: string; // PlayerProfile ID
-  paymentRefs: string[]; // Payment IDs
+  pitchId: string; 
+  pitchName: string; 
+  ownerProfileId: string; // OwnerProfile ID
+  paymentRefs: string[]; 
   totalAmount: number;
-  promoRef?: string; // Promo ID
+  promoRef?: string; 
+  
   // Actor details - denormalized for easier display
+  actorId: string;
   actorName: string;
   actorRole: UserRole;
-  pitchName: string; // Denormalized for easier display
+
+  // Add refs for different roles who can book
+  managerRef?: string;
+  playerRef?: string;
 }
 
 
