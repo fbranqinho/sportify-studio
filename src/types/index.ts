@@ -186,7 +186,7 @@ export interface Pitch {
   coords: { lat: number; lng: number };
 }
 
-export type ReservationStatus = "Pending" | "Confirmed" | "Cancelled";
+export type ReservationStatus = "Pending" | "Accepted" | "Scheduled" | "Canceled";
 
 export interface Reservation {
   id: string;

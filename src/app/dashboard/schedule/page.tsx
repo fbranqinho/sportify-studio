@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban } from "lucide-react";
+import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck, CalendarX } from "lucide-react";
 import { format } from "date-fns";
 
 export default function SchedulePage() {
@@ -65,7 +65,7 @@ export default function SchedulePage() {
   }, [user, toast]);
   
 
-  const handleUpdateStatus = async (reservationId: string, status: "Confirmed" | "Cancelled") => {
+  const handleUpdateStatus = async (reservationId: string, status: "Accepted" | "Canceled") => {
     const reservationRef = doc(db, "reservations", reservationId);
     try {
       await updateDoc(reservationRef, { status });
@@ -81,14 +81,16 @@ export default function SchedulePage() {
 
   const now = new Date();
   const pendingReservations = reservations.filter(r => r.status === "Pending");
-  const upcomingReservations = reservations.filter(r => r.status === "Confirmed" && new Date(r.date) >= now);
+  const upcomingReservations = reservations.filter(r => (r.status === "Accepted" || r.status === "Scheduled") && new Date(r.date) >= now);
   const pastReservations = reservations.filter(r => new Date(r.date) < now);
   
   const getStatusIcon = (status: Reservation["status"]) => {
     switch(status) {
-        case "Confirmed":
+        case "Scheduled":
+            return <CalendarCheck className="h-4 w-4 text-blue-600" />;
+        case "Accepted":
             return <CheckCheck className="h-4 w-4 text-green-600" />;
-        case "Cancelled":
+        case "Canceled":
             return <Ban className="h-4 w-4 text-red-600" />;
         case "Pending":
              return <Clock className="h-4 w-4 text-amber-600" />;
@@ -117,10 +119,10 @@ export default function SchedulePage() {
       </CardContent>
       {user?.role === 'OWNER' && reservation.status === 'Pending' && (
         <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => handleUpdateStatus(reservation.id, 'Confirmed')}>
+          <Button size="sm" onClick={() => handleUpdateStatus(reservation.id, 'Accepted')}>
              <CheckCircle className="mr-2 h-4 w-4" /> Approve
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation.id, 'Cancelled')}>
+          <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation.id, 'Canceled')}>
              <XCircle className="mr-2 h-4 w-4" /> Reject
           </Button>
         </CardFooter>
@@ -177,7 +179,7 @@ export default function SchedulePage() {
               {upcomingReservations.length > 0 ? (
                  <ReservationList reservations={upcomingReservations} />
               ) : (
-                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no confirmed bookings for the future." />
+                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no accepted or scheduled bookings for the future." />
               )}
             </TabsContent>
             <TabsContent value="history">
