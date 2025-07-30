@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { ManagerProfile } from "@/types";
 import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
@@ -44,6 +43,15 @@ export function CreateTeamForm({ managerId }: CreateTeamFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!managerId) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Manager ID is missing. Cannot create team.",
+        });
+        return;
+    }
+    
     try {
       await addDoc(collection(db, "teams"), {
         ...values,
