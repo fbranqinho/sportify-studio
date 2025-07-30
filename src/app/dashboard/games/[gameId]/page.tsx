@@ -568,16 +568,17 @@ export default function GameDetailsPage() {
         return 'Match Details';
     };
 
+    const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+    const missingPlayers = (pitch?.capacity || 10) - confirmedPlayers;
+
     const getMatchStatus = () => {
         if (match.status === 'PendingOpponent') {
             if (match.invitedTeamId) return 'Awaiting Opponent Confirmation';
-            return 'Open for applications';
+            return `Waiting players... ${missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'}`;
         }
         return match.status;
     };
     
-    const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-
     const isManager = user?.id === teamA?.managerId;
 
 
