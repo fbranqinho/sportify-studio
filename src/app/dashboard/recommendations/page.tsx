@@ -164,14 +164,17 @@ export default function RecommendationsPage() {
                   />
                 </div>
               </div>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading} className="font-semibold">
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Getting Recommendations...
                   </>
                 ) : (
-                  "Generate Recommendations"
+                  <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate Recommendations
+                  </>
                 )}
               </Button>
             </form>

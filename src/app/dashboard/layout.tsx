@@ -48,12 +48,12 @@ export default function DashboardLayout({
           <SidebarFooter className="items-center gap-4 group-data-[collapsible=icon]:flex-col">
             <div className="flex items-center gap-3 group-data-[collapsible=icon]:flex-col">
               <Avatar className="size-10">
-                <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" />
+                <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" data-ai-hint="male profile"/>
                 <AvatarFallback>FP</AvatarFallback>
               </Avatar>
               <div className="group-data-[collapsible=icon]:hidden">
                 <p className="font-semibold font-headline">First Player</p>
-                <p className="text-sm text-muted-foreground">{role.toLowerCase()}</p>
+                <p className="text-sm text-muted-foreground">{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</p>
               </div>
             </div>
           </SidebarFooter>

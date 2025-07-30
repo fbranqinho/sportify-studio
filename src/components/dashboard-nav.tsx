@@ -27,7 +27,7 @@ import {
 
 const navItems: NavItem[] = [
   { title: "Find a Game", href: "/dashboard", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE"] },
-  { title: "Recommendations", href: "/dashboard/recommendations", icon: Sparkles, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
+  { title: "AI Recommendations", href: "/dashboard/recommendations", icon: Sparkles, roles: ["PLAYER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
   { title: "Games", href: "/dashboard/games", icon: Calendar, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
