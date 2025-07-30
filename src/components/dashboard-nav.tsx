@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -17,7 +18,7 @@ import {
   Ticket,
   Shield,
   Award,
-  Calendar,
+  Map,
   Contact,
 } from "lucide-react";
 
@@ -26,7 +27,7 @@ const navItems: NavItem[] = [
   { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
-  { title: "Games", href: "/dashboard/games", icon: Calendar, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
+  { title: "Games", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
   { title: "Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
   { title: "Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
