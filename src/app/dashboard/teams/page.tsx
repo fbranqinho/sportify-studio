@@ -5,8 +5,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp } from "firebase/firestore";
-import type { Team, TeamInvitation } from "@/types";
+import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp, getDocs } from "firebase/firestore";
+import type { Team, TeamInvitation, PlayerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, MapPin, ChevronRight, Check, X, Mail, ShieldCheck } from "lucide-react";
@@ -179,7 +179,7 @@ function PlayerTeamsView() {
   const handleInvitationResponse = async (invitation: TeamInvitation, accepted: boolean) => {
     if (!user) return;
     const { id: invitationId, teamId, teamName } = invitation;
-    
+
     const batch = writeBatch(db);
     
     // Update invitation status
@@ -188,24 +188,33 @@ function PlayerTeamsView() {
     
     // If accepted, add player to team
     if (accepted) {
-      const teamRef = doc(db, "teams", teamId);
-      batch.update(teamRef, {
-        playerIds: arrayUnion(user.id),
-        players: arrayUnion({ playerId: user.id, number: null })
-      });
-    }
-    
-    try {
-      await batch.commit();
-      if (accepted) {
+      try {
+        // Find playerProfileId from user.id
+        const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", user.id));
+        const playerProfileSnapshot = await getDocs(playerProfileQuery);
+
+        if (playerProfileSnapshot.empty) {
+            throw new Error("Player profile not found.");
+        }
+        const playerProfileId = playerProfileSnapshot.docs[0].id;
+        
+        const teamRef = doc(db, "teams", teamId);
+        batch.update(teamRef, {
+          playerIds: arrayUnion(user.id),
+          players: arrayUnion({ playerId: playerProfileId, number: null })
+        });
+        
+        await batch.commit();
         toast({ title: "Invitation Accepted!", description: `You have joined ${teamName}.` });
-        // The onSnapshot listener will automatically update the UI with the new team.
-      } else {
-        toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${teamName}.` });
+
+      } catch (error) {
+        console.error("Error accepting invitation:", error);
+        toast({ variant: "destructive", title: "Error", description: "There was a problem accepting the invitation." });
       }
-    } catch (error) {
-      console.error("Error responding to invitation:", error);
-      toast({ variant: "destructive", title: "Error", description: "There was a problem responding." });
+    } else {
+        // Just decline the invitation
+        await batch.commit();
+        toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${teamName}.` });
     }
   };
 
@@ -341,3 +350,5 @@ export default function TeamsPage() {
     </Card>
   )
 }
+
+    

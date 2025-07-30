@@ -41,11 +41,11 @@ export default function MyGamesPage() {
 
     const setupListeners = async () => {
         let matchesQuery;
+        let matchesQueryB; // For teamBRef
 
         if (user.role === 'MANAGER') {
             matchesQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
         } else if (user.role === 'PLAYER') {
-            // First, get the teams the player is in
             const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
             const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
             const playerTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
@@ -53,37 +53,55 @@ export default function MyGamesPage() {
             if (playerTeamIds.length === 0) {
                 setMatches([]);
                 setLoading(false);
-                return () => {}; // No teams, no matches
+                return () => {};
             }
-            // Then, get matches for those teams
+            
             matchesQuery = query(collection(db, "matches"), where("teamARef", "in", playerTeamIds));
-             // Note: Firestore doesn't support 'OR' queries on different fields, so we can't easily query for teamBRef at the same time.
-             // A more complex solution (e.g., duplicating data) would be needed for games where the user is team B.
-             // For now, this will show games where the user's team is Team A.
+            matchesQueryB = query(collection(db, "matches"), where("teamBRef", "in", playerTeamIds));
+
         } else {
             setLoading(false);
-            return () => {}; // No query for other roles yet
+            return () => {};
         }
 
-        const unsubscribe = onSnapshot(matchesQuery, async (querySnapshot) => {
-            const matchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+        const handleSnapshot = async (querySnapshot: DocumentData, isTeamB: boolean = false) => {
+            const matchesData = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
+            
             const teamIds = new Set<string>();
-            matchesData.forEach(match => {
+            matchesData.forEach((match: Match) => {
                 if (match.teamARef) teamIds.add(match.teamARef);
                 if (match.teamBRef) teamIds.add(match.teamBRef);
             });
             
             const teamsMap = await fetchTeamDetails(Array.from(teamIds));
-            setTeams(teamsMap);
-            setMatches(matchesData);
+            setTeams(prev => new Map([...prev, ...teamsMap]));
+
+            setMatches(currentMatches => {
+                const existingIds = new Set(currentMatches.map(m => m.id));
+                const newMatches = matchesData.filter((m: Match) => !existingIds.has(m.id));
+                return [...currentMatches, ...newMatches];
+            });
+
             setLoading(false);
-        }, (error) => {
-            console.error("Error fetching matches: ", error);
+        };
+        
+        const unsubscribeA = onSnapshot(matchesQuery, (snap) => handleSnapshot(snap), (error) => {
+            console.error("Error fetching matches (Team A): ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch matches." });
             setLoading(false);
         });
+
+        let unsubscribeB = () => {};
+        if (matchesQueryB) {
+            unsubscribeB = onSnapshot(matchesQueryB, (snap) => handleSnapshot(snap, true), (error) => {
+                console.error("Error fetching matches (Team B): ", error);
+            });
+        }
         
-        return unsubscribe;
+        return () => {
+          unsubscribeA();
+          unsubscribeB();
+        };
     }
 
     const unsubscribePromise = setupListeners();
@@ -185,20 +203,6 @@ export default function MyGamesPage() {
         </p>
       </div>
 
-      {user.role === 'PLAYER' && (
-        <Card className="bg-blue-50 border-blue-200">
-            <CardHeader className="flex flex-row items-center gap-4">
-                <AlertCircle className="h-6 w-6 text-blue-600" />
-                <div>
-                    <CardTitle className="text-blue-900">Player View Limitation</CardTitle>
-                    <CardDescription className="text-blue-800">
-                        For now, only games where your team is listed as Team A are shown. This will be improved in a future update.
-                    </CardDescription>
-                </div>
-            </CardHeader>
-        </Card>
-      )}
-
       {/* Upcoming Games Section */}
       <div className="space-y-4">
         <h2 className="text-2xl font-bold font-headline text-primary">Upcoming Games ({upcomingMatches.length})</h2>
@@ -228,3 +232,5 @@ export default function MyGamesPage() {
     </div>
   );
 }
+
+    

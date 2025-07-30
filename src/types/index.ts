@@ -132,7 +132,7 @@ export interface AdminProfile {
 }
 
 export interface TeamPlayer {
-  playerId: string;
+  playerId: string; // This should be the ID from the PlayerProfile collection
   number: number | null;
 }
 
@@ -142,7 +142,7 @@ export interface Team {
   logoUrl?: string;
   managerId: string; // User ID of the manager
   players: TeamPlayer[];
-  playerIds: string[]; // For querying purposes
+  playerIds: string[]; // Array of User IDs for querying purposes
   city: string;
   motto?: string;
   foundationYear: number;
@@ -163,7 +163,7 @@ export interface TeamInvitation {
     id: string;
     teamId: string;
     teamName: string;
-    playerId: string;
+    playerId: string; // User ID of the invited player
     playerName: string;
     managerId: string;
     status: InvitationStatus;
@@ -224,30 +224,20 @@ export interface Reservation {
 
 export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
 
-export interface MatchPlayerStat {
-    playerRef: string; // PlayerProfile ID
-    team: "A" | "B";
-    goals: number;
-    assists: number;
-    yellowCards: number;
-    redCards: number;
-    injured: boolean;
-}
-
 export interface Match {
     id: string;
     date: string; // ISO 8601 string
     teamARef: string | null;
     teamBRef: string | null;
-    teamAPlayers: string[];
-    teamBPlayers: string[];
+    teamAPlayers: string[]; // Array of PlayerProfile IDs
+    teamBPlayers: string[]; // Array of PlayerProfile IDs
     scoreA: number;
     scoreB: number;
     pitchRef: string;
     status: MatchStatus;
-    attendance?: number;
+    attendance: number;
     refereeId: string | null;
-    managerRef?: string | null;
+    managerRef: string | null;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";
@@ -304,3 +294,5 @@ export interface EnrichedPlayerSearchResult {
     profile: PlayerProfile;
     user: User;
 }
+
+    
