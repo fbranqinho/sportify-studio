@@ -171,6 +171,17 @@ export interface TeamInvitation {
     respondedAt?: FieldValue;
 }
 
+export interface MatchInvitation {
+    id: string;
+    matchId: string;
+    teamId: string;
+    playerId: string;
+    managerId: string;
+    status: InvitationStatus;
+    invitedAt: FieldValue;
+    respondedAt?: FieldValue;
+}
+
 
 export type PitchSport = "fut7" | "fut11" | "fut5" | "futsal";
 
