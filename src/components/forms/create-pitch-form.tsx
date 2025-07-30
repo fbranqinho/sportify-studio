@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { OwnerProfile, PitchSport } from "@/types";
+import { MapPin } from "lucide-react";
 
 const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
 
@@ -34,8 +35,8 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
-  latitude: z.coerce.number().min(-90).max(90, { message: "Invalid latitude." }),
-  longitude: z.coerce.number().min(-180).max(180, { message: "Invalid longitude." }),
+  latitude: z.coerce.number().min(-90, "Invalid latitude.").max(90, { message: "Invalid latitude." }),
+  longitude: z.coerce.number().min(-180, "Invalid longitude.").max(180, { message: "Invalid longitude." }),
 });
 
 interface CreatePitchFormProps {
@@ -58,6 +59,37 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
       longitude: 0,
     },
   });
+  
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          form.setValue("latitude", parseFloat(latitude.toFixed(6)));
+          form.setValue("longitude", parseFloat(longitude.toFixed(6)));
+          toast({
+            title: "Location Found!",
+            description: "Coordinates have been filled in for you.",
+          });
+        },
+        (error) => {
+          console.error("Error getting location: ", error);
+          toast({
+            variant: "destructive",
+            title: "Could not get location",
+            description: "Please enable location permissions in your browser or enter coordinates manually.",
+          });
+        }
+      );
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Geolocation not supported",
+        description: "Your browser does not support geolocation.",
+      });
+    }
+  };
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!ownerProfile) {
@@ -88,6 +120,7 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
         description: `${values.name} has been successfully added.`,
       });
 
+      form.reset();
       onPitchCreated();
     } catch (error: any) {
       toast({
@@ -181,33 +214,41 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
             )}
           />
         </div>
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-                control={form.control}
-                name="latitude"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Latitude</FormLabel>
-                    <FormControl>
-                    <Input type="number" step="any" placeholder="e.g. 41.1579" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="longitude"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Longitude</FormLabel>
-                    <FormControl>
-                    <Input type="number" step="any" placeholder="e.g. -8.6291" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
+
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <FormLabel>Coordinates</FormLabel>
+                <Button type="button" variant="outline" size="sm" onClick={handleGetLocation}>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Get Current Location
+                </Button>
+            </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                    control={form.control}
+                    name="latitude"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormControl>
+                        <Input type="number" step="any" placeholder="e.g. 41.1579" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="longitude"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormControl>
+                        <Input type="number" step="any" placeholder="e.g. -8.6291" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+            </div>
         </div>
         <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Creating..." : "Create Field"}
