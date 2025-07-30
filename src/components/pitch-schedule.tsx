@@ -6,7 +6,7 @@ import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
 import type { Pitch, Reservation, User, Match, Notification } from "@/types";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus } from "lucide-react";
@@ -127,7 +127,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         }
 
         try {
-            const batch = new (await import('firebase/firestore')).WriteBatch(db);
+            const batch = writeBatch(db);
 
             // Step 1: Update match with the application
             batch.update(matchRef, {
