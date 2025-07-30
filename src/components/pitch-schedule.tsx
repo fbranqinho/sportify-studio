@@ -92,8 +92,12 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const match = matches.find(m => isSameTime(new Date(m.date)));
         
         if (match) {
+             const isPlayerInGame = (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id));
             if (match.allowExternalPlayers) {
-                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0) + (match.playerApplications?.length || 0);
+                if(isPlayerInGame) {
+                    return { status: 'Booked', match }; // User is already in, show as booked
+                }
+                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                 if (totalPlayers < 10) { // Assuming Fut5 capacity
                     return { status: 'Open', match };
                 }
@@ -220,7 +224,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             }
                             
                             if (slotInfo.status === 'Open' && slotInfo.match) {
-                                const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0) + (slotInfo.match.playerApplications?.length || 0);
+                                const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0);
                                 const missingPlayers = 10 - totalPlayers;
                                 return (
                                     <Button
