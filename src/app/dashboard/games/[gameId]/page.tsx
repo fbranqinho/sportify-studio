@@ -1,11 +1,10 @@
 
-
 "use client";
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Notification } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -14,11 +13,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 
 // Component to handle inviting an opponent
@@ -47,7 +57,7 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
             const querySnapshot = await getDocs(teamsQuery);
             let teams = querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                .filter(team => team.id !== match.teamARef); // Exclude own team
+                .filter(team => team.id !== match.teamARef); 
                 
             setSearchResults(teams);
         } catch (error) {
@@ -158,6 +168,7 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
 
 function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
     const { toast } = useToast();
+    const router = useRouter();
 
     const handleToggleExternalPlayers = async (checked: boolean) => {
         const matchRef = doc(db, "matches", match.id);
@@ -171,6 +182,18 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
         }
     }
     
+    const handleDeleteGame = async () => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await deleteDoc(matchRef);
+            toast({ title: "Game Deleted", description: "The game has been successfully removed."});
+            router.push('/dashboard/my-games');
+        } catch (error) {
+            console.error("Error deleting game:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not delete the game." });
+        }
+    }
+
     return (
         <Card>
             <CardHeader>
@@ -188,9 +211,39 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                     </div>
                     <Switch
                         id="allow-external"
-                        checked={match.allowExternalPlayers}
+                        checked={!!match.allowExternalPlayers}
                         onCheckedChange={handleToggleExternalPlayers}
                     />
+                </div>
+                 <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-external" className="text-base font-semibold text-destructive">
+                            Delete Game
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                           This will permanently delete the game. This action cannot be undone.
+                        </p>
+                    </div>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the game
+                                and remove all associated data.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </CardContent>
         </Card>
@@ -244,8 +297,10 @@ export default function GameDetailsPage() {
     }, [gameId, router, toast]);
 
     React.useEffect(() => {
-        fetchGameDetails();
-    }, [fetchGameDetails]);
+        if (gameId) {
+            fetchGameDetails();
+        }
+    }, [gameId, fetchGameDetails]);
 
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
@@ -299,9 +354,11 @@ export default function GameDetailsPage() {
             {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
 
             {/* Invite Opponent section, shown only if there's no opponent and no invitation sent */}
-            {match.teamARef && !match.teamBRef && !match.invitedTeamId && (
+            {isManager && match.teamARef && !match.teamBRef && !match.invitedTeamId && (
                 <InviteOpponent match={match} onOpponentInvited={() => fetchGameDetails()} />
             )}
         </div>
     );
 }
+
+    
