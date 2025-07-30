@@ -140,8 +140,9 @@ export interface Team {
   id: string;
   name: string;
   logoUrl?: string;
-  managerRef?: string; // ManagerProfile ID
+  managerId?: string; // User ID of the manager
   players: TeamPlayer[];
+  playerIds: string[]; // For querying purposes
   city: string;
   motto?: string;
   foundationYear: number;

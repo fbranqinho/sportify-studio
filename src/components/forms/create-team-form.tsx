@@ -27,10 +27,10 @@ const formSchema = z.object({
 });
 
 interface CreateTeamFormProps {
-  managerProfile: ManagerProfile;
+  managerId: string;
 }
 
-export function CreateTeamForm({ managerProfile }: CreateTeamFormProps) {
+export function CreateTeamForm({ managerId }: CreateTeamFormProps) {
   const { toast } = useToast();
   const router = useRouter();
 
@@ -47,8 +47,9 @@ export function CreateTeamForm({ managerProfile }: CreateTeamFormProps) {
     try {
       await addDoc(collection(db, "teams"), {
         ...values,
-        managerRef: managerProfile.id,
+        managerId: managerId,
         players: [],
+        playerIds: [],
         foundationYear: new Date().getFullYear(),
         wins: 0,
         draws: 0,

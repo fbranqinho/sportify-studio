@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname } from "next/path";
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -22,21 +22,18 @@ import {
   Contact,
   CalendarCheck,
   Gamepad2,
-  Mail,
-  Swords,
 } from "lucide-react";
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
   { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
-  { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
-  { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
-  { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
-  { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
-  { title: "My Invitations", href: "/dashboard/invitations", icon: Mail, roles: ["PLAYER"] },
+  { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
+  { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "My Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
+  { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
+  { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
   { title: "Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
 ];

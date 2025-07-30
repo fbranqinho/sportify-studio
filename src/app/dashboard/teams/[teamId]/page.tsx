@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Team, PlayerProfile, TeamPlayer, User, EnrichedPlayerSearchResult } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -56,25 +56,20 @@ export default function ManageTeamPage() {
       setTeam(teamData);
 
       // Fetch player profiles
-      if (teamData.players.length > 0) {
-        const playerIds = teamData.players.map(p => p.playerId);
-        if (playerIds.length === 0) {
-            setPlayers([]);
-        } else {
-            const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerIds));
-            const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
-            const playerProfilesMap = new Map<string, PlayerProfile>();
-            playerProfilesSnapshot.forEach(doc => {
-                const profile = {id: doc.id, ...doc.data()} as PlayerProfile;
-                playerProfilesMap.set(profile.userRef, profile);
-            });
-            
-            const enrichedPlayers = teamData.players.map(p => ({
-                ...p,
-                profile: playerProfilesMap.get(p.playerId)
-            }));
-            setPlayers(enrichedPlayers);
-        }
+      if (teamData.playerIds && teamData.playerIds.length > 0) {
+          const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", teamData.playerIds));
+          const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
+          const playerProfilesMap = new Map<string, PlayerProfile>();
+          playerProfilesSnapshot.forEach(doc => {
+              const profile = {id: doc.id, ...doc.data()} as PlayerProfile;
+              playerProfilesMap.set(profile.userRef, profile);
+          });
+          
+          const enrichedPlayers = teamData.players.map(p => ({
+              ...p,
+              profile: playerProfilesMap.get(p.playerId)
+          }));
+          setPlayers(enrichedPlayers);
       } else {
         setPlayers([]);
       }
@@ -111,11 +106,15 @@ export default function ManageTeamPage() {
   const handleRemovePlayer = async (playerIdToRemove: string) => {
      if (!team) return;
      const updatedPlayers = team.players.filter(p => p.playerId !== playerIdToRemove);
+     const updatedPlayerIds = team.playerIds.filter(id => id !== playerIdToRemove);
      try {
         const teamDocRef = doc(db, "teams", teamId);
-        await updateDoc(teamDocRef, { players: updatedPlayers });
+        await updateDoc(teamDocRef, { 
+            players: updatedPlayers,
+            playerIds: updatedPlayerIds 
+        });
         setPlayers(current => current.filter(p => p.playerId !== playerIdToRemove));
-        setTeam(prev => prev ? { ...prev, players: updatedPlayers } : null);
+        setTeam(prev => prev ? { ...prev, players: updatedPlayers, playerIds: updatedPlayerIds } : null);
         toast({ title: "Player Removed", description: "The player has been removed from the team." });
      } catch (error) {
         console.error("Error removing player:", error);
@@ -132,26 +131,25 @@ export default function ManageTeamPage() {
     
     setIsSearching(true);
     try {
-        // Query player profiles by nickname
         const profilesQuery = query(
             collection(db, "playerProfiles"),
-            where("nickname", ">=", queryText),
-            where("nickname", "<=", queryText + '\uf8ff')
+            where("nickname", ">=", queryText.toLowerCase()),
+            where("nickname", "<=", queryText.toLowerCase() + '\uf8ff')
         );
         const profilesSnapshot = await getDocs(profilesQuery);
         
         if (profilesSnapshot.empty) {
             setSearchResults([]);
+            setIsSearching(false);
             return;
         }
 
         const playerUserRefs = profilesSnapshot.docs.map(d => d.data().userRef);
         
-        // Fetch user data for the found profiles
         const usersQuery = query(collection(db, "users"), where("id", "in", playerUserRefs));
         const usersSnapshot = await getDocs(usersQuery);
         const usersMap = new Map<string, User>();
-        usersSnapshot.forEach(doc => usersMap.set(doc.id, doc.data() as User));
+        usersSnapshot.forEach(doc => usersMap.set(doc.id, {id: doc.id, ...doc.data()} as User));
 
         const results: EnrichedPlayerSearchResult[] = profilesSnapshot.docs.map(doc => {
             const profile = { id: doc.id, ...doc.data() } as PlayerProfile;
@@ -159,7 +157,7 @@ export default function ManageTeamPage() {
                 profile,
                 user: usersMap.get(profile.userRef)
             }
-        }).filter(item => item.user); // Filter out any profiles that don't have a matching user
+        }).filter(item => item.user);
 
         setSearchResults(results as EnrichedPlayerSearchResult[]);
 
@@ -177,13 +175,11 @@ export default function ManageTeamPage() {
     const invitedUserId = playerToInvite.user.id;
 
     try {
-        // Check if player is already in the team
-        if (team.players.some(p => p.playerId === invitedUserId)) {
+        if (team.playerIds?.includes(invitedUserId)) {
             toast({ variant: "destructive", title: "Already on Team", description: `${playerToInvite.user.name} is already on your team.` });
             return;
         }
         
-        // Check for existing pending invitation
         const invitationQuery = query(
             collection(db, "teamInvitations"),
             where("teamId", "==", teamId),
@@ -196,7 +192,6 @@ export default function ManageTeamPage() {
             return;
         }
 
-        // Create invitation document
         await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
@@ -251,7 +246,6 @@ export default function ManageTeamPage() {
           <CardDescription>Invite players, edit their numbers, and view their status.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-            {/* Player List */}
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -274,7 +268,6 @@ export default function ManageTeamPage() {
                                 />
                             </TableCell>
                             <TableCell>
-                                {/* Placeholder */}
                                 <Badge variant="outline">Up to date</Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -293,7 +286,6 @@ export default function ManageTeamPage() {
                 </TableBody>
             </Table>
             
-            {/* Invite Player */}
              <div>
                 <h3 className="text-lg font-semibold font-headline mb-2">Invite New Player</h3>
                 <div className="relative">
