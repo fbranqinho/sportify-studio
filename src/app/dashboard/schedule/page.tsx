@@ -102,7 +102,6 @@ export default function SchedulePage() {
     // Handle Confirmed status
     if (status === "Confirmed" && reservation.teamRef) {
       try {
-        // Step 1: Fetch the team document to get playerIds and managerId
         const teamDocRef = doc(db, "teams", reservation.teamRef);
         const teamDoc = await getDoc(teamDocRef);
 
@@ -114,7 +113,7 @@ export default function SchedulePage() {
         const teamData = teamDoc.data() as Team;
         const playerIds = teamData.playerIds || [];
 
-        // Step 2: Create the Match document first to get its ID.
+        // Step 1: Create the Match document first to get its ID.
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
@@ -130,7 +129,7 @@ export default function SchedulePage() {
           managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
-        // Step 3: Use a batch to update the reservation and create all invitations atomically.
+        // Step 2: Use a batch to update the reservation and create all invitations atomically.
         const batch = writeBatch(db);
 
         // Operation 1: Update the reservation status.
@@ -145,14 +144,14 @@ export default function SchedulePage() {
                     matchId: matchDoc.id,
                     teamId: reservation.teamRef,
                     playerId: playerId,
-                    managerId: teamData.managerId, // Use managerId from team data
+                    managerId: teamData.managerId,
                     status: "pending",
                     invitedAt: serverTimestamp(),
                 });
             }
         }
         
-        // Step 4: Commit the batch.
+        // Step 3: Commit the batch.
         await batch.commit(); 
         
         toast({
@@ -161,8 +160,8 @@ export default function SchedulePage() {
         });
 
       } catch (error) {
-        console.error("Error updating reservation status: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
+        console.error("Error confirming reservation and creating match/invitations: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not confirm reservation." });
       }
     } else {
         // Fallback for reservations without a team (e.g., booked by a player)
@@ -321,5 +320,7 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
 
     
