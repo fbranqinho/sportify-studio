@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { UserRole } from "@/types";
@@ -7,6 +8,7 @@ import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
 import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import React from "react";
 
 interface DashboardPageProps {
   role?: UserRole;
@@ -36,7 +38,14 @@ const AdminDashboard = () => (
 
 
 export default function DashboardPage({ role }: DashboardPageProps) {
-  const name = "First Player"; // This would come from user data
+  const [name, setName] = React.useState("First Player");
+
+  React.useEffect(() => {
+    const mockName = localStorage.getItem('mockUserName');
+    if (mockName) {
+        setName(mockName);
+    }
+  }, []);
 
   if (!role) {
     // Render nothing or a loading state until the role is available

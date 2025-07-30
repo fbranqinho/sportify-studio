@@ -27,11 +27,15 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { app } from "@/lib/firebase";
+import { mockData } from "@/lib/mock-data";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+  password: z.string().min(1, { message: "Password is required." }),
 });
+
+// List of mock users for login validation
+const mockUsers = mockData.users.map(user => user.email);
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,19 +51,65 @@ export default function LoginPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
-      toast({
-        title: "Login Successful",
-        description: "Redirecting you to the dashboard.",
-      });
-      router.push("/dashboard");
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error.message,
-      });
+    // TEMPORARY: Bypass Firebase Auth for mock users for testing purposes.
+    if (mockUsers.includes(values.email)) {
+      try {
+        // Attempt to sign in silently, if it fails, it's ok for mock users.
+        await signInWithEmailAndPassword(auth, values.email, values.password).catch(() => {});
+        
+        toast({
+          title: "Login Successful (Mock User)",
+          description: "Redirecting you to the dashboard.",
+        });
+        
+        // Store mock user role to simulate session
+        const user = mockData.users.find(u => u.email === values.email);
+        if (user) {
+            localStorage.setItem('mockUserRole', user.role);
+            localStorage.setItem('mockUserName', user.name);
+        }
+
+        router.push("/dashboard");
+
+      } catch (error: any) {
+         // Even if auth fails, if it's a mock user, let them in for testing.
+         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            const user = mockData.users.find(u => u.email === values.email);
+            if (user) {
+              localStorage.setItem('mockUserRole', user.role);
+              localStorage.setItem('mockUserName', user.name);
+              toast({
+                title: `Logged in as ${user.name}`,
+                description: "Redirecting you to the dashboard.",
+              });
+              router.push("/dashboard");
+              return;
+            }
+        }
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: error.message,
+        });
+      }
+    } else {
+        // For real users, use Firebase Auth
+        try {
+            await signInWithEmailAndPassword(auth, values.email, values.password);
+            localStorage.removeItem('mockUserRole');
+            localStorage.removeItem('mockUserName');
+            toast({
+                title: "Login Successful",
+                description: "Redirecting you to the dashboard.",
+            });
+            router.push("/dashboard");
+        } catch (error: any) {
+            toast({
+                variant: "destructive",
+                title: "Login Failed",
+                description: "Invalid credentials. Please sign up if you don't have an account.",
+            });
+        }
     }
   }
 
@@ -75,7 +125,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl font-headline">Login</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Use a mock user email (e.g., bruno@test.com) and any password.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -88,7 +138,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="m@example.com" {...field} />
+                      <Input placeholder="bruno@test.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

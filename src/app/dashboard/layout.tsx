@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -36,21 +37,50 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [role, setRole] = React.useState<UserRole>("PLAYER");
+  const [name, setName] = React.useState("User");
   const router = useRouter();
   const auth = getAuth(app);
+
+  React.useEffect(() => {
+    // Check for mock user role in local storage for testing
+    const mockRole = localStorage.getItem('mockUserRole') as UserRole;
+    const mockName = localStorage.getItem('mockUserName');
+    if (mockRole) {
+      setRole(mockRole);
+    }
+    if (mockName) {
+      setName(mockName);
+    }
+
+    const unsubscribe = auth.onAuthStateChanged(user => {
+        if (user) {
+            // If a real user is logged in, you'd fetch their role from Firestore
+            // For now, we'll keep the mock logic simple
+            if (!mockRole) {
+                // Fetch user data from firestore and set role and name
+            }
+        } else if (!mockRole) {
+            router.push('/login');
+        }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
 
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
+    localStorage.setItem('mockUserRole', newRole);
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      localStorage.removeItem('mockUserRole');
+      localStorage.removeItem('mockUserName');
       router.push("/login");
     } catch (error) {
       console.error("Error signing out: ", error);
-      // Optionally, show a toast message to the user
     }
   };
   
@@ -84,10 +114,10 @@ export default function DashboardLayout({
                 <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
                    <Avatar className="size-10">
                     <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" data-ai-hint="male profile"/>
-                    <AvatarFallback>FP</AvatarFallback>
+                    <AvatarFallback>{name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="group-data-[collapsible=icon]:hidden">
-                    <p className="font-semibold font-headline">First Player</p>
+                    <p className="font-semibold font-headline">{name}</p>
                     <p className="text-sm text-muted-foreground">{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</p>
                   </div>
                 </div>
