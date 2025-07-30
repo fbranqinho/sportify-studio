@@ -124,18 +124,20 @@ export default function ManageTeamPage() {
 
   const handleSearchPlayers = async (queryText: string) => {
     setSearchQuery(queryText);
-    if (queryText.trim().length < 2) {
+    const searchTerm = queryText.trim().toLowerCase();
+
+    if (searchTerm.length < 2) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
     
     setIsSearching(true);
     try {
-        // Query player profiles by nickname
         const profilesQuery = query(
             collection(db, "playerProfiles"),
-            where("nickname", ">=", queryText.toLowerCase()),
-            where("nickname", "<=", queryText.toLowerCase() + '\uf8ff')
+            where("nickname", ">=", searchTerm),
+            where("nickname", "<=", searchTerm + '\uf8ff')
         );
         const profilesSnapshot = await getDocs(profilesQuery);
         
@@ -152,7 +154,6 @@ export default function ManageTeamPage() {
             return;
         }
         
-        // Fetch corresponding users to get name and email
         const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerUserRefs));
         const usersSnapshot = await getDocs(usersQuery);
         const usersMap = new Map<string, User>();
@@ -164,7 +165,7 @@ export default function ManageTeamPage() {
                 profile,
                 user: usersMap.get(profile.userRef)
             }
-        }).filter(item => item.user); // Filter out any profiles that didn't have a matching user
+        }).filter(item => item.user);
 
         setSearchResults(results as EnrichedPlayerSearchResult[]);
 
@@ -350,3 +351,5 @@ export default function ManageTeamPage() {
     </div>
   );
 }
+
+    
