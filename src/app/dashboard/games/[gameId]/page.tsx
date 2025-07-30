@@ -25,30 +25,35 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
     const { user } = useUser();
 
     const handleSearch = async () => {
-        const term = searchQuery.trim();
-        if (!term) {
+        const searchTerm = searchQuery.trim().toLowerCase();
+        if (!searchTerm) {
             setSearchResults([]);
             return;
         }
         setIsSearching(true);
         try {
+            // Firestore queries are case-sensitive. The most robust way to handle this
+            // is to query for a range and then filter client-side.
             const teamsQuery = query(
                 collection(db, "teams"),
-                where("name", ">=", term),
-                where("name", "<=", term + '\uf8ff')
+                where("name_lowercase", ">=", searchTerm),
+                where("name_lowercase", "<=", searchTerm + '\uf8ff')
             );
             const querySnapshot = await getDocs(teamsQuery);
 
             const teams = querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                // Perform case-insensitive filter on the client side
-                .filter(team => team.name.toLowerCase().startsWith(term.toLowerCase()))
-                .filter(team => team.id !== match.teamARef);
-
+                // Final client-side filter to ensure exact match for older data without lowercase field
+                // and to exclude own team
+                .filter(team => 
+                    (team.name_lowercase || team.name.toLowerCase()).startsWith(searchTerm) &&
+                    team.id !== match.teamARef
+                );
+                
             setSearchResults(teams);
         } catch (error) {
             console.error("Error searching teams: ", error);
-            toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams." });
+            toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. The required index might be building." });
         } finally {
             setIsSearching(false);
         }
