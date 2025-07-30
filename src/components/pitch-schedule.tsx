@@ -83,33 +83,41 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const [hours, minutes] = slot.split(':').map(Number);
         slotDateTime.setHours(hours, minutes, 0, 0);
 
+        // Priority 1: Check for a Match first
         const match = matches.find(m => {
             const matchDate = new Date(m.date);
             return matchDate.getTime() === slotDateTime.getTime();
         });
-
+        
         if (match) {
-             if (match.allowExternalPlayers) {
+            // Check if players can apply
+            if (match.allowExternalPlayers) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0) + (match.playerApplications?.length || 0);
-                if (totalPlayers < 10) { // Example: fut5 game size, including applicants
+                 // Assuming a Fut5, so capacity is 10. This could be dynamic based on pitch.
+                if (totalPlayers < 10) { 
                     return { status: 'Open', match };
                 }
             }
+            // If no applications are allowed or the match is full, it's booked.
             return { status: 'Booked', match };
         }
 
+        // Priority 2: If no match, check for a Reservation
         const reservation = reservations.find(r => {
             const reservationDate = new Date(r.date);
             return reservationDate.getTime() === slotDateTime.getTime();
         });
 
         if (reservation) {
+            // A confirmed reservation without a match yet is considered booked.
             if (reservation.status === 'Confirmed') return { status: 'Booked', reservation };
             if (reservation.status === 'Pending') return { status: 'Pending', reservation };
         }
         
+        // If no match and no reservation, it's available.
         return { status: 'Available' };
     };
+
 
     const handleApplyToGame = async (match: Match) => {
         if (!user || !user.id) {
