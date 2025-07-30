@@ -84,10 +84,25 @@ export default function SchedulePage() {
 
   const handleUpdateStatus = async (reservation: Reservation, status: "Confirmed" | "Canceled") => {
     const reservationRef = doc(db, "reservations", reservation.id);
-    try {
-      await updateDoc(reservationRef, { status });
+    
+    if (status === "Canceled") {
+      try {
+        await updateDoc(reservationRef, { status: "Canceled" });
+        toast({
+          title: "Reservation Canceled",
+          description: `The reservation has been canceled.`,
+        });
+      } catch (error) {
+        console.error("Error canceling reservation: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not cancel reservation." });
+      }
+      return;
+    }
 
-      if (status === "Confirmed" && reservation.teamRef) {
+    // Handle Confirmed status
+    if (status === "Confirmed" && reservation.teamRef) {
+      try {
+        // Step 1: Fetch the team document to get playerIds and managerId
         const teamDocRef = doc(db, "teams", reservation.teamRef);
         const teamDoc = await getDoc(teamDocRef);
 
@@ -97,8 +112,9 @@ export default function SchedulePage() {
         }
         
         const teamData = teamDoc.data() as Team;
+        const playerIds = teamData.playerIds || [];
 
-        // Step 1: Create the Match document to get its ID
+        // Step 2: Create the Match document first to get its ID.
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
@@ -114,40 +130,52 @@ export default function SchedulePage() {
           managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
-        // Step 2: Create invitations for all players in the team using a batch write
-        const playerIds = teamData.playerIds || [];
-        if (playerIds.length > 0) {
-            const batch = writeBatch(db);
-            const invitationsCollection = collection(db, "matchInvitations");
+        // Step 3: Use a batch to update the reservation and create all invitations atomically.
+        const batch = writeBatch(db);
 
+        // Operation 1: Update the reservation status.
+        batch.update(reservationRef, { status: "Confirmed" });
+
+        // Operation 2: Create invitations for all players in the team.
+        if (playerIds.length > 0) {
+            const invitationsCollection = collection(db, "matchInvitations");
             for (const playerId of playerIds) {
-                const newInvitationRef = doc(invitationsCollection); // Create a new doc reference
+                const newInvitationRef = doc(invitationsCollection);
                 batch.set(newInvitationRef, {
                     matchId: matchDoc.id,
                     teamId: reservation.teamRef,
                     playerId: playerId,
-                    managerId: teamData.managerId,
+                    managerId: teamData.managerId, // Use managerId from team data
                     status: "pending",
                     invitedAt: serverTimestamp(),
                 });
             }
-            await batch.commit(); // Commit all invitations at once
         }
+        
+        // Step 4: Commit the batch.
+        await batch.commit(); 
         
         toast({
           title: "Reservation Confirmed!",
           description: `A match has been scheduled and invitations sent to ${playerIds.length} players.`,
         });
 
-      } else if (status === "Canceled") {
-         toast({
-          title: "Reservation Canceled",
-          description: `The reservation has been canceled.`,
-        });
+      } catch (error) {
+        console.error("Error updating reservation status: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
       }
-    } catch (error) {
-      console.error("Error updating reservation status: ", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
+    } else {
+        // Fallback for reservations without a team (e.g., booked by a player)
+        try {
+            await updateDoc(reservationRef, { status: "Confirmed" });
+            toast({
+                title: "Reservation Confirmed!",
+                description: `The reservation has been confirmed.`,
+            });
+        } catch(error) {
+             console.error("Error updating reservation status: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update reservation." });
+        }
     }
   };
 
