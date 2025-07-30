@@ -16,7 +16,6 @@ import {
   Landmark,
   Ticket,
   Shield,
-  Sparkles,
   Award,
   Calendar,
   Contact,
@@ -24,7 +23,6 @@ import {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "AI Recommendations", href: "/dashboard/recommendations", icon: Sparkles, roles: ["PLAYER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
   { title: "Games", href: "/dashboard/games", icon: Calendar, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },

@@ -239,7 +239,7 @@ export type PaymentStatus = "Paid" | "Pending" | "Overdue" | "Cancelled";
 export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee";
 
 export interface Payment {
-  id: string;
+  id:string;
   playerRef?: string; // PlayerProfile ID
   ownerRef?: string; // OwnerProfile ID
   managerRef?: string; // ManagerProfile ID
@@ -302,17 +302,4 @@ export type NavItem = {
   icon: LucideIcon;
   roles: UserRole[];
   label?: string;
-};
-
-export type Location = {
-  locationId: string;
-  locationName: string;
-  description: string;
-  sportsOffered: string;
-  address: string;
-  availableTimes: string;
-  pricing: string;
-  suitabilityScore: number;
-  image?: string;
-  imageHint?: string;
 };
