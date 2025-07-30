@@ -330,6 +330,7 @@ export default function TeamDetailsPage() {
       const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
       setTeam(teamData);
 
+      // Robust player fetching logic
       if (teamData.playerIds && teamData.playerIds.length > 0) {
           const playerProfilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", teamData.playerIds));
           const playerProfilesSnapshot = await getDocs(playerProfilesQuery);
@@ -339,10 +340,17 @@ export default function TeamDetailsPage() {
               playerProfilesMap.set(profile.userRef, profile);
           });
           
-          const enrichedPlayers = teamData.players.map(p => ({
-              ...p,
-              profile: playerProfilesMap.get(p.playerId)
-          })).sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
+          // Use playerIds as the source of truth for the roster
+          const enrichedPlayers = teamData.playerIds.map(userId => {
+              const profile = playerProfilesMap.get(userId);
+              const teamPlayerInfo = teamData.players.find(p => p.playerId === userId);
+              return {
+                  playerId: userId,
+                  number: teamPlayerInfo?.number ?? null,
+                  profile: profile
+              };
+          }).sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
+          
           setPlayers(enrichedPlayers);
       } else {
         setPlayers([]);
