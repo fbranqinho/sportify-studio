@@ -38,6 +38,11 @@ const AdminDashboard = () => (
 export default function DashboardPage({ role }: DashboardPageProps) {
   const name = "First Player"; // This would come from user data
 
+  if (!role) {
+    // Render nothing or a loading state until the role is available
+    return null;
+  }
+
   const renderDashboard = () => {
     switch (role) {
       case "PLAYER":
