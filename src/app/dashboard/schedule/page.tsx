@@ -8,11 +8,12 @@ import { useUser } from "@/hooks/use-user";
 import type { Reservation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck } from "lucide-react";
 import { format } from "date-fns";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 
 export default function SchedulePage() {
   const { user } = useUser();
@@ -87,7 +88,7 @@ export default function SchedulePage() {
       await updateDoc(reservationRef, { status });
       toast({
         title: "Reservation Updated",
-        description: `The reservation has been ${status.toLowerCase()}.`,
+        description: `The reservation has been ${status === "Confirmed" ? "confirmed" : "canceled"}.`,
       });
     } catch (error) {
       console.error("Error updating reservation status: ", error);
@@ -153,15 +154,23 @@ export default function SchedulePage() {
   )
 
   const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
-    <div className="text-center py-12">
+    <Card className="flex flex-col items-center justify-center p-12 text-center mt-4 border-dashed">
         <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="mt-4 text-lg font-semibold font-headline">{title}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </div>
+    </Card>
+  )
+
+  const LoadingSkeleton = () => (
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+          <Skeleton className="h-52" />
+          <Skeleton className="h-52" />
+          <Skeleton className="h-52" />
+      </div>
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold font-headline">My Schedule</h1>
         <p className="text-muted-foreground">
@@ -169,45 +178,48 @@ export default function SchedulePage() {
         </p>
       </div>
 
-      <Tabs defaultValue="pending">
-        <TabsList>
-          <TabsTrigger value="pending">Pending ({pendingReservations.length})</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming ({upcomingReservations.length})</TabsTrigger>
-          <TabsTrigger value="history">History ({pastReservations.length})</TabsTrigger>
-        </TabsList>
-        
+      {/* Pending Requests Section */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold font-headline text-primary">Pending Requests ({pendingReservations.length})</h2>
         {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                <Skeleton className="h-52" />
-                <Skeleton className="h-52" />
-                <Skeleton className="h-52" />
-            </div>
+            <LoadingSkeleton />
+        ) : pendingReservations.length > 0 ? (
+            <ReservationList reservations={pendingReservations} />
         ) : (
-          <>
-            <TabsContent value="pending">
-              {pendingReservations.length > 0 ? (
-                 <ReservationList reservations={pendingReservations} />
-              ) : (
-                <EmptyState icon={Clock} title="No Pending Reservations" description="You don't have any new booking requests right now." />
-              )}
-            </TabsContent>
-            <TabsContent value="upcoming">
-              {upcomingReservations.length > 0 ? (
-                 <ReservationList reservations={upcomingReservations} />
-              ) : (
-                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no confirmed or scheduled bookings for the future." />
-              )}
-            </TabsContent>
-            <TabsContent value="history">
-              {pastReservations.length > 0 ? (
-                <ReservationList reservations={pastReservations} />
-              ) : (
-                <EmptyState icon={History} title="No Reservation History" description="Your past bookings will appear here." />
-              )}
-            </TabsContent>
-          </>
+            <EmptyState icon={Clock} title="No Pending Reservations" description="You don't have any new booking requests right now." />
         )}
-      </Tabs>
+      </div>
+
+      <div className="border-t pt-8 space-y-4">
+        <h2 className="text-2xl font-bold font-headline">Upcoming Schedule ({upcomingReservations.length})</h2>
+         {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
+            <LoadingSkeleton />
+        ) : upcomingReservations.length > 0 ? (
+            <ReservationList reservations={upcomingReservations} />
+        ) : (
+            <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no confirmed or scheduled bookings for the future." />
+        )}
+      </div>
+
+       <div className="border-t pt-8">
+        <Accordion type="single" collapsible>
+            <AccordionItem value="history">
+                <AccordionTrigger>
+                    <h2 className="text-2xl font-bold font-headline">Reservation History ({pastReservations.length})</h2>
+                </AccordionTrigger>
+                <AccordionContent>
+                    {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
+                        <LoadingSkeleton />
+                    ) : pastReservations.length > 0 ? (
+                        <ReservationList reservations={pastReservations} />
+                    ) : (
+                        <EmptyState icon={History} title="No Reservation History" description="Your past bookings will appear here." />
+                    )}
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
+      </div>
+
     </div>
   );
 }
