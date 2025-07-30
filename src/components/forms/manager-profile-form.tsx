@@ -6,15 +6,30 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
-  Form
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
-// No fields needed for the initial form, so the schema is empty.
-const formSchema = z.object({});
+const tactics = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
+
+const formSchema = z.object({
+  tactics: z.enum(tactics),
+});
 
 interface ManagerProfileFormProps {
     userId: string;
@@ -27,16 +42,19 @@ export function ManagerProfileForm({ userId, userName }: ManagerProfileFormProps
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      tactics: "4-4-2",
+    },
   });
 
-  async function onSubmit() {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-        // Step 1: Create manager profile document in Firestore with default values
+        // Step 1: Create manager profile document in Firestore with selected tactic
         await addDoc(collection(db, "managerProfiles"), {
             userRef: userId,
             name: userName,
+            tactics: values.tactics,
             teams: [],
-            tactics: "4-4-2", // Default value
             victories: 0,
             defeats: 0,
             draws: 0,
@@ -68,9 +86,31 @@ export function ManagerProfileForm({ userId, userName }: ManagerProfileFormProps
   return (
      <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-           <p className="text-sm text-muted-foreground">
-              Welcome, Manager! All your stats will be tracked as you manage teams and play games. For now, just click below to get started.
-           </p>
+            <FormField
+                control={form.control}
+                name="tactics"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preferred Tactic</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your preferred tactic" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {tactics.map((tactic) => (
+                          <SelectItem key={tactic} value={tactic} className="font-semibold">
+                            {tactic}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
             <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Saving..." : "Complete and Continue"}
             </Button>
