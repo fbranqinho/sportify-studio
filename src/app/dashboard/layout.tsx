@@ -37,6 +37,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const auth = getAuth(app);
 
+  React.useEffect(() => {
+    if (!loading && user && !user.profileCompleted) {
+      router.push("/complete-profile");
+    }
+  }, [user, loading, router]);
+
+
   const handleRoleChange = (newRole: UserRole) => {
     // This logic needs to be re-evaluated for a real application
     // For now, it won't do much as the user is tied to the DB role
@@ -60,7 +67,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   }
 
   if (user && !user.profileCompleted) {
-    router.push("/complete-profile");
     return (
        <div className="flex items-center justify-center min-h-screen">
         <p>Redirecting to complete your profile...</p>
