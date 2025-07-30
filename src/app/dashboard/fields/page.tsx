@@ -82,16 +82,16 @@ export default function FieldsPage() {
          </div>
          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={!ownerProfile}>
                 <PlusCircle className="mr-2" />
                 Add New Field
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[625px]">
+            <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="font-headline">Add a New Field</DialogTitle>
                 <DialogDescription>
-                  Fill in the details below to list a new field.
+                  Fill in the details below to list a new field. The address will be inherited from your owner profile.
                 </DialogDescription>
               </DialogHeader>
               <CreatePitchForm ownerProfile={ownerProfile} onPitchCreated={handlePitchCreated} />
@@ -138,7 +138,7 @@ export default function FieldsPage() {
                 <CardDescription>You haven't added any fields yet. Get started by adding your first one!</CardDescription>
             </CardHeader>
             <CardContent>
-                 <Button onClick={() => setIsDialogOpen(true)}>
+                 <Button onClick={() => setIsDialogOpen(true)} disabled={!ownerProfile}>
                     <PlusCircle className="mr-2" />
                     Add Your First Field
                 </Button>

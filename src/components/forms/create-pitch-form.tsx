@@ -30,7 +30,6 @@ const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Field name must be at least 2 characters." }),
-  address: z.string().min(10, { message: "Address is required." }),
   city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
@@ -48,7 +47,6 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      address: "",
       city: "",
       sport: "fut7",
       capacity: 14,
@@ -56,11 +54,11 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!ownerProfile) {
+    if (!ownerProfile || !ownerProfile.companyAddress) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No owner profile found. Cannot create pitch.",
+        description: "No owner profile with an address found. Cannot create pitch.",
       });
       return;
     }
@@ -68,7 +66,7 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
     try {
       await addDoc(collection(db, "pitches"), {
         name: values.name,
-        address: values.address,
+        address: ownerProfile.companyAddress, // Use owner's address
         city: values.city,
         sport: values.sport,
         capacity: values.capacity,
@@ -113,22 +111,7 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="address"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Address</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. 123 Football St" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <FormField
+           <FormField
             control={form.control}
             name="city"
             render={({ field }) => (
@@ -141,6 +124,8 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
               </FormItem>
             )}
           />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <FormField
             control={form.control}
             name="sport"
