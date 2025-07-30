@@ -306,5 +306,3 @@ export interface EnrichedPlayerSearchResult {
     profile: PlayerProfile;
     user: User;
 }
-
-    

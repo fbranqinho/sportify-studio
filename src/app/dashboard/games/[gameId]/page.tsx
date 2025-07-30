@@ -32,8 +32,6 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
         }
         setIsSearching(true);
         try {
-            // Firestore queries are case-sensitive. The most robust way to handle this
-            // is to query for a range and then filter client-side.
             const teamsQuery = query(
                 collection(db, "teams"),
                 where("name_lowercase", ">=", searchTerm),
@@ -43,17 +41,30 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
 
             const teams = querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                // Final client-side filter to ensure exact match for older data without lowercase field
-                // and to exclude own team
-                .filter(team => 
-                    (team.name_lowercase || team.name.toLowerCase()).startsWith(searchTerm) &&
-                    team.id !== match.teamARef
-                );
+                // Final client-side filter to exclude own team
+                .filter(team => team.id !== match.teamARef);
                 
             setSearchResults(teams);
         } catch (error) {
             console.error("Error searching teams: ", error);
-            toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. The required index might be building." });
+            // Fallback for older data without lowercase field
+            try {
+                const teamsRef = collection(db, "teams");
+                const fallbackSnapshot = await getDocs(teamsRef);
+                const teams = fallbackSnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as Team))
+                    .filter(team => 
+                        team.name.toLowerCase().includes(searchTerm) &&
+                        team.id !== match.teamARef
+                    );
+                setSearchResults(teams);
+                if(teams.length === 0) {
+                     toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. A required index might be building." });
+                }
+            } catch (fallbackError) {
+                 console.error("Error on fallback search for teams: ", fallbackError);
+                 toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams." });
+            }
         } finally {
             setIsSearching(false);
         }
