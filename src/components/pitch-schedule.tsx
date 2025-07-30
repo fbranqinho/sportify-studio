@@ -214,16 +214,19 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             }
                             
                             if (slotInfo.status === 'Open' && slotInfo.match) {
+                                const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0) + (slotInfo.match.playerApplications?.length || 0);
+                                const missingPlayers = 10 - totalPlayers;
                                 return (
                                     <Button
                                         key={slot}
-                                        variant="default"
-                                        className="h-12 flex-col bg-accent hover:bg-accent/90 text-accent-foreground"
+                                        variant="outline"
+                                        className="h-12 flex-col"
                                         onClick={() => handleApplyToGame(slotInfo.match!)}
                                     >
                                         <span className="font-bold text-base">{slot}</span>
                                         <div className="text-xs flex items-center gap-1">
-                                           <UserPlus className="h-3 w-3" /> Apply to Play
+                                           <UserPlus className="h-3 w-3" />
+                                            {missingPlayers > 0 ? `${missingPlayers} missing` : 'Apply'}
                                         </div>
                                     </Button>
                                 );
