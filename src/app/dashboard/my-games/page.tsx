@@ -29,9 +29,21 @@ export default function MyGamesPage() {
     if (!user) return;
     setLoading(true);
 
+    let activeListeners = 0;
+
+    const doneLoading = () => {
+        activeListeners -= 1;
+        if (activeListeners === 0) {
+            setLoading(false);
+        }
+    };
+
     const fetchTeamDetails = async (teamIds: string[]) => {
         if (teamIds.length === 0) return new Map();
-        const teamsQuery = query(collection(db, "teams"), where("__name__", "in", teamIds));
+        const uniqueTeamIds = [...new Set(teamIds)];
+        if (uniqueTeamIds.length === 0) return new Map();
+
+        const teamsQuery = query(collection(db, "teams"), where("__name__", "in", uniqueTeamIds));
         const teamsSnapshot = await getDocs(teamsQuery);
         const teamsMap = new Map<string, Team>();
         teamsSnapshot.forEach(doc => {
@@ -43,6 +55,7 @@ export default function MyGamesPage() {
     // Listener for Match Invitations (for players)
     let unsubscribeInvitations = () => {};
     if (user.role === 'PLAYER') {
+        activeListeners++;
         const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
         unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
             const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
@@ -51,16 +64,21 @@ export default function MyGamesPage() {
             if (invs.length > 0) {
                  const teamIds = invs.map(inv => inv.teamId);
                  const teamsMap = await fetchTeamDetails(teamIds);
-                 setTeams(prev => new Map([...prev, ...teamsMap]));
+                 setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
+            doneLoading();
+        }, (error) => {
+            console.error("Error fetching invitations:", error);
+            doneLoading();
         });
     }
 
-    const setupListeners = async () => {
+    const setupMatchListeners = async () => {
+        activeListeners++;
         let matchesQuery;
         let matchesQueryB; // For teamBRef
         
-        let allTeamIds: string[] = [];
+        let userTeamIds: string[] = [];
         let combinedMatches = new Map<string, Match>();
 
         if (user.role === 'MANAGER') {
@@ -68,70 +86,79 @@ export default function MyGamesPage() {
         } else if (user.role === 'PLAYER') {
             const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
             const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
-            const playerTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
-            allTeamIds = playerTeamIds;
+            userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
             
-            if (playerTeamIds.length === 0) {
+            if (userTeamIds.length === 0) {
                 setMatches([]);
-                setLoading(false);
+                doneLoading();
                 return () => {};
             }
             
-            matchesQuery = query(collection(db, "matches"), where("teamARef", "in", playerTeamIds));
-            matchesQueryB = query(collection(db, "matches"), where("teamBRef", "in", playerTeamIds));
+            matchesQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+            matchesQueryB = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
 
         } else {
-            setLoading(false);
+             doneLoading();
             return () => {};
         }
 
 
-        const handleSnapshot = async (querySnapshot: DocumentData) => {
+        const handleSnapshot = async (querySnapshot: DocumentData, isInitialLoad: boolean) => {
             const newMatches = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
             
             newMatches.forEach(match => {
                 combinedMatches.set(match.id, match);
             });
             
-            const teamIds = new Set<string>(allTeamIds);
+            const teamIdsFromMatches = new Set<string>();
             combinedMatches.forEach((match: Match) => {
-                if (match.teamARef) teamIds.add(match.teamARef);
-                if (match.teamBRef) teamIds.add(match.teamBRef);
+                if (match.teamARef) teamIdsFromMatches.add(match.teamARef);
+                if (match.teamBRef) teamIdsFromMatches.add(match.teamBRef);
             });
             
-            if (teamIds.size > 0) {
-                 const teamsMap = await fetchTeamDetails(Array.from(teamIds));
-                 setTeams(prev => new Map([...prev, ...teamsMap]));
+            const allTeamIds = [...new Set([...userTeamIds, ...teamIdsFromMatches])];
+
+            if (allTeamIds.length > 0) {
+                 const teamsMap = await fetchTeamDetails(allTeamIds);
+                 setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
             
             setMatches(Array.from(combinedMatches.values()));
-            setLoading(false);
+            if(isInitialLoad) doneLoading();
         };
         
-        const unsubscribeA = onSnapshot(matchesQuery, handleSnapshot, (error) => {
+        let isInitialA = true;
+        const unsubscribeA = onSnapshot(matchesQuery, (snapshot) => handleSnapshot(snapshot, isInitialA), (error) => {
             console.error("Error fetching matches (Team A): ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch matches." });
-            setLoading(false);
+            if(isInitialA) doneLoading();
         });
+        if(isInitialA) isInitialA = false;
 
         let unsubscribeB = () => {};
         if (matchesQueryB) {
-            unsubscribeB = onSnapshot(matchesQueryB, handleSnapshot, (error) => {
+            let isInitialB = true;
+            unsubscribeB = onSnapshot(matchesQueryB, (snapshot) => handleSnapshot(snapshot, isInitialB), (error) => {
                 console.error("Error fetching matches (Team B): ", error);
             });
+             if(isInitialB) isInitialB = false;
         }
         
         return () => {
           unsubscribeA();
           unsubscribeB();
-          unsubscribeInvitations();
         };
     }
 
-    const unsubscribePromise = setupListeners();
+    const unsubscribeMatchesPromise = setupMatchListeners();
+
+    if (activeListeners === 0) {
+      setLoading(false);
+    }
     
     return () => {
-        unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
+        unsubscribeMatchesPromise.then(unsub => unsub && unsub());
+        unsubscribeInvitations();
     };
 
   }, [user, toast]);
@@ -275,19 +302,15 @@ export default function MyGamesPage() {
       </div>
       
        {/* Invitations Section (for players) */}
-       {user?.role === 'PLAYER' && (
+       {user?.role === 'PLAYER' && invitations.length > 0 && (
         <div className="space-y-4">
             <h2 className="text-2xl font-bold font-headline text-primary">Game Invitations ({invitations.length})</h2>
-             {invitations.length > 0 ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {invitations.map(inv => {
-                        const team = teams.get(inv.teamId);
-                        return <InvitationCard key={inv.id} invitation={inv} teamName={team?.name || 'a team'} />
-                    })}
-                </div>
-            ) : (
-                <EmptyState icon={Mail} title="No Game Invitations" description="You don't have any new invitations to play." />
-            )}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {invitations.map(inv => {
+                    const team = teams.get(inv.teamId);
+                    return <InvitationCard key={inv.id} invitation={inv} teamName={team?.name || 'a team'} />
+                })}
+            </div>
         </div>
        )}
 
@@ -298,7 +321,11 @@ export default function MyGamesPage() {
         {upcomingMatches.length > 0 ? (
             <MatchList matches={upcomingMatches} />
         ) : (
-            <EmptyState icon={Gamepad2} title="No Upcoming Games" description="You don't have any games scheduled for the future." />
+             user?.role === 'PLAYER' && invitations.length === 0 ? (
+                <EmptyState icon={Gamepad2} title="No Upcoming Games" description="You don't have any games scheduled or new invitations." />
+             ) : (
+                <EmptyState icon={Gamepad2} title="No Upcoming Games" description="You don't have any games scheduled for the future." />
+             )
         )}
       </div>
 
@@ -321,3 +348,4 @@ export default function MyGamesPage() {
     </div>
   );
 }
+
