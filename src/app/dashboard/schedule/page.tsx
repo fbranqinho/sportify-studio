@@ -89,6 +89,16 @@ export default function SchedulePage() {
 
       // If confirmed, create a new match and invitations
       if (status === "Confirmed" && reservation.teamRef) {
+        const teamDocRef = doc(db, "teams", reservation.teamRef);
+        const teamDoc = await getDoc(teamDocRef);
+
+        if (!teamDoc.exists()) {
+             toast({ variant: "destructive", title: "Error", description: "Team associated with reservation not found." });
+             return;
+        }
+        
+        const teamData = teamDoc.data() as Team;
+
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
@@ -101,26 +111,21 @@ export default function SchedulePage() {
           scoreB: 0,
           refereeId: null,
           attendance: 0,
-          managerRef: reservation.managerRef || null,
+          managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
         // Get players from the team to create invitations
-        const teamDocRef = doc(db, "teams", reservation.teamRef);
-        const teamDoc = await getDoc(teamDocRef);
-        if (teamDoc.exists()) {
-            const teamData = teamDoc.data() as Team;
-            const playerIds = teamData.playerIds || [];
+        const playerIds = teamData.playerIds || [];
 
-            for (const playerId of playerIds) {
-                await addDoc(collection(db, "matchInvitations"), {
-                    matchId: matchDoc.id,
-                    teamId: reservation.teamRef,
-                    playerId: playerId,
-                    managerId: reservation.managerRef,
-                    status: "pending",
-                    invitedAt: serverTimestamp(),
-                });
-            }
+        for (const playerId of playerIds) {
+            await addDoc(collection(db, "matchInvitations"), {
+                matchId: matchDoc.id,
+                teamId: reservation.teamRef,
+                playerId: playerId,
+                managerId: teamData.managerId, // Use managerId from team data
+                status: "pending",
+                invitedAt: serverTimestamp(),
+            });
         }
         
         toast({
@@ -128,7 +133,7 @@ export default function SchedulePage() {
           description: `A match has been scheduled and invitations sent.`,
         });
 
-      } else {
+      } else if (status === "Canceled") {
          toast({
           title: "Reservation Canceled",
           description: `The reservation has been canceled.`,
