@@ -64,11 +64,17 @@ export default function MyGamesPage() {
             return () => {};
         }
 
-        const handleSnapshot = async (querySnapshot: DocumentData, isTeamB: boolean = false) => {
-            const matchesData = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
+        let combinedMatches = new Map<string, Match>();
+
+        const handleSnapshot = async (querySnapshot: DocumentData) => {
+            const newMatches = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
+            
+            newMatches.forEach(match => {
+                combinedMatches.set(match.id, match);
+            });
             
             const teamIds = new Set<string>();
-            matchesData.forEach((match: Match) => {
+            combinedMatches.forEach((match: Match) => {
                 if (match.teamARef) teamIds.add(match.teamARef);
                 if (match.teamBRef) teamIds.add(match.teamBRef);
             });
@@ -76,16 +82,11 @@ export default function MyGamesPage() {
             const teamsMap = await fetchTeamDetails(Array.from(teamIds));
             setTeams(prev => new Map([...prev, ...teamsMap]));
 
-            setMatches(currentMatches => {
-                const existingIds = new Set(currentMatches.map(m => m.id));
-                const newMatches = matchesData.filter((m: Match) => !existingIds.has(m.id));
-                return [...currentMatches, ...newMatches];
-            });
-
+            setMatches(Array.from(combinedMatches.values()));
             setLoading(false);
         };
         
-        const unsubscribeA = onSnapshot(matchesQuery, (snap) => handleSnapshot(snap), (error) => {
+        const unsubscribeA = onSnapshot(matchesQuery, handleSnapshot, (error) => {
             console.error("Error fetching matches (Team A): ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not fetch matches." });
             setLoading(false);
@@ -93,7 +94,7 @@ export default function MyGamesPage() {
 
         let unsubscribeB = () => {};
         if (matchesQueryB) {
-            unsubscribeB = onSnapshot(matchesQueryB, (snap) => handleSnapshot(snap, true), (error) => {
+            unsubscribeB = onSnapshot(matchesQueryB, handleSnapshot, (error) => {
                 console.error("Error fetching matches (Team B): ", error);
             });
         }
@@ -232,5 +233,3 @@ export default function MyGamesPage() {
     </div>
   );
 }
-
-    
