@@ -235,6 +235,7 @@ export interface Match {
     invitedTeamId?: string | null; // ID of the team invited, used with PendingOpponent status
     teamAPlayers: string[]; // Array of User IDs
     teamBPlayers: string[]; // Array of User IDs
+    playerApplications?: string[]; // Array of user IDs who applied to play
     scoreA: number;
     scoreB: number;
     pitchRef: string;
@@ -242,6 +243,7 @@ export interface Match {
     attendance: number;
     refereeId: string | null;
     managerRef: string | null;
+    allowExternalPlayers?: boolean;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

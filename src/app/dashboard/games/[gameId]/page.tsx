@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -16,6 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Search, UserPlus, X } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 
 // Component to handle inviting an opponent
@@ -153,10 +156,52 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
     );
 }
 
+function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
+    const { toast } = useToast();
+
+    const handleToggleExternalPlayers = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowExternalPlayers: checked });
+            onMatchUpdate({ allowExternalPlayers: checked });
+            toast({ title: "Settings updated", description: `Players can ${checked ? 'now' : 'no longer'} apply to this game.`});
+        } catch (error) {
+            console.error("Error updating match settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
+        }
+    }
+    
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Game Management</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-external" className="text-base font-semibold">
+                            Accept External Players
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Allow players who are not in a team to apply to fill empty slots in this game.
+                        </p>
+                    </div>
+                    <Switch
+                        id="allow-external"
+                        checked={match.allowExternalPlayers}
+                        onCheckedChange={handleToggleExternalPlayers}
+                    />
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
 
 export default function GameDetailsPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useUser();
     const gameId = params.gameId as string;
     const [match, setMatch] = React.useState<Match | null>(null);
     const [teamA, setTeamA] = React.useState<Team | null>(null);
@@ -202,6 +247,10 @@ export default function GameDetailsPage() {
         fetchGameDetails();
     }, [fetchGameDetails]);
 
+    const handleMatchUpdate = (data: Partial<Match>) => {
+        setMatch(prev => prev ? {...prev, ...data} : null);
+    }
+
     if (loading) {
         return <div className="space-y-4">
             <Skeleton className="h-8 w-48" />
@@ -220,6 +269,9 @@ export default function GameDetailsPage() {
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
     };
+
+    const isManager = user?.id === teamA?.managerId;
+
 
     return (
         <div className="space-y-6">
@@ -243,6 +295,8 @@ export default function GameDetailsPage() {
                     <p>Pitch: Placeholder Pitch Name</p>
                 </CardContent>
             </Card>
+
+            {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
 
             {/* Invite Opponent section, shown only if there's no opponent and no invitation sent */}
             {match.teamARef && !match.teamBRef && !match.invitedTeamId && (

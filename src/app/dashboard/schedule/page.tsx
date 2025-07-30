@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -122,6 +123,8 @@ export default function SchedulePage() {
           teamBRef: null,
           teamAPlayers: [],
           teamBPlayers: [],
+          playerApplications: [],
+          allowExternalPlayers: false, // Default value
           scoreA: 0,
           scoreB: 0,
           refereeId: null,

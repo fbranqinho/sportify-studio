@@ -1,17 +1,19 @@
 
+
 "use client";
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore } from "date-fns";
-import type { Pitch, Reservation, User } from "@/types";
+import type { Pitch, Reservation, User, Match } from "@/types";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 // Generate hourly time slots from 09:00 to 23:00
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
@@ -24,48 +26,111 @@ interface PitchScheduleProps {
     user: User;
 }
 
+interface SlotInfo {
+  status: 'Available' | 'Pending' | 'Confirmed' | 'Open';
+  match?: Match;
+  reservation?: Reservation;
+}
+
+
 export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [selectedDate, setSelectedDate] = React.useState(startOfDay(new Date()));
     const [reservations, setReservations] = React.useState<Reservation[]>([]);
+    const [matches, setMatches] = React.useState<Match[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const { toast } = useToast();
 
     React.useEffect(() => {
         setLoading(true);
-        const q = query(
+
+        const qReservations = query(
             collection(db, "reservations"), 
             where("pitchId", "==", pitch.id)
         );
+        const qMatches = query(
+            collection(db, "matches"),
+            where("pitchRef", "==", pitch.id)
+        );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const resData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation);
-            setReservations(resData);
-            setLoading(false);
+        const unsubscribeReservations = onSnapshot(qReservations, (snapshot) => {
+            setReservations(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation));
         }, (error) => {
             console.error("Error fetching reservations: ", error);
-            setLoading(false);
+        });
+        
+        const unsubscribeMatches = onSnapshot(qMatches, (snapshot) => {
+            setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match));
+             setLoading(false); // Consider loading finished after matches are fetched
+        }, (error) => {
+             console.error("Error fetching matches: ", error);
+             setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribeReservations();
+            unsubscribeMatches();
+        };
     }, [pitch.id]);
 
     const handleDateChange = (days: number) => {
         setSelectedDate(prev => addDays(prev, days));
     };
 
-    const getStatusForSlot = (slot: string) => {
+    const getStatusForSlot = (slot: string): SlotInfo => {
         const slotDateTime = new Date(selectedDate);
         const [hours, minutes] = slot.split(':').map(Number);
         slotDateTime.setHours(hours, minutes, 0, 0);
 
-        const foundReservation = reservations.find(r => {
+        const reservation = reservations.find(r => {
             const reservationDate = new Date(r.date);
             return reservationDate.getTime() === slotDateTime.getTime() && (r.status === 'Confirmed' || r.status === 'Pending');
         });
 
-        return foundReservation ? foundReservation.status : 'Available';
+        if (reservation) {
+            const match = matches.find(m => {
+                const matchDate = new Date(m.date);
+                return matchDate.getTime() === slotDateTime.getTime();
+            });
+            
+            if (match?.allowExternalPlayers) {
+                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+                if (totalPlayers < 10) { // Example: fut5 game size
+                    return { status: 'Open', match, reservation };
+                }
+            }
+
+            return { status: reservation.status as 'Confirmed' | 'Pending', reservation };
+        }
+        
+        return { status: 'Available' };
     };
+
+    const handleApplyToGame = async (match: Match) => {
+        if (!user || !user.id) {
+            toast({ variant: "destructive", title: "You must be logged in to apply." });
+            return;
+        }
+
+        const matchRef = doc(db, "matches", match.id);
+        
+        if(match.playerApplications?.includes(user.id)) {
+            toast({ title: "You have already applied to this game." });
+            return;
+        }
+
+        try {
+            await updateDoc(matchRef, {
+                playerApplications: arrayUnion(user.id)
+            });
+            // TODO: Create a notification for the match/team manager
+            toast({ title: "Application sent!", description: "The team manager has been notified of your interest." });
+        } catch(error) {
+            console.error("Error applying to game:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not send your application." });
+        }
+    }
 
     const handleBookingSuccess = () => {
         setIsDialogOpen(false);
@@ -78,7 +143,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline">Book a Slot</CardTitle>
-                <CardDescription>Select a day and time to make a reservation.</CardDescription>
+                <CardDescription>Select a day and time to make a reservation or apply to join an open game.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {/* Date Selector */}
@@ -103,28 +168,43 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
                         {timeSlots.map(slot => {
-                            const status = getStatusForSlot(slot);
+                            const slotInfo = getStatusForSlot(slot);
                             const slotDateTime = new Date(selectedDate);
                             const [hours] = slot.split(':').map(Number);
                             slotDateTime.setHours(hours, 0, 0, 0);
                             const isPast = isBefore(slotDateTime, new Date());
+                            const isDisabled = (slotInfo.status !== 'Available' && slotInfo.status !== 'Open') || isPast;
 
-                            const isDisabled = status !== 'Available' || isPast;
+                             if (slotInfo.status === 'Open' && slotInfo.match && !isPast) {
+                                return (
+                                    <Button
+                                        key={slot}
+                                        variant="default"
+                                        className="h-12 flex-col bg-blue-600 hover:bg-blue-700"
+                                        onClick={() => handleApplyToGame(slotInfo.match!)}
+                                    >
+                                        <span className="font-bold text-base">{slot}</span>
+                                        <div className="text-xs flex items-center gap-1">
+                                           <UserPlus className="h-3 w-3" /> Apply to Play
+                                        </div>
+                                    </Button>
+                                );
+                            }
 
                             return (
                                 <DialogTrigger asChild key={slot}>
                                     <Button
-                                        variant={status === 'Available' ? "outline" : "secondary"}
+                                        variant={slotInfo.status === 'Available' ? "outline" : "secondary"}
                                         disabled={isDisabled}
                                         className="h-12 flex-col"
                                         onClick={() => setSelectedSlot(slot)}
                                     >
                                         <span className="font-bold text-base">{slot}</span>
                                         <div className="text-xs flex items-center gap-1">
-                                            {status === 'Available' && !isPast && <><CheckCircle className="h-3 w-3 text-green-500" /> Available</>}
-                                            {status === 'Pending' && <><Clock className="h-3 w-3 text-amber-500" /> Pending</>}
-                                            {status === 'Confirmed' && <><Ban className="h-3 w-3 text-red-500" /> Booked</>}
-                                            {isPast && status === 'Available' && 'Unavailable'}
+                                            {slotInfo.status === 'Available' && !isPast && <><CheckCircle className="h-3 w-3 text-green-500" /> Available</>}
+                                            {slotInfo.status === 'Pending' && <><Clock className="h-3 w-3 text-amber-500" /> Pending</>}
+                                            {slotInfo.status === 'Confirmed' && <><Ban className="h-3 w-3 text-red-500" /> Booked</>}
+                                            {isPast && slotInfo.status === 'Available' && 'Unavailable'}
                                         </div>
                                     </Button>
                                 </DialogTrigger>
