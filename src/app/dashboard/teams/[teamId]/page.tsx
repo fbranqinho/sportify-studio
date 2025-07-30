@@ -83,6 +83,7 @@ function TeamStats({ team }: { team: Team }) {
 
 // --- Player-focused View Component ---
 function PlayerTeamView({ team, players }: { team: Team, players: EnrichedTeamPlayer[] }) {
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   return (
     <div className="space-y-6">
        <TeamHeader team={team} />
@@ -104,7 +105,7 @@ function PlayerTeamView({ team, players }: { team: Team, players: EnrichedTeamPl
                 <TableBody>
                    {players.map(({ playerId, number, profile }) => (
                       <TableRow key={playerId}>
-                         <TableCell className="font-medium">{profile?.nickname ?? "Unknown"}</TableCell>
+                         <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : "Unknown"}</TableCell>
                          <TableCell className="text-center font-mono">{number ?? "-"}</TableCell>
                          <TableCell className="text-right">{profile?.position ?? "N/A"}</TableCell>
                       </TableRow>
@@ -187,6 +188,8 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
     }
   };
   
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  
   return (
     <div className="space-y-6">
         <Card>
@@ -213,7 +216,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                     <TableBody>
                         {players.length > 0 ? players.map(({ playerId, number, profile }) => (
                             <TableRow key={playerId}>
-                                <TableCell className="font-medium">{profile?.nickname ?? "Unknown Player"}</TableCell>
+                                <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : "Unknown Player"}</TableCell>
                                 <TableCell>
                                     <Input 
                                         type="number" 
@@ -275,7 +278,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
                                     {searchResults.map((result) => (
                                         <TableRow key={result.user.id}>
                                             <TableCell>
-                                                <div className="font-medium">{result.profile.nickname}</div>
+                                                <div className="font-medium">{capitalize(result.profile.nickname)}</div>
                                                 <div className="text-xs text-muted-foreground">{result.user.name} ({result.user.email})</div>
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -453,7 +456,7 @@ export default function TeamDetailsPage() {
   return (
     <div className="space-y-6">
         <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold font-headline">{team.name}</h1>
+            <h1 className="text-3xl font-bold font-headline">{isManager ? "Manage Team" : team.name}</h1>
             <Button variant="outline" size="sm" asChild>
                 <Link href="/dashboard/teams">
                 <ChevronLeft className="mr-2 h-4 w-4" />
@@ -478,7 +481,5 @@ export default function TeamDetailsPage() {
     </div>
   );
 }
-
-    
 
     
