@@ -19,12 +19,15 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { MapPin } from "lucide-react";
 
 const formSchema = z.object({
   companyName: z.string().min(2, { message: "Company name must be at least 2 characters." }),
   companyNif: z.string().regex(/^[0-9]{9}$/, { message: "NIF must have 9 digits." }),
   companyAddress: z.string().min(10, { message: "Company address is required." }),
   description: z.string().optional(),
+  latitude: z.coerce.number().min(-90, "Invalid latitude.").max(90, { message: "Invalid latitude." }),
+  longitude: z.coerce.number().min(-180, "Invalid longitude.").max(180, { message: "Invalid longitude." }),
 });
 
 interface OwnerProfileFormProps {
@@ -42,8 +45,40 @@ export function OwnerProfileForm({ userId }: OwnerProfileFormProps) {
       companyNif: "",
       companyAddress: "",
       description: "",
+      latitude: 0,
+      longitude: 0,
     },
   });
+  
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          form.setValue("latitude", parseFloat(latitude.toFixed(6)));
+          form.setValue("longitude", parseFloat(longitude.toFixed(6)));
+          toast({
+            title: "Location Found!",
+            description: "Coordinates have been filled in for you.",
+          });
+        },
+        (error) => {
+          console.error("Error getting location: ", error);
+          toast({
+            variant: "destructive",
+            title: "Could not get location",
+            description: "Please enable location permissions in your browser or enter coordinates manually.",
+          });
+        }
+      );
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Geolocation not supported",
+        description: "Your browser does not support geolocation.",
+      });
+    }
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -52,9 +87,6 @@ export function OwnerProfileForm({ userId }: OwnerProfileFormProps) {
             ...values,
             userRef: userId,
             pitches: [],
-            // Defaulting lat/lng, should be updated when creating a pitch
-            latitude: 0, 
-            longitude: 0,
         });
 
         // Step 2: Update user document
@@ -141,6 +173,43 @@ export function OwnerProfileForm({ userId }: OwnerProfileFormProps) {
                     </FormItem>
                 )}
             />
+
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <FormLabel>Company Coordinates</FormLabel>
+                    <Button type="button" variant="outline" size="sm" onClick={handleGetLocation}>
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Get Current Location
+                    </Button>
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="latitude"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormControl>
+                            <Input type="number" step="any" placeholder="e.g. 41.1579" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="longitude"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormControl>
+                            <Input type="number" step="any" placeholder="e.g. -8.6291" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                </div>
+            </div>
+
             <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Saving..." : "Save and Continue"}
             </Button>
