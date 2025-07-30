@@ -27,15 +27,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { app } from "@/lib/firebase";
-import { mockData } from "@/lib/mock-data";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(1, { message: "Password is required." }),
 });
-
-// List of mock users for login validation
-const mockUsers = mockData.users.map(user => user.email);
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,38 +47,19 @@ export default function LoginPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    // TEMPORARY: Bypass Firebase Auth for mock users for testing purposes.
-    if (mockUsers.includes(values.email)) {
-        const user = mockData.users.find(u => u.email === values.email);
-        if (user) {
-            localStorage.setItem('mockUserId', user.id);
-            localStorage.setItem('mockUserRole', user.role);
-            localStorage.setItem('mockUserName', user.name);
-            toast({
-                title: `Logged in as ${user.name}`,
-                description: "Redirecting you to the dashboard.",
-            });
-            router.push("/dashboard");
-        }
-    } else {
-        // For real users, use Firebase Auth
-        try {
-            await signInWithEmailAndPassword(auth, values.email, values.password);
-            localStorage.removeItem('mockUserId');
-            localStorage.removeItem('mockUserRole');
-            localStorage.removeItem('mockUserName');
-            toast({
-                title: "Login Successful",
-                description: "Redirecting you to the dashboard.",
-            });
-            router.push("/dashboard");
-        } catch (error: any) {
-            toast({
-                variant: "destructive",
-                title: "Login Failed",
-                description: "Invalid credentials. Please sign up if you don't have an account.",
-            });
-        }
+    try {
+        await signInWithEmailAndPassword(auth, values.email, values.password);
+        toast({
+            title: "Login Successful",
+            description: "Redirecting you to the dashboard.",
+        });
+        router.push("/dashboard");
+    } catch (error: any) {
+        toast({
+            variant: "destructive",
+            title: "Login Failed",
+            description: "Invalid credentials. Please sign up if you don't have an account.",
+        });
     }
   }
 
@@ -98,7 +75,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl font-headline">Login</CardTitle>
           <CardDescription>
-            Use a mock user email (e.g., bruno@test.com) and any password.
+            Enter your email and password to access your account.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -111,7 +88,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="bruno@test.com" {...field} />
+                      <Input placeholder="m@example.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

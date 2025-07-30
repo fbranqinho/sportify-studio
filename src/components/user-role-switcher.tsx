@@ -9,19 +9,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { UserRole } from "@/types";
-import { mockData } from "@/lib/mock-data";
-
 
 interface UserRoleSwitcherProps {
   role: UserRole;
   onRoleChange: (role: UserRole) => void;
 }
 
-const roles: UserRole[] = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE"];
+// In a real app, you would fetch available roles for the user.
+// For now, we allow switching between all possible roles for demonstration.
+const roles: UserRole[] = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"];
 
 export function UserRoleSwitcher({ role, onRoleChange }: UserRoleSwitcherProps) {
   return (
-    <Select value={role} onValueChange={(value) => onRoleChange(value as UserRole)}>
+    <Select value={role} onValueChange={(value) => onRoleChange(value as UserRole)} disabled>
       <SelectTrigger className="w-[180px] font-semibold bg-transparent border-2 border-primary text-primary focus:ring-primary">
         <SelectValue placeholder="Select a role" />
       </SelectTrigger>

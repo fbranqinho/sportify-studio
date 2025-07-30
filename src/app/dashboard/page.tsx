@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { UserRole } from "@/types";
+import type { User, UserRole } from "@/types";
 import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
 import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
@@ -9,10 +9,13 @@ import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import React from "react";
+import { getAuth } from "firebase/auth";
+import { app, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 interface DashboardPageProps {
   role?: UserRole;
-  userId?: string; // userId is passed from layout but not used here directly
+  userId?: string;
 }
 
 const WelcomeHeader = ({ role, name }: { role: UserRole, name: string }) => (
@@ -39,20 +42,25 @@ const AdminDashboard = () => (
 
 
 export default function DashboardPage({ role }: DashboardPageProps) {
-  const [name, setName] = React.useState("User");
+  const [user, setUser] = React.useState<User | null>(null);
+  const auth = getAuth(app);
 
   React.useEffect(() => {
-    // Role is now passed as a prop, but name is still sourced from localStorage for simplicity
-    // A more robust solution would pass the full user object or name as a prop as well.
-    const mockName = localStorage.getItem('mockUserName');
-    if (mockName) {
-        setName(mockName);
+    const fetchUser = async () => {
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+            const userDocRef = doc(db, "users", firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                setUser({ id: userDoc.id, ...userDoc.data() } as User);
+            }
+        }
     }
-  }, []);
+    fetchUser();
+  }, [auth]);
 
-  if (!role) {
-    // Render nothing or a loading state until the role is available
-    return null;
+  if (!role || !user) {
+    return <div>Loading...</div>;
   }
 
   const renderDashboard = () => {
@@ -76,7 +84,7 @@ export default function DashboardPage({ role }: DashboardPageProps) {
 
   return (
     <div className="space-y-6">
-      <WelcomeHeader role={role} name={name} />
+      <WelcomeHeader role={role} name={user.name} />
       {renderDashboard()}
     </div>
   );

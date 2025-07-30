@@ -5,13 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { getAuth, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import {
   SidebarProvider,
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarInset,
-  SidebarTrigger,
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,76 +25,83 @@ import {
 import { UserRoleSwitcher } from "@/components/user-role-switcher";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Icons } from "@/components/icons";
-import type { UserRole } from "@/types";
+import type { User, UserRole } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Bell, LogOut, Settings } from "lucide-react";
-import { app } from "@/lib/firebase";
-import { mockData } from "@/lib/mock-data";
+import { app, db } from "@/lib/firebase";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [role, setRole] = React.useState<UserRole>("PLAYER");
-  const [name, setName] = React.useState("User");
-  const [userId, setUserId] = React.useState<string | null>(null);
+  const [user, setUser] = React.useState<User | null>(null);
+  const [loading, setLoading] = React.useState(true);
   const router = useRouter();
   const auth = getAuth(app);
 
   React.useEffect(() => {
-    const mockRole = localStorage.getItem('mockUserRole') as UserRole;
-    const mockName = localStorage.getItem('mockUserName');
-    const mockUserId = localStorage.getItem('mockUserId');
-    
-    if (mockRole && mockName && mockUserId) {
-      setRole(mockRole);
-      setName(mockName);
-      setUserId(mockUserId);
-    } else {
-        const unsubscribe = auth.onAuthStateChanged(user => {
-            if (user) {
-                // Fetch user data from firestore and set role, name, and userId
-                // This part would be implemented for real users
-            } else {
-                router.push('/login');
-            }
-        });
-        return () => unsubscribe();
-    }
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          setUser({ id: userDoc.id, ...userDoc.data() } as User);
+        } else {
+          // Handle case where user exists in Auth but not in Firestore
+          console.error("No user document found in Firestore, logging out.");
+          await signOut(auth);
+          router.push("/login");
+        }
+      } else {
+        router.push("/login");
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [router, auth]);
 
 
   const handleRoleChange = (newRole: UserRole) => {
-    const newUser = mockData.users.find(u => u.role === newRole);
-    if (newUser) {
-        localStorage.setItem('mockUserId', newUser.id);
-        localStorage.setItem('mockUserRole', newUser.role);
-        localStorage.setItem('mockUserName', newUser.name);
-        // Force a reload of the page to fetch new data for the new user role.
-        window.location.reload();
+    // In a real app, you might have logic here to switch roles if a user
+    // has multiple profiles. For now, we'll just update the state.
+    if (user) {
+      setUser({ ...user, role: newRole });
+      // Potentially force a reload or navigate to ensure data is fresh
+      // window.location.reload();
     }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      localStorage.removeItem('mockUserId');
-      localStorage.removeItem('mockUserRole');
-      localStorage.removeItem('mockUserName');
       router.push("/login");
     } catch (error) {
       console.error("Error signing out: ", error);
     }
   };
   
-  // Pass role and userId to children that are React components
   const childrenWithProps = React.Children.map(children, child => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, { role, userId } as any);
+    if (React.isValidElement(child) && user) {
+      return React.cloneElement(child, { role: user.role, userId: user.id } as any);
     }
     return child;
   });
+
+  if (loading) {
+      return (
+          <div className="flex items-center justify-center min-h-screen">
+              <p>Loading...</p>
+          </div>
+      )
+  }
+
+  if (!user) {
+    // This case should be handled by the redirect in useEffect, but as a fallback
+    return null;
+  }
 
 
   return (
@@ -111,19 +117,19 @@ export default function DashboardLayout({
             </Link>
           </SidebarHeader>
           <SidebarContent>
-            <DashboardNav role={role} />
+            <DashboardNav role={user.role} />
           </SidebarContent>
           <SidebarFooter>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
                    <Avatar className="size-10">
-                    <AvatarImage src="https://placehold.co/100x100.png" alt="@shadcn" data-ai-hint="male profile"/>
-                    <AvatarFallback>{name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src="https://placehold.co/100x100.png" alt={user.name} data-ai-hint="male profile"/>
+                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="group-data-[collapsible=icon]:hidden">
-                    <p className="font-semibold font-headline">{name}</p>
-                    <p className="text-sm text-muted-foreground">{role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()}</p>
+                    <p className="font-semibold font-headline">{user.name}</p>
+                    <p className="text-sm text-muted-foreground">{user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()}</p>
                   </div>
                 </div>
               </DropdownMenuTrigger>
@@ -148,7 +154,7 @@ export default function DashboardLayout({
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
-              <UserRoleSwitcher role={role} onRoleChange={handleRoleChange} />
+              <UserRoleSwitcher role={user.role} onRoleChange={handleRoleChange} />
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon">
