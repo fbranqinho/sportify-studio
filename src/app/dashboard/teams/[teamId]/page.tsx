@@ -157,22 +157,16 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
     
     setIsSearching(true);
     try {
-        // Step 1: Search for users by their name_lowercase
-        const usersQuery = query(
-            collection(db, "users"),
-            // where("role", "==", "PLAYER"), // Temporarily removed while index builds
-            where("name_lowercase", ">=", searchTerm),
-            where("name_lowercase", "<=", searchTerm + '\uf8ff')
+        // Step 1: Search for users by their name.
+        // This is a simplified search that works without a dedicated lowercase field.
+        const usersSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "PLAYER")));
+
+        const allPlayers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        
+        const foundUsers = allPlayers.filter(player => 
+            player.name.toLowerCase().includes(searchTerm)
         );
-        const usersSnapshot = await getDocs(usersQuery);
 
-        if (usersSnapshot.empty) {
-            setSearchResults([]);
-            setIsSearching(false);
-            return;
-        }
-
-        const foundUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)).filter(u => u.role === 'PLAYER');
         const playerUserIds = foundUsers.map(u => u.id);
         
         if(playerUserIds.length === 0){
