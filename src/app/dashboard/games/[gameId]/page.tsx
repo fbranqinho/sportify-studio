@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -29,6 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge";
 
 
 // Component to handle inviting an opponent
@@ -378,6 +380,88 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
     )
 }
 
+interface ConfirmedPlayer {
+    id: string;
+    name: string;
+    teamName: string;
+}
+
+function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team | null; teamB: Team | null }) {
+    const [players, setPlayers] = React.useState<ConfirmedPlayer[]>([]);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const fetchPlayers = async () => {
+            const allPlayerIds = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
+            if (allPlayerIds.length === 0) {
+                setPlayers([]);
+                setLoading(false);
+                return;
+            }
+            setLoading(true);
+
+            const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
+            const usersSnapshot = await getDocs(usersQuery);
+            const usersMap = new Map(usersSnapshot.docs.map(doc => [doc.id, doc.data() as User]));
+            
+            const confirmedPlayers: ConfirmedPlayer[] = allPlayerIds.map(id => {
+                const user = usersMap.get(id);
+                let teamName = "External Player";
+                if (match.teamAPlayers?.includes(id)) {
+                    teamName = teamA?.name || "Team A";
+                } else if (match.teamBPlayers?.includes(id)) {
+                    teamName = teamB?.name || "Team B";
+                }
+                return {
+                    id: id,
+                    name: user?.name || "Unknown Player",
+                    teamName: teamName,
+                };
+            });
+            setPlayers(confirmedPlayers);
+            setLoading(false);
+        };
+
+        fetchPlayers();
+    }, [match, teamA, teamB]);
+    
+    if ((match.teamAPlayers?.length || 0) === 0 && (match.teamBPlayers?.length || 0) === 0) {
+        return null;
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline">Confirmed Players</CardTitle>
+                <CardDescription>Players who have confirmed their attendance for this game.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? <Skeleton className="h-20 w-full" /> : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Player</TableHead>
+                                <TableHead>Team</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {players.map(player => (
+                                <TableRow key={player.id}>
+                                    <TableCell className="font-medium">{player.name}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary">{player.teamName}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+
 
 export default function GameDetailsPage() {
     const params = useParams();
@@ -562,6 +646,7 @@ export default function GameDetailsPage() {
             </div>
             
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
+            {isManager && <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />}
 
             {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
 

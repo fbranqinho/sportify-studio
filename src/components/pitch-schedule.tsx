@@ -125,6 +125,11 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             toast({ title: "You have already applied to this game." });
             return;
         }
+        
+        if (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id)) {
+             toast({ title: "You are already confirmed in this game." });
+            return;
+        }
 
         try {
             const batch = writeBatch(db);
