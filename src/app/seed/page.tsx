@@ -28,7 +28,7 @@ export default function SeedPage() {
         ownerProfiles: mockData.ownerProfiles,
         promoterProfiles: mockData.promoterProfiles,
         refereeProfiles: mockData.refereeProfiles,
-        adminProfiles: mock.adminProfiles,
+        adminProfiles: mockData.adminProfiles,
         teams: mockData.teams,
         pitches: mockData.pitches,
         competitions: mockData.competitions,
