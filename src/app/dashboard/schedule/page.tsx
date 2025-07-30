@@ -39,7 +39,6 @@ export default function SchedulePage() {
       });
     } else if (user) { // For other roles, no need to fetch owner profile
         setOwnerProfileId(null); // Explicitly set to null if not an owner
-        setLoading(false);
     }
   }, [user]);
 
@@ -52,38 +51,31 @@ export default function SchedulePage() {
     setLoading(true);
 
     let unsubscribe = () => {};
+    let reservationsQuery;
 
     if (user.role === 'OWNER') {
       if (ownerProfileId) {
-        const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
-        unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
-          const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
-          setReservations(reservationsData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching owner reservations: ", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
-          setLoading(false);
-        });
+        reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
       } else {
         // If ownerProfileId is null for an owner, it means it's still loading or not found.
         // We set loading to false only if we are sure there's no profile.
-        if (ownerProfileId === null && !user) setLoading(false);
+        setLoading(false);
+        return;
       }
     } else { // For PLAYER, MANAGER, etc.
       const roleField = `${user.role.toLowerCase()}Ref`;
-      const reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
-      
-      unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
-        const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
-        setReservations(reservationsData);
-        setLoading(false);
-      }, (error) => {
-        console.error("Error fetching user reservations: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
-        setLoading(false);
-      });
+      reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
     }
+    
+    unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+      const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+      setReservations(reservationsData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching reservations: ", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
+      setLoading(false);
+    });
     
     return () => unsubscribe();
 
