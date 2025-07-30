@@ -43,17 +43,34 @@ function NotificationBell() {
   React.useEffect(() => {
     if (!user) return;
 
-    let unsubscribe: () => void;
+    let unsubscribe: (() => void) | undefined;
+
+    const handleSnapshot = (snapshot: any) => {
+        const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
+        // Sort notifications by date client-side
+        notifs.sort((a, b) => {
+          const aTime = a.createdAt?.seconds || 0;
+          const bTime = b.createdAt?.seconds || 0;
+          return bTime - aTime;
+        });
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.read).length;
+        setUnreadCount(unread);
+    };
+
+    const handleError = (error: any) => {
+         console.error("Error fetching notifications (check Firestore indexes):", error);
+    };
 
     if (user.role === 'OWNER') {
         const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
         getDocs(q).then(profileSnapshot => {
             if (!profileSnapshot.empty) {
                 const ownerProfileId = profileSnapshot.docs[0].id;
+                // Query without ordering, as it requires a composite index
                 const notifQuery = query(
                     collection(db, "notifications"),
                     where("ownerProfileId", "==", ownerProfileId),
-                    orderBy("createdAt", "desc"),
                     limit(10)
                 );
                 unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
@@ -68,18 +85,6 @@ function NotificationBell() {
         );
         unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
     }
-    
-    const handleSnapshot = (snapshot: any) => {
-        const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
-        setNotifications(notifs);
-        const unread = notifs.filter(n => !n.read).length;
-        setUnreadCount(unread);
-    };
-
-    const handleError = (error: any) => {
-         console.error("Error fetching notifications (check Firestore indexes):", error);
-    };
-
 
     return () => {
         if (unsubscribe) {
