@@ -156,14 +156,24 @@ export default function MyGamesPage() {
   
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
-    const teamB = match.teamBRef ? teams.get(match.teamBRef) : teamA;
+    const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
     const isFinished = match.status === "Finished";
     
+    const getMatchTitle = () => {
+      if (teamA && !teamB) {
+        return `${teamA.name} (treino)`;
+      }
+      if (teamA && teamB) {
+        return `${teamA.name} vs ${teamB.name}`;
+      }
+      return 'Match Details';
+    }
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline flex justify-between items-center">
-                    <span>{teamA?.name || 'Team A'} vs {teamB?.name || 'Team B'}</span>
+                    <span>{getMatchTitle()}</span>
                     {isFinished && (
                         <span className="text-2xl font-bold">{match.scoreA} - {match.scoreB}</span>
                     )}
