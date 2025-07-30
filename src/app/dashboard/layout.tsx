@@ -43,16 +43,26 @@ function NotificationBell() {
   React.useEffect(() => {
     if (!user) return;
 
+    // The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/sportify-ge7ao/firestore/indexes?create_composite=ClRwcm9qZWN0cy9zcG9ydGlmeS1nZTdhby9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvbm90aWZpY2F0aW9ucy9pbmRleGVzL18QARoKCgZ1c2VySWQQARoNCgljcmVhdGVkQXQQAhoMCghfX25hbWVfXxAC
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", user.id),
-      orderBy("createdAt", "desc"),
-      limit(10)
+      // Temporarily removed orderBy to prevent crash without the index.
+      // orderBy("createdAt", "desc"), 
+      limit(20) // Increased limit to sort on client
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-      setNotifications(notifs);
+      
+      // Sort on the client side
+      notifs.sort((a, b) => {
+        const dateA = a.createdAt?.seconds ?? 0;
+        const dateB = b.createdAt?.seconds ?? 0;
+        return dateB - dateA;
+      });
+
+      setNotifications(notifs.slice(0, 10)); // Keep original limit for display
       const unread = notifs.filter(n => !n.read).length;
       setUnreadCount(unread);
     });
