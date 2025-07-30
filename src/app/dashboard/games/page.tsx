@@ -23,22 +23,31 @@ import { Heart, MapPin, Search } from "lucide-react";
 import { GamesMap } from "@/components/games-map";
 import type { Pitch } from "@/types";
 import { cn } from "@/lib/utils";
-
-// Mock data for pitches to simulate what we'd get from Firestore
-const mockPitches: Pitch[] = [
-  { id: "p1", name: "City Arena - Field 1", address: "123 Main St, Lisbon", sport: "fut7", capacity: 50, ownerRef: "o1", city: "Lisbon", coords: { lat: 38.7223, lng: -9.1393 } },
-  { id: "p2", name: "Greenfield Park", address: "456 Oak Ave, Lisbon", sport: "fut11", capacity: 100, ownerRef: "o2", city: "Lisbon", coords: { lat: 38.7369, lng: -9.1424 } },
-  { id: "p3", name: "Rooftop Soccer", address: "789 High St, Lisbon", sport: "fut5", capacity: 20, ownerRef: "o1", city: "Lisbon", coords: { lat: 38.7111, lng: -9.1522 } },
-  { id: "p4", name: "Benfica Futsal Court", address: "101 Eagles Way, Lisbon", sport: "futsal", capacity: 40, ownerRef: "o3", city: "Lisbon", coords: { lat: 38.7525, lng: -9.1845 } },
-];
-
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function GamesPage() {
-  const [pitches, setPitches] = React.useState<Pitch[]>(mockPitches);
+  const [pitches, setPitches] = React.useState<Pitch[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
   const [favorites, setFavorites] = React.useState<string[]>([]);
   const [sportFilter, setSportFilter] = React.useState<string>("all");
   const [searchQuery, setSearchQuery] = React.useState<string>("");
+  
+  React.useEffect(() => {
+    setLoading(true);
+    const unsubscribe = onSnapshot(collection(db, "pitches"), (snapshot) => {
+        const pitchesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
+        setPitches(pitchesData);
+        setLoading(false);
+    }, (error) => {
+        console.error("Error fetching pitches:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const toggleFavorite = (pitchId: string) => {
     setFavorites((prev) =>
@@ -87,7 +96,15 @@ export default function GamesPage() {
         </Card>
 
         <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-          {filteredPitches.map((pitch) => (
+          {loading ? (
+            Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="space-y-4 p-4 rounded-lg border">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-10 w-full" />
+                </div>
+            ))
+          ) : filteredPitches.map((pitch) => (
              <Card 
                 key={pitch.id} 
                 className="hover:shadow-md transition-shadow"
