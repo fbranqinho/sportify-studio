@@ -9,16 +9,15 @@ import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import React from "react";
-import { getAuth } from "firebase/auth";
-import { app, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { useUser } from "@/hooks/use-user";
 
-interface DashboardPageProps {
-  role?: UserRole;
-  userId?: string;
+
+interface WelcomeHeaderProps {
+  role: UserRole;
+  name: string;
 }
 
-const WelcomeHeader = ({ role, name }: { role: UserRole, name: string }) => (
+const WelcomeHeader = ({ role, name }: WelcomeHeaderProps) => (
   <div>
     <h1 className="text-3xl font-bold font-headline">
       Welcome, {name}!
@@ -41,30 +40,15 @@ const AdminDashboard = () => (
 );
 
 
-export default function DashboardPage({ role }: DashboardPageProps) {
-  const [user, setUser] = React.useState<User | null>(null);
-  const auth = getAuth(app);
+export default function DashboardPage() {
+  const { user, loading } = useUser();
 
-  React.useEffect(() => {
-    const fetchUser = async () => {
-        const firebaseUser = auth.currentUser;
-        if (firebaseUser) {
-            const userDocRef = doc(db, "users", firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                setUser({ id: userDoc.id, ...userDoc.data() } as User);
-            }
-        }
-    }
-    fetchUser();
-  }, [auth]);
-
-  if (!role || !user) {
+  if (loading || !user) {
     return <div>Loading...</div>;
   }
 
   const renderDashboard = () => {
-    switch (role) {
+    switch (user.role) {
       case "PLAYER":
         return <PlayerDashboard />;
       case "MANAGER":
@@ -78,13 +62,14 @@ export default function DashboardPage({ role }: DashboardPageProps) {
       case "ADMIN":
         return <AdminDashboard />;
       default:
-        return <PlayerDashboard />;
+        // Fallback or loading state
+        return <div>Loading dashboard...</div>;
     }
   };
 
   return (
     <div className="space-y-6">
-      <WelcomeHeader role={role} name={user.name} />
+      <WelcomeHeader role={user.role} name={user.name} />
       {renderDashboard()}
     </div>
   );

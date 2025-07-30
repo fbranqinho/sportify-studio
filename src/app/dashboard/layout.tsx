@@ -30,47 +30,16 @@ import { Button } from "@/components/ui/button";
 import { Bell, LogOut, Settings } from "lucide-react";
 import { app, db } from "@/lib/firebase";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { UserProvider, useUser } from "@/hooks/use-user";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [user, setUser] = React.useState<User | null>(null);
-  const [loading, setLoading] = React.useState(true);
+function DashboardContent({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useUser();
   const router = useRouter();
   const auth = getAuth(app);
 
-  React.useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      if (firebaseUser) {
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const userData = { id: userDoc.id, ...userDoc.data() } as User;
-          setUser(userData);
-          if (!userData.profileCompleted) {
-            router.push("/complete-profile");
-          }
-        } else {
-          console.error("No user document found in Firestore, logging out.");
-          await signOut(auth);
-          router.push("/login");
-        }
-      } else {
-        router.push("/login");
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [router, auth]);
-
-
   const handleRoleChange = (newRole: UserRole) => {
-    if (user) {
-      setUser({ ...user, role: newRole });
-    }
+    // This logic needs to be re-evaluated for a real application
+    // For now, it won't do much as the user is tied to the DB role
   };
 
   const handleLogout = async () => {
@@ -81,21 +50,22 @@ export default function DashboardLayout({
       console.error("Error signing out: ", error);
     }
   };
-  
-  const childrenWithProps = React.Children.map(children, child => {
-    if (React.isValidElement(child) && user) {
-      // Pass user role and id to child components
-      return React.cloneElement(child, { role: user.role, userId: user.id } as any);
-    }
-    return child;
-  });
 
-  if (loading || !user || (user && !user.profileCompleted)) {
-      return (
-          <div className="flex items-center justify-center min-h-screen">
-              <p>Loading...</p>
-          </div>
-      )
+  if (loading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (user && !user.profileCompleted) {
+    router.push("/complete-profile");
+    return (
+       <div className="flex items-center justify-center min-h-screen">
+        <p>Redirecting to complete your profile...</p>
+      </div>
+    )
   }
 
   return (
@@ -117,7 +87,7 @@ export default function DashboardLayout({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
-                   <Avatar className="size-10">
+                  <Avatar className="size-10">
                     <AvatarImage src="https://placehold.co/100x100.png" alt={user.name} data-ai-hint="male profile"/>
                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                   </Avatar>
@@ -161,9 +131,22 @@ export default function DashboardLayout({
               </Button>
             </div>
           </header>
-          <main className="flex-1 flex-col p-4 sm:p-6">{childrenWithProps}</main>
+          <main className="flex-1 flex-col p-4 sm:p-6">{children}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>
   );
+}
+
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <UserProvider>
+      <DashboardContent>{children}</DashboardContent>
+    </UserProvider>
+  )
 }

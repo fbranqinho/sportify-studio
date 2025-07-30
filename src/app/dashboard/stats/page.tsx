@@ -7,39 +7,33 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import type { PlayerProfile } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUser } from "@/hooks/use-user";
 
-interface StatsPageProps {
-  userId?: string;
-}
-
-export default function StatsPage({ userId }: StatsPageProps) {
+export default function StatsPage() {
+  const { user } = useUser();
+  const userId = user?.id;
   const [playerProfile, setPlayerProfile] = React.useState<PlayerProfile | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     const fetchPlayerProfile = async () => {
-      // Always start with loading true when the effect runs
       setLoading(true);
 
-      // Only proceed if userId is a valid, non-empty string
       if (typeof userId !== 'string' || !userId) {
-        console.log("StatsPage: useEffect ran without a valid userId.");
+        console.log("StatsPage: No valid userId yet.");
         setLoading(false);
         return;
       }
       
-      console.log(`StatsPage: Fetching player profile for userId: ${userId}`);
-
       try {
         const q = query(collection(db, "playerProfiles"), where("userRef", "==", userId));
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
           const docData = querySnapshot.docs[0].data() as PlayerProfile;
-          console.log("StatsPage: Found player profile data:", docData);
-          setPlayerProfile(docData);
+          setPlayerProfile({id: querySnapshot.docs[0].id, ...docData});
         } else {
-          console.log("StatsPage: No player profile found for the given userId.");
+          console.log(`StatsPage: No player profile found for userId: ${userId}`);
           setPlayerProfile(null);
         }
       } catch (error) {
@@ -51,7 +45,7 @@ export default function StatsPage({ userId }: StatsPageProps) {
     };
 
     fetchPlayerProfile();
-  }, [userId]); // Re-run this effect ONLY when the userId prop changes.
+  }, [userId]);
 
   return (
     <div className="space-y-6">
