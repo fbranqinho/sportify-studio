@@ -244,6 +244,7 @@ export interface Match {
     refereeId: string | null;
     managerRef: string | null;
     allowExternalPlayers?: boolean;
+    reservationRef?: string; // ID of the reservation that created this match
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

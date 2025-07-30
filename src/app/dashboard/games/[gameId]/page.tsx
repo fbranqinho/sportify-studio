@@ -185,13 +185,22 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
     }
     
     const handleDeleteGame = async () => {
+        const batch = writeBatch(db);
         const matchRef = doc(db, "matches", match.id);
+        batch.delete(matchRef);
+
+        // If there's an associated reservation, delete it as well.
+        if (match.reservationRef) {
+            const reservationRef = doc(db, "reservations", match.reservationRef);
+            batch.delete(reservationRef);
+        }
+
         try {
-            await deleteDoc(matchRef);
-            toast({ title: "Game Deleted", description: "The game has been successfully removed."});
+            await batch.commit();
+            toast({ title: "Game Deleted", description: "The game and its reservation have been removed."});
             router.push('/dashboard/my-games');
         } catch (error) {
-            console.error("Error deleting game:", error);
+            console.error("Error deleting game and reservation:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not delete the game." });
         }
     }
@@ -223,7 +232,7 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                             Delete Game
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                           This will permanently delete the game. This action cannot be undone.
+                           This will permanently delete the game and its associated field reservation. This action cannot be undone.
                         </p>
                     </div>
                      <AlertDialog>
@@ -237,7 +246,7 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
                                 This action cannot be undone. This will permanently delete the game
-                                and remove all associated data.
+                                and its associated reservation from the schedule.
                             </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

@@ -105,6 +105,7 @@ export default function SchedulePage() {
             const matchDoc = await addDoc(collection(db, "matches"), {
                 date: reservation.date,
                 pitchRef: reservation.pitchId,
+                reservationRef: reservation.id, // Link reservation to match
                 status: "PendingOpponent", 
                 teamARef: reservation.teamRef,
                 teamBRef: null,
@@ -144,6 +145,7 @@ export default function SchedulePage() {
              const matchDoc = await addDoc(collection(db, "matches"), {
                 date: reservation.date,
                 pitchRef: reservation.pitchId,
+                reservationRef: reservation.id, // Link reservation to match
                 status: "PendingOpponent", // This status means it's open for players
                 teamARef: null, // No teams in a pick-up game initially
                 teamBRef: null,
