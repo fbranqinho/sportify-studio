@@ -200,7 +200,7 @@ export default function MyGamesPage() {
     
     const getMatchTitle = () => {
       if (teamA && !teamB) {
-        return `${teamA.name} (treino)`;
+        return `${teamA.name} (Practice)`;
       }
       if (teamA && teamB) {
         return `${teamA.name} vs ${teamB.name}`;
@@ -231,7 +231,7 @@ export default function MyGamesPage() {
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
                  </div>
             </CardContent>
-            {!isFinished && isManager && !teamB && (
+            {!isFinished && isManager && (
             <CardFooter>
                 <Button variant="outline" className="w-full" asChild>
                     <Link href={`/dashboard/games/${match.id}`}>Manage Game</Link>

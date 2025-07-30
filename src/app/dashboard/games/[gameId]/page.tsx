@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -345,7 +345,7 @@ export default function GameDetailsPage() {
     }
 
     const getMatchTitle = () => {
-        if (teamA && !teamB && match.status !== 'PendingOpponent') return `${teamA.name} (treino)`;
+        if (teamA && !teamB && match.status !== 'PendingOpponent') return `${teamA.name} (Practice)`;
         if (teamA && teamB && match.status === 'PendingOpponent') return `${teamA.name} vs ${teamB.name} (Pending)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
@@ -373,24 +373,41 @@ export default function GameDetailsPage() {
                         <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <p>Status: {match.status}</p>
-                        {pitch && <p>Pitch: {pitch.name}</p>}
+                       <div className="text-sm space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Shield className="h-4 w-4 text-muted-foreground"/>
+                                <span>Status: <span className="font-semibold">{match.status}</span></span>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
 
                 {owner && pitch && (
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base font-semibold">Pitch Information</CardTitle>
+                            <CardTitle className="text-base font-semibold">Venue Information</CardTitle>
                         </CardHeader>
-                        <CardContent className="text-sm space-y-2">
-                             <div className="flex items-center gap-2">
-                                <Building className="h-4 w-4 text-muted-foreground"/>
-                                <span>{owner.companyName}</span>
+                        <CardContent className="text-sm space-y-3">
+                             <div className="flex items-start gap-3">
+                                <Shield className="h-4 w-4 text-muted-foreground mt-0.5"/>
+                                <div>
+                                    <p className="font-semibold">{pitch.name}</p>
+                                    <p className="text-xs text-muted-foreground">Pitch</p>
+                                </div>
                             </div>
-                             <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-muted-foreground"/>
-                                <span>{pitch.address}</span>
+                             <div className="flex items-start gap-3">
+                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5"/>
+                                 <div>
+                                    <p className="font-semibold">{pitch.address}</p>
+                                    <p className="text-xs text-muted-foreground">Address</p>
+                                </div>
+                            </div>
+                              <div className="flex items-start gap-3">
+                                <Building className="h-4 w-4 text-muted-foreground mt-0.5"/>
+                                 <div>
+                                    <p className="font-semibold">{owner.companyName}</p>
+                                    <p className="text-xs text-muted-foreground">Managed by</p>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
