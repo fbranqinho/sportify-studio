@@ -104,6 +104,8 @@ export default function SchedulePage() {
           scoreA: 0,
           scoreB: 0,
           playersStats: [],
+          teamAPlayers: [],
+          teamBPlayers: [],
           refereeId: null,
           attendance: 0,
         });

@@ -239,6 +239,8 @@ export interface Match {
     date: string; // ISO 8601 string
     teamARef: string | null;
     teamBRef: string | null;
+    teamAPlayers: string[];
+    teamBPlayers: string[];
     scoreA: number;
     scoreB: number;
     pitchRef: string;
