@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Match, Team, MatchInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -44,9 +44,15 @@ export default function MyGamesPage() {
     let unsubscribeInvitations = () => {};
     if (user.role === 'PLAYER') {
         const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
-        unsubscribeInvitations = onSnapshot(invQuery, (snapshot) => {
+        unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
             const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
             setInvitations(invs);
+            
+            if (invs.length > 0) {
+                 const teamIds = invs.map(inv => inv.teamId);
+                 const teamsMap = await fetchTeamDetails(teamIds);
+                 setTeams(prev => new Map([...prev, ...teamsMap]));
+            }
         });
     }
 
@@ -55,6 +61,7 @@ export default function MyGamesPage() {
         let matchesQueryB; // For teamBRef
         
         let allTeamIds: string[] = [];
+        let combinedMatches = new Map<string, Match>();
 
         if (user.role === 'MANAGER') {
             matchesQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
@@ -78,7 +85,6 @@ export default function MyGamesPage() {
             return () => {};
         }
 
-        let combinedMatches = new Map<string, Match>();
 
         const handleSnapshot = async (querySnapshot: DocumentData) => {
             const newMatches = querySnapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data() } as Match));
@@ -93,9 +99,11 @@ export default function MyGamesPage() {
                 if (match.teamBRef) teamIds.add(match.teamBRef);
             });
             
-            const teamsMap = await fetchTeamDetails(Array.from(teamIds));
-            setTeams(prev => new Map([...prev, ...teamsMap]));
-
+            if (teamIds.size > 0) {
+                 const teamsMap = await fetchTeamDetails(Array.from(teamIds));
+                 setTeams(prev => new Map([...prev, ...teamsMap]));
+            }
+            
             setMatches(Array.from(combinedMatches.values()));
             setLoading(false);
         };
@@ -128,9 +136,17 @@ export default function MyGamesPage() {
 
   }, [user, toast]);
 
-  const handleInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
-     // TODO: Implement logic to accept/decline match invitation
-     toast({ title: "Response Recorded", description: "This feature is coming soon." });
+  const handleInvitationResponse = async (invitationId: string, accepted: boolean) => {
+     const invitationRef = doc(db, "matchInvitations", invitationId);
+     try {
+        await updateDoc(invitationRef, {
+            status: accepted ? "accepted" : "declined"
+        });
+        toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
+     } catch (error) {
+        console.error("Error responding to invitation:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not save your response." });
+     }
   }
 
 
@@ -189,10 +205,10 @@ export default function MyGamesPage() {
         <p className="text-sm">You have been invited to play in an upcoming game.</p>
       </CardContent>
        <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => handleInvitationResponse(invitation, true)}>
+          <Button size="sm" onClick={() => handleInvitationResponse(invitation.id, true)}>
              <Check className="mr-2 h-4 w-4" /> Accept
           </Button>
-          <Button size="sm" variant="destructive" onClick={() => handleInvitationResponse(invitation, false)}>
+          <Button size="sm" variant="destructive" onClick={() => handleInvitationResponse(invitation.id, false)}>
              <X className="mr-2 h-4 w-4" /> Decline
           </Button>
         </CardFooter>
