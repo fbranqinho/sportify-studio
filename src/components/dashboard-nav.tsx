@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
   { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER", "PLAYER", "PROMOTER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
-  { title: "Games", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
+  { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
   { title: "Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
   { title: "Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
