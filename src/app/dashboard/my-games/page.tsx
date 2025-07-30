@@ -156,7 +156,7 @@ export default function MyGamesPage() {
   
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
-    const teamB = match.teamBRef ? teams.get(match.teamBRef) : { name: "To Be Defined" };
+    const teamB = match.teamBRef ? teams.get(match.teamBRef) : teamA;
     const isFinished = match.status === "Finished";
     
     return (
