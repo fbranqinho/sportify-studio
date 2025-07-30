@@ -23,9 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Pitch, User, Team } from "@/types";
+import type { Pitch, User, Team, Notification } from "@/types";
 
 const formSchema = z.object({
   teamRef: z.string().optional(),
@@ -85,38 +85,55 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
         const [hour, minute] = selectedTime.split(':').map(Number);
         const bookingDate = new Date(selectedDate);
         bookingDate.setHours(hour, minute);
+        
+        const batch = writeBatch(db);
+        
+        // 1. Create the reservation document
+        const newReservationRef = doc(collection(db, "reservations"));
+        const reservationData: any = {
+            date: bookingDate.toISOString(),
+            status: "Pending",
+            pitchId: pitch.id,
+            pitchName: pitch.name,
+            ownerProfileId: pitch.ownerRef, // This is the ID of the owner's profile document
+            paymentRefs: [],
+            totalAmount: 0,
+            actorId: user.id,
+            actorName: user.name,
+            actorRole: user.role,
+            createdAt: serverTimestamp(),
+        };
+        
+        if (isManager) {
+            reservationData.managerRef = user.id;
+            reservationData.teamRef = values.teamRef;
+        } else {
+            reservationData.playerRef = user.id;
+        }
 
-      const reservationData: any = {
-        date: bookingDate.toISOString(),
-        status: "Pending",
-        pitchId: pitch.id,
-        pitchName: pitch.name,
-        ownerProfileId: pitch.ownerRef,
-        paymentRefs: [],
-        totalAmount: 0,
-        actorId: user.id,
-        actorName: user.name,
-        actorRole: user.role,
-        createdAt: serverTimestamp(),
-      };
-      
-      if (isManager) {
-        reservationData.managerRef = user.id;
-        reservationData.teamRef = values.teamRef;
-      } else {
-        reservationData.playerRef = user.id;
-      }
+        batch.set(newReservationRef, reservationData);
+        
+        // 2. Create notification for the owner
+        const newNotificationRef = doc(collection(db, "notifications"));
+        const notification: Omit<Notification, 'id'> = {
+            ownerProfileId: pitch.ownerRef, // Target the notification to the owner profile
+            message: `${user.name} has requested a booking for ${pitch.name}.`,
+            link: '/dashboard/schedule',
+            read: false,
+            createdAt: serverTimestamp() as any,
+        };
+        batch.set(newNotificationRef, notification);
+        
+        // Commit both operations
+        await batch.commit();
 
+        toast({
+            title: "Reservation Requested!",
+            description: `Your request to book ${pitch.name} has been sent to the owner.`,
+        });
 
-      await addDoc(collection(db, "reservations"), reservationData);
-
-      toast({
-        title: "Reservation Requested!",
-        description: `Your request to book ${pitch.name} has been sent to the owner.`,
-      });
-
-      form.reset();
-      onReservationSuccess();
+        form.reset();
+        onReservationSuccess();
 
     } catch (error: any) {
       toast({

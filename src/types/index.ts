@@ -96,7 +96,7 @@ export interface ManagerProfile {
 
 export interface OwnerProfile {
     id: string;
-    userRef?: string; // User ID
+    userRef: string; // User ID
     pitches: string[]; // Pitch IDs
     description?: string;
     companyName?: string;
@@ -291,7 +291,8 @@ export interface Promo {
 
 export interface Notification {
     id: string;
-    userId: string;
+    userId?: string;
+    ownerProfileId?: string; // To notify owners without needing their userId
     message: string;
     link: string;
     read: boolean;

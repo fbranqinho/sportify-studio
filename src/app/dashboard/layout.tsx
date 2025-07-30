@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Icons } from "@/components/icons";
-import type { User, UserRole, Notification } from "@/types";
+import type { User, UserRole, Notification, OwnerProfile } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Bell, LogOut, Settings, Check } from "lucide-react";
 import { app, db } from "@/lib/firebase";
@@ -43,25 +43,49 @@ function NotificationBell() {
   React.useEffect(() => {
     if (!user) return;
 
-    // The query requires an index on userId (asc) and createdAt (desc).
-    const q = query(
-      collection(db, "notifications"),
-      where("userId", "==", user.id),
-      orderBy("createdAt", "desc"),
-      limit(10)
-    );
+    let unsubscribe: () => void;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-      
-      setNotifications(notifs);
-      const unread = notifs.filter(n => !n.read).length;
-      setUnreadCount(unread);
-    }, (error) => {
-        console.error("Error fetching notifications (check Firestore indexes):", error);
-    });
+    if (user.role === 'OWNER') {
+        const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
+        getDocs(q).then(profileSnapshot => {
+            if (!profileSnapshot.empty) {
+                const ownerProfileId = profileSnapshot.docs[0].id;
+                const notifQuery = query(
+                    collection(db, "notifications"),
+                    where("ownerProfileId", "==", ownerProfileId),
+                    orderBy("createdAt", "desc"),
+                    limit(10)
+                );
+                unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
+            }
+        });
+    } else {
+        const notifQuery = query(
+          collection(db, "notifications"),
+          where("userId", "==", user.id),
+          orderBy("createdAt", "desc"),
+          limit(10)
+        );
+        unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
+    }
+    
+    const handleSnapshot = (snapshot: any) => {
+        const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.read).length;
+        setUnreadCount(unread);
+    };
 
-    return () => unsubscribe();
+    const handleError = (error: any) => {
+         console.error("Error fetching notifications (check Firestore indexes):", error);
+    };
+
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, [user]);
 
   const handleMarkAsRead = async (notificationId: string) => {
