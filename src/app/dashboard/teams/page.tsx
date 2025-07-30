@@ -9,10 +9,11 @@ import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serv
 import type { Team, TeamInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Users, MapPin, ChevronRight, Check, X, Mail } from "lucide-react";
+import { PlusCircle, Users, MapPin, ChevronRight, Check, X, Mail, ShieldCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 // --- Sub-components for different roles ---
 
@@ -62,8 +63,8 @@ function ManagerTeamsView() {
 
       {loading ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-48" />
-          <Skeleton className="h-48" />
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
         </div>
       ) : teams.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -75,14 +76,29 @@ function ManagerTeamsView() {
                   <MapPin className="h-4 w-4" /> {team.city}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex-grow space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span>
-                    <span className="font-semibold">{team.playerIds?.length || 0}</span> players
-                  </span>
-                </div>
-                 <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
+              <CardContent className="flex-grow space-y-4">
+                 <div className="text-sm text-muted-foreground italic">&quot;{team.motto}&quot;</div>
+                 <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="font-semibold">Record (W-D-L)</span>
+                        <span className="font-mono font-bold">{team.wins}-{team.draws}-{team.losses}</span>
+                    </div>
+                     <div className="flex justify-between items-center text-sm">
+                        <span className="font-semibold">Recent Form</span>
+                        <div className="flex items-center gap-1">
+                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
+                            <Badge className="bg-red-500 hover:bg-red-500 text-white">L</Badge>
+                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
+                            <Badge className="bg-gray-400 hover:bg-gray-400 text-white">D</Badge>
+                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
+                        </div>
+                    </div>
+                     <div className="flex justify-between items-center text-sm">
+                        <span className="font-semibold">Players</span>
+                        <span className="font-bold">{team.playerIds?.length || 0}</span>
+                    </div>
+                 </div>
+
               </CardContent>
               <CardFooter>
                  <Button asChild variant="outline" className="w-full justify-between">
@@ -299,9 +315,9 @@ export default function TeamsPage() {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-full" />
            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
+            <Skeleton className="h-56" />
+            <Skeleton className="h-56" />
+            <Skeleton className="h-56" />
           </div>
         </div>
      )
