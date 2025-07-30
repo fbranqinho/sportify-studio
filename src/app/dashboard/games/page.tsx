@@ -2,39 +2,41 @@
 "use client";
 
 import * as React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Heart, MapPin, Search } from "lucide-react";
 import { GamesMap } from "@/components/games-map";
 import type { Pitch } from "@/types";
-import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+
+// Haversine formula to calculate distance between two points on Earth
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+};
+
+const deg2rad = (deg: number) => {
+  return deg * (Math.PI / 180);
+};
+
 
 export default function GamesPage() {
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
-  const [favorites, setFavorites] = React.useState<string[]>([]);
-  const [sportFilter, setSportFilter] = React.useState<string>("all");
-  const [searchQuery, setSearchQuery] = React.useState<string>("");
+  const [userLocation, setUserLocation] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [nearestPitchId, setNearestPitchId] = React.useState<string | null>(null);
+  const { toast } = useToast();
   
+  // Fetch pitches from Firestore
   React.useEffect(() => {
     setLoading(true);
     const unsubscribe = onSnapshot(collection(db, "pitches"), (snapshot) => {
@@ -43,102 +45,70 @@ export default function GamesPage() {
         setLoading(false);
     }, (error) => {
         console.error("Error fetching pitches:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch fields data."})
         setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
 
-  const toggleFavorite = (pitchId: string) => {
-    setFavorites((prev) =>
-      prev.includes(pitchId)
-        ? prev.filter((id) => id !== pitchId)
-        : [...prev, pitchId]
-    );
-  };
+  // Get user's location
+  React.useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        () => {
+          toast({
+            variant: "destructive",
+            title: "Location Access Denied",
+            description: "Please enable location access to find the nearest fields.",
+          });
+        }
+      );
+    }
+  }, [toast]);
   
-  const filteredPitches = pitches
-    .filter(p => sportFilter === 'all' || p.sport === sportFilter)
-    .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.address.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Find the nearest pitch once user location and pitches are available
+  React.useEffect(() => {
+    if (userLocation && pitches.length > 0) {
+      let closestPitch: Pitch | null = null;
+      let minDistance = Infinity;
+
+      pitches.forEach(pitch => {
+        if (pitch.coords) {
+            const distance = getDistance(userLocation.lat, userLocation.lng, pitch.coords.lat, pitch.coords.lng);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPitch = pitch;
+            }
+        }
+      });
+      
+      if (closestPitch) {
+          setNearestPitchId(closestPitch.id);
+      }
+    }
+  }, [userLocation, pitches]);
+
+
+  if (loading) {
+      return <Skeleton className="w-full h-full" />;
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
-      {/* Left Column: Filters and List */}
-      <div className="lg:col-span-1 flex flex-col gap-4 h-full">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Find a Game</CardTitle>
-            <CardDescription>Filter by sport and location to find the perfect match.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input 
-                placeholder="Search by name or address..." 
-                className="pl-10" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Select value={sportFilter} onValueChange={setSportFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by sport" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sports</SelectItem>
-                <SelectItem value="fut5">Futebol 5</SelectItem>
-                <SelectItem value="fut7">Futebol 7</SelectItem>
-                <SelectItem value="fut11">Futebol 11</SelectItem>
-                <SelectItem value="futsal">Futsal</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-          {loading ? (
-            Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="space-y-4 p-4 rounded-lg border">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-10 w-full" />
-                </div>
-            ))
-          ) : filteredPitches.map((pitch) => (
-             <Card 
-                key={pitch.id} 
-                className="hover:shadow-md transition-shadow"
-                onMouseEnter={() => setHoveredPitchId(pitch.id)}
-                onMouseLeave={() => setHoveredPitchId(null)}
-              >
-              <CardHeader>
-                <CardTitle className="text-lg font-headline flex justify-between items-start">
-                  {pitch.name}
-                   <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => toggleFavorite(pitch.id)}>
-                    <Heart className={cn("h-5 w-5", favorites.includes(pitch.id) ? "text-red-500 fill-current" : "text-muted-foreground")} />
-                  </Button>
-                </CardTitle>
-                <CardDescription className="flex items-center gap-2 pt-1">
-                  <MapPin className="h-4 w-4" /> {pitch.address}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm font-semibold bg-primary/10 text-primary rounded-full px-3 py-1 inline-block">
-                  {pitch.sport.toUpperCase()}
-                </div>
-              </CardContent>
-              <CardFooter>
-                 <Button className="w-full font-semibold">View Details & Book</Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Right Column: Map */}
-      <div className="lg:col-span-2 h-full rounded-lg overflow-hidden border">
-         <GamesMap pitches={filteredPitches} hoveredPitchId={hoveredPitchId} setHoveredPitchId={setHoveredPitchId} />
-      </div>
+    <div className="w-full h-full rounded-lg overflow-hidden border">
+        <GamesMap 
+            pitches={pitches} 
+            hoveredPitchId={hoveredPitchId} 
+            setHoveredPitchId={setHoveredPitchId}
+            userLocation={userLocation}
+            nearestPitchId={nearestPitchId}
+        />
     </div>
   );
 }

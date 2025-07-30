@@ -10,12 +10,16 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/tooltip";
+import { User, Star } from "lucide-react";
+
 
 interface GamesMapProps {
   pitches: Pitch[];
   hoveredPitchId: string | null;
   setHoveredPitchId: (id: string | null) => void;
+  userLocation: { lat: number; lng: number } | null;
+  nearestPitchId: string | null;
 }
 
 // A simple function to normalize coordinates to a 0-1 scale
@@ -27,7 +31,7 @@ const normalizeCoords = (coords: { lat: number; lng: number }, bounds: any) => {
 };
 
 
-export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId }: GamesMapProps) {
+export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId, userLocation, nearestPitchId }: GamesMapProps) {
     
   // Define the geographical bounds for Lisbon to position the markers
   const lisbonBounds = {
@@ -48,9 +52,34 @@ export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId }: GamesMa
       />
       
       <TooltipProvider>
+        {/* Render User Location */}
+        {userLocation && (() => {
+          const {x, y} = normalizeCoords(userLocation, lisbonBounds);
+          return (
+             <Tooltip>
+                <TooltipTrigger asChild>
+                    <div
+                        style={{ left: `${x}%`, top: `${y}%` }}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                    >
+                        <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg flex items-center justify-center">
+                            <User className="h-3 w-3 text-white" />
+                        </div>
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p className="font-semibold">Your Location</p>
+                </TooltipContent>
+            </Tooltip>
+          )
+        })()}
+
+        {/* Render Pitches */}
         {pitches.map((pitch) => {
             if (!pitch.coords) return null;
             const {x, y} = normalizeCoords(pitch.coords, lisbonBounds);
+            const isNearest = pitch.id === nearestPitchId;
+            const isHovered = pitch.id === hoveredPitchId;
 
             return (
                  <Tooltip key={pitch.id}>
@@ -60,15 +89,19 @@ export function GamesMap({ pitches, hoveredPitchId, setHoveredPitchId }: GamesMa
                             onMouseLeave={() => setHoveredPitchId(null)}
                             style={{ left: `${x}%`, top: `${y}%` }}
                             className={cn(
-                                "absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary border-2 border-white shadow-lg transition-all duration-300",
+                                "absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-lg transition-all duration-300",
                                 "hover:scale-150 hover:z-10",
-                                hoveredPitchId === pitch.id ? "scale-150 z-10 ring-2 ring-accent" : ""
+                                isHovered && "scale-150 z-10 ring-2 ring-accent",
+                                isNearest ? "bg-green-500" : "bg-primary",
                             )}
-                        />
+                        >
+                          {isNearest && <Star className="h-2.5 w-2.5 text-white" />}
+                        </button>
                     </TooltipTrigger>
                     <TooltipContent>
                         <p className="font-semibold">{pitch.name}</p>
                         <p className="text-sm text-muted-foreground">{pitch.address}</p>
+                         {isNearest && <p className="text-xs text-green-600 font-bold mt-1">Nearest to you!</p>}
                     </TooltipContent>
                 </Tooltip>
             )
