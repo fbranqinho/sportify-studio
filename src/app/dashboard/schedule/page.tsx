@@ -5,13 +5,13 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Pitch, OwnerProfile } from "@/types";
+import type { Reservation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck, CalendarX } from "lucide-react";
+import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck } from "lucide-react";
 import { format } from "date-fns";
 
 export default function SchedulePage() {
@@ -19,50 +19,66 @@ export default function SchedulePage() {
   const { toast } = useToast();
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [ownerProfileId, setOwnerProfileId] = React.useState<string | null>(null);
 
+  // Effect to get Owner Profile ID if user is an OWNER
   React.useEffect(() => {
-    if (!user) return;
-  
-    setLoading(true);
-    let reservationsQuery;
-  
-    if (user.role === 'OWNER') {
+    if (user?.role === 'OWNER') {
       const profilesQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
       getDocs(profilesQuery).then(profileSnapshot => {
         if (!profileSnapshot.empty) {
-          const ownerProfileId = profileSnapshot.docs[0].id;
-          reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
-  
-          const unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
-            const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
-            setReservations(reservationsData);
-            setLoading(false);
-          }, (error) => {
-            console.error("Error fetching reservations: ", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
-            setLoading(false);
-          });
-          return () => unsubscribe();
+          const ownerId = profileSnapshot.docs[0].id;
+          setOwnerProfileId(ownerId);
         } else {
-          setLoading(false);
+           setLoading(false); // No profile, so no reservations to load
         }
+      }).catch(error => {
+          console.error("Error fetching owner profile: ", error);
+          setLoading(false);
       });
-    } else {
+    }
+  }, [user]);
+
+  // Effect to fetch reservations based on user role
+  React.useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+
+    let unsubscribe = () => {};
+
+    if (user.role === 'OWNER') {
+      if (ownerProfileId) {
+        const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+        unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+          const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+          setReservations(reservationsData);
+          setLoading(false);
+        }, (error) => {
+          console.error("Error fetching owner reservations: ", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
+          setLoading(false);
+        });
+      }
+      // If ownerProfileId is still null, we wait for the other effect to set it.
+      // If it has run and found no profile, loading would already be false.
+    } else { // For PLAYER, MANAGER, etc.
       const roleField = `${user.role.toLowerCase()}Ref`;
-      reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
+      const reservationsQuery = query(collection(db, "reservations"), where(roleField, "==", user.id));
       
-      const unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+      unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
         const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
         setReservations(reservationsData);
         setLoading(false);
       }, (error) => {
-        console.error("Error fetching reservations: ", error);
+        console.error("Error fetching user reservations: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
         setLoading(false);
       });
-      return () => unsubscribe();
     }
-  }, [user, toast]);
+    
+    return () => unsubscribe();
+
+  }, [user, ownerProfileId, toast]);
   
 
   const handleUpdateStatus = async (reservationId: string, status: "Accepted" | "Canceled") => {
@@ -160,7 +176,7 @@ export default function SchedulePage() {
           <TabsTrigger value="history">History ({pastReservations.length})</TabsTrigger>
         </TabsList>
         
-        {loading ? (
+        {loading && (user?.role !== 'OWNER' || (user?.role === 'OWNER' && ownerProfileId)) ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
                 <Skeleton className="h-52" />
                 <Skeleton className="h-52" />
