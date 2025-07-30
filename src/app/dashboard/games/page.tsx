@@ -22,13 +22,14 @@ import { Button } from "@/components/ui/button";
 import { Heart, MapPin, Search } from "lucide-react";
 import { GamesMap } from "@/components/games-map";
 import type { Pitch } from "@/types";
+import { cn } from "@/lib/utils";
 
 // Mock data for pitches to simulate what we'd get from Firestore
 const mockPitches: Pitch[] = [
-  { id: "p1", name: "City Arena - Field 1", address: "123 Main St, Lisbon", sport: "fut7", capacity: 50, ownerRef: "o1", coords: { lat: 38.7223, lng: -9.1393 } },
-  { id: "p2", name: "Greenfield Park", address: "456 Oak Ave, Lisbon", sport: "fut11", capacity: 100, ownerRef: "o2", coords: { lat: 38.7369, lng: -9.1424 } },
-  { id: "p3", name: "Rooftop Soccer", address: "789 High St, Lisbon", sport: "fut5", capacity: 20, ownerRef: "o1", coords: { lat: 38.7111, lng: -9.1522 } },
-  { id: "p4", name: "Benfica Futsal Court", address: "101 Eagles Way, Lisbon", sport: "futsal", capacity: 40, ownerRef: "o3", coords: { lat: 38.7525, lng: -9.1845 } },
+  { id: "p1", name: "City Arena - Field 1", address: "123 Main St, Lisbon", sport: "fut7", capacity: 50, ownerRef: "o1", city: "Lisbon", coords: { lat: 38.7223, lng: -9.1393 } },
+  { id: "p2", name: "Greenfield Park", address: "456 Oak Ave, Lisbon", sport: "fut11", capacity: 100, ownerRef: "o2", city: "Lisbon", coords: { lat: 38.7369, lng: -9.1424 } },
+  { id: "p3", name: "Rooftop Soccer", address: "789 High St, Lisbon", sport: "fut5", capacity: 20, ownerRef: "o1", city: "Lisbon", coords: { lat: 38.7111, lng: -9.1522 } },
+  { id: "p4", name: "Benfica Futsal Court", address: "101 Eagles Way, Lisbon", sport: "futsal", capacity: 40, ownerRef: "o3", city: "Lisbon", coords: { lat: 38.7525, lng: -9.1845 } },
 ];
 
 
