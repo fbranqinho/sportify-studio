@@ -537,14 +537,17 @@ export default function TeamDetailsPage() {
 
 
       {isManager ? (
-        <ManagerTeamView 
-            team={team} 
-            players={players} 
-            onPlayerRemoved={handleRemovePlayer} 
-            onNumberUpdated={handleUpdateNumber}
-            onPlayerInvited={handleInvitePlayer}
-            teamId={teamId}
-        />
+        <>
+          <TeamHeader team={team} />
+          <ManagerTeamView 
+              team={team} 
+              players={players} 
+              onPlayerRemoved={handleRemovePlayer} 
+              onNumberUpdated={handleUpdateNumber}
+              onPlayerInvited={handleInvitePlayer}
+              teamId={teamId}
+          />
+        </>
       ) : (
         <PlayerTeamView team={team} players={players} />
       )}
