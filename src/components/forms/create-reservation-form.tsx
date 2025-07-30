@@ -61,6 +61,7 @@ interface CreateReservationFormProps {
 export function CreateReservationForm({ user, pitch, onReservationSuccess }: CreateReservationFormProps) {
   const { toast } = useToast();
   const [managerTeams, setManagerTeams] = React.useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = React.useState(true);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -70,12 +71,16 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
   React.useEffect(() => {
     if (user?.role === 'MANAGER') {
       const fetchManagerTeams = async () => {
+        setLoadingTeams(true);
         const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
         const teamsSnapshot = await getDocs(teamsQuery);
         const teams = teamsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
         setManagerTeams(teams);
+        setLoadingTeams(false);
       };
       fetchManagerTeams();
+    } else {
+        setLoadingTeams(false);
     }
   }, [user]);
 
@@ -148,30 +153,31 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess }: Cre
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         {user.role === 'MANAGER' && (
-          <FormField
-            control={form.control}
-            name="teamRef"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Select Team</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select one of your teams" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {managerTeams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            loadingTeams ? <p className="text-sm text-muted-foreground">Loading teams...</p> : managerTeams.length > 0 &&
+              <FormField
+                control={form.control}
+                name="teamRef"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Team</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select one of your teams" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {managerTeams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
