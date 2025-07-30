@@ -32,15 +32,32 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
         }
         setIsSearching(true);
         try {
-            const teamsQuery = query(
+            // Primary, efficient query on the lowercase field
+            const teamsQueryLower = query(
                 collection(db, "teams"),
                 where("name_lowercase", ">=", searchTerm),
                 where("name_lowercase", "<=", searchTerm + '\uf8ff')
             );
-            const querySnapshot = await getDocs(teamsQuery);
-            const teams = querySnapshot.docs
+            const querySnapshotLower = await getDocs(teamsQueryLower);
+            let teams = querySnapshotLower.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                .filter(team => team.id !== match.teamARef); // Exclude the current team
+                .filter(team => team.id !== match.teamARef);
+
+            // Fallback for old data without `name_lowercase`
+            if (teams.length === 0) {
+                console.log("Fallback search initiated for term:", searchQuery);
+                const teamsQueryFallback = query(
+                    collection(db, "teams"),
+                    where("name", ">=", searchQuery),
+                    where("name", "<=", searchQuery + '\uf8ff')
+                );
+                const querySnapshotFallback = await getDocs(teamsQueryFallback);
+                 teams = querySnapshotFallback.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as Team))
+                    .filter(team => team.id !== match.teamARef);
+            }
+
+
             setSearchResults(teams);
         } catch (error) {
             console.error("Error searching teams: ", error);
