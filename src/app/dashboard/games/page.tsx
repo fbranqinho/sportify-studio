@@ -14,6 +14,7 @@ import { PitchesMap } from "@/components/pitches-map";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { haversineDistance } from "@/lib/utils";
 
+// It's important to read the environment variable here
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export default function GamesPage() {
@@ -86,7 +87,8 @@ export default function GamesPage() {
     (pitch.city && pitch.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
     pitch.sport.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
+  
+  // Explicitly check if the API key is missing.
   if (!googleMapsApiKey) {
     return (
         <Card>
