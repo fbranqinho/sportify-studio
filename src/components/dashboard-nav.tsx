@@ -28,7 +28,7 @@ import {
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
   { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
-  { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER", "PLAYER", "PROMOTER"] },
+  { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Find Game", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
