@@ -1,17 +1,25 @@
+
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
-import { ArrowRight } from "lucide-react";
+import { LogIn } from "lucide-react";
 
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center">
+      <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
           <Icons.logo className="h-8 w-8" />
           <span>Sportify</span>
         </Link>
+        <nav>
+           <Button asChild variant="ghost" className="font-semibold">
+              <Link href="/login">
+                Login <LogIn className="ml-2" />
+              </Link>
+            </Button>
+        </nav>
       </header>
 
       <main className="flex-1">
@@ -27,12 +35,12 @@ export default function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button asChild size="lg" className="font-semibold">
-                  <Link href="/dashboard">
-                    Get Started <ArrowRight className="ml-2" />
+                  <Link href="/signup">
+                    Sign Up for Free
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="font-semibold">
-                  <Link href="#">Learn More</Link>
+                  <Link href="/dashboard">Go to Dashboard</Link>
                 </Button>
               </div>
             </div>
