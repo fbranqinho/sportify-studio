@@ -237,16 +237,15 @@ export interface MatchPlayerStat {
 export interface Match {
     id: string;
     date: string; // ISO 8601 string
-    teamARef?: string | null; // Team ID
-    teamBRef?: string | null; // Team ID
-    managerRef?: string; // User ID of the manager
-    scoreA?: number;
-    scoreB?: number;
-    pitchRef?: string; // Pitch ID
-    status?: MatchStatus;
+    teamARef: string | null;
+    teamBRef: string | null;
+    scoreA: number;
+    scoreB: number;
+    pitchRef: string;
+    status: MatchStatus;
     attendance?: number;
     playersStats: MatchPlayerStat[];
-    refereeId?: string | null;
+    refereeId: string | null;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";
