@@ -25,9 +25,9 @@ export interface PlayerProfile {
   position: PlayerPosition;
   dominantFoot: DominantFoot;
   photoUrl?: string;
-  recentForm: ("W" | "D" | "L")[]; // Win, Draw, Loss
+  recentForm: ("W" | "D" | "L")[];
 
-  // Attributes from DTO
+  // Attributes
   finishing: number;
   shotPower: number;
   longShots: number;
@@ -58,7 +58,7 @@ export interface PlayerProfile {
   pace: number;
   overall: number;
 
-  // Stats from DTO
+  // Stats
   yellowCards: number;
   redCards: number;
   injuries: number;
@@ -71,7 +71,7 @@ export interface PlayerProfile {
   teamOfWeek: number;
   playerOfYear: number;
 
-  // Status from DTO
+  // Status
   injured: boolean;
   suspended: boolean;
   availableToPlay: boolean;
@@ -125,7 +125,7 @@ export interface RefereeProfile {
 export interface AdminProfile {
   id: string;
   userRef: string; // User ID
-  permissions: string[]; // e.g., ['manage_users', 'manage_content']
+  permissions: string[];
 }
 
 export interface TeamPlayer {
@@ -138,7 +138,7 @@ export interface Team {
   name: string;
   logoUrl?: string;
   managerRef?: string; // ManagerProfile ID
-  players: TeamPlayer[]; // PlayerProfile IDs of ACCEPTED members
+  players: TeamPlayer[];
   city: string;
   motto?: string;
   foundationYear: number;
@@ -198,7 +198,7 @@ export interface Reservation {
 
 export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
 
-export interface MatchPlayer {
+export interface MatchPlayerStat {
     playerRef: string; // PlayerProfile ID
     team: "A" | "B";
     goals: number;
@@ -218,7 +218,7 @@ export interface Match {
     pitchRef?: string; // Pitch ID
     status?: MatchStatus;
     attendance?: number;
-    playersStats: MatchPlayer[];
+    playersStats: MatchPlayerStat[];
     refereeId?: string;
 }
 
@@ -263,39 +263,7 @@ export interface Promo {
     validHours: number[]; // e.g., [8, 9, 10] for 8h-10h
 }
 
-export type PlayerPayment = {
-    id: string; // paymentId
-    playerId: string;
-    teamId: string;
-    amount: number;
-    status: PaymentStatus;
-    dueDate: string; // ISO 8601 string
-};
-
-// Kept for backwards compatibility with existing components if needed
-export type Player = {
-  id: string;
-  name: string;
-  avatar: string;
-  position: string;
-  stats: {
-    games: number;
-    goals: number;
-    assists: number;
-    rating: number;
-  };
-  playingStyle: string;
-};
-
-export type PromoterEvent = {
-    id: string;
-    name: string;
-    date: string;
-    location: string;
-    prize: string;
-};
-
-// Types for existing components that will be refactored
+// For UI components
 export type NavItem = {
   title: string;
   href: string;
