@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -350,6 +350,8 @@ export default function GameDetailsPage() {
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         return 'Match Details';
     };
+    
+    const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
 
     const isManager = user?.id === teamA?.managerId;
 
@@ -377,6 +379,10 @@ export default function GameDetailsPage() {
                             <div className="flex items-center gap-2">
                                 <Shield className="h-4 w-4 text-muted-foreground"/>
                                 <span>Status: <span className="font-semibold">{match.status}</span></span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-muted-foreground"/>
+                                <span>Confirmed Players: <span className="font-semibold">{confirmedPlayers}</span></span>
                             </div>
                         </div>
                     </CardContent>
