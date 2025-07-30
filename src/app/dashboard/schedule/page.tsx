@@ -81,7 +81,7 @@ export default function SchedulePage() {
   }, [user, ownerProfileId, toast]);
   
 
-  const handleUpdateStatus = async (reservationId: string, status: "Accepted" | "Canceled") => {
+  const handleUpdateStatus = async (reservationId: string, status: "Confirmed" | "Canceled") => {
     const reservationRef = doc(db, "reservations", reservationId);
     try {
       await updateDoc(reservationRef, { status });
@@ -97,14 +97,14 @@ export default function SchedulePage() {
 
   const now = new Date();
   const pendingReservations = reservations.filter(r => r.status === "Pending");
-  const upcomingReservations = reservations.filter(r => (r.status === "Accepted" || r.status === "Scheduled") && new Date(r.date) >= now);
+  const upcomingReservations = reservations.filter(r => (r.status === "Confirmed" || r.status === "Scheduled") && new Date(r.date) >= now);
   const pastReservations = reservations.filter(r => new Date(r.date) < now || r.status === "Canceled");
   
   const getStatusIcon = (status: Reservation["status"]) => {
     switch(status) {
         case "Scheduled":
             return <CalendarCheck className="h-4 w-4 text-blue-600" />;
-        case "Accepted":
+        case "Confirmed":
             return <CheckCheck className="h-4 w-4 text-green-600" />;
         case "Canceled":
             return <Ban className="h-4 w-4 text-red-600" />;
@@ -135,7 +135,7 @@ export default function SchedulePage() {
       </CardContent>
       {user?.role === 'OWNER' && reservation.status === 'Pending' && (
         <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => handleUpdateStatus(reservation.id, 'Accepted')}>
+          <Button size="sm" onClick={() => handleUpdateStatus(reservation.id, 'Confirmed')}>
              <CheckCircle className="mr-2 h-4 w-4" /> Approve
           </Button>
           <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation.id, 'Canceled')}>
@@ -195,7 +195,7 @@ export default function SchedulePage() {
               {upcomingReservations.length > 0 ? (
                  <ReservationList reservations={upcomingReservations} />
               ) : (
-                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no accepted or scheduled bookings for the future." />
+                <EmptyState icon={Calendar} title="No Upcoming Bookings" description="There are no confirmed or scheduled bookings for the future." />
               )}
             </TabsContent>
             <TabsContent value="history">
