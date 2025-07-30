@@ -38,7 +38,7 @@ export default function DashboardLayout({
             <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
               <Icons.logo className="size-8" />
               <span className="duration-300 group-data-[collapsible=icon]:hidden">
-                FieldFinder
+                Sportify
               </span>
             </Link>
           </SidebarHeader>

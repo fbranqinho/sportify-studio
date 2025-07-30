@@ -5,7 +5,7 @@ export default function NetworkPage() {
     <Card>
       <CardHeader>
         <CardTitle className="font-headline">Network</CardTitle>
-        <CardDescription>Consult teams, managers, and players in the FieldFinder network.</CardDescription>
+        <CardDescription>Consult teams, managers, and players in the Sportify network.</CardDescription>
       </CardHeader>
       <CardContent>
         <p>This feature is available for Promoters. Full implementation coming soon.</p>

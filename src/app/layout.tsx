@@ -4,8 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FieldFinder",
-  description: "Play simple.",
+  title: "Sportify",
+  description: "Play, simple",
 };
 
 export default function RootLayout({
