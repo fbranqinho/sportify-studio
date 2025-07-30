@@ -8,20 +8,22 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import type { PlayerProfile } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function StatsPage() {
+interface StatsPageProps {
+  userId?: string;
+}
+
+export default function StatsPage({ userId }: StatsPageProps) {
   const [playerProfile, setPlayerProfile] = React.useState<PlayerProfile | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     const fetchPlayerProfile = async () => {
-      setLoading(true);
-      const userId = localStorage.getItem("mockUserId");
       if (!userId) {
-        console.error("No user ID found in local storage.");
         setLoading(false);
         return;
       }
-
+      
+      setLoading(true);
       try {
         const q = query(collection(db, "playerProfiles"), where("userRef", "==", userId));
         const querySnapshot = await getDocs(q);
@@ -29,7 +31,8 @@ export default function StatsPage() {
           const docData = querySnapshot.docs[0].data() as PlayerProfile;
           setPlayerProfile(docData);
         } else {
-          console.log("No such player profile!");
+          console.log("No such player profile for userId:", userId);
+          setPlayerProfile(null);
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
@@ -39,7 +42,7 @@ export default function StatsPage() {
     };
 
     fetchPlayerProfile();
-  }, []);
+  }, [userId]);
 
   return (
     <div className="space-y-6">

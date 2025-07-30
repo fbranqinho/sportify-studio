@@ -12,6 +12,7 @@ import React from "react";
 
 interface DashboardPageProps {
   role?: UserRole;
+  userId?: string; // userId is passed from layout but not used here directly
 }
 
 const WelcomeHeader = ({ role, name }: { role: UserRole, name: string }) => (
@@ -38,9 +39,11 @@ const AdminDashboard = () => (
 
 
 export default function DashboardPage({ role }: DashboardPageProps) {
-  const [name, setName] = React.useState("First Player");
+  const [name, setName] = React.useState("User");
 
   React.useEffect(() => {
+    // Role is now passed as a prop, but name is still sourced from localStorage for simplicity
+    // A more robust solution would pass the full user object or name as a prop as well.
     const mockName = localStorage.getItem('mockUserName');
     if (mockName) {
         setName(mockName);

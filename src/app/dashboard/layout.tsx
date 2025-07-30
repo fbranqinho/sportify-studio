@@ -39,47 +39,39 @@ export default function DashboardLayout({
 }) {
   const [role, setRole] = React.useState<UserRole>("PLAYER");
   const [name, setName] = React.useState("User");
+  const [userId, setUserId] = React.useState<string | null>(null);
   const router = useRouter();
   const auth = getAuth(app);
 
   React.useEffect(() => {
-    // Check for mock user role in local storage for testing
     const mockRole = localStorage.getItem('mockUserRole') as UserRole;
     const mockName = localStorage.getItem('mockUserName');
-    if (mockRole) {
+    const mockUserId = localStorage.getItem('mockUserId');
+    
+    if (mockRole && mockName && mockUserId) {
       setRole(mockRole);
-    }
-    if (mockName) {
       setName(mockName);
-    }
-
-    const unsubscribe = auth.onAuthStateChanged(user => {
-        if (user) {
-            // If a real user is logged in, you'd fetch their role from Firestore
-            // For now, we'll keep the mock logic simple
-            if (!mockRole) {
-                // Fetch user data from firestore and set role and name
+      setUserId(mockUserId);
+    } else {
+        const unsubscribe = auth.onAuthStateChanged(user => {
+            if (user) {
+                // Fetch user data from firestore and set role, name, and userId
+                // This part would be implemented for real users
+            } else {
+                router.push('/login');
             }
-        } else if (!mockRole) {
-            router.push('/login');
-        }
-    });
-
-    return () => unsubscribe();
-  }, [router]);
+        });
+        return () => unsubscribe();
+    }
+  }, [router, auth]);
 
 
   const handleRoleChange = (newRole: UserRole) => {
-    setRole(newRole);
-    localStorage.setItem('mockUserRole', newRole);
-    // This is a simple mock implementation, a real app would update the user in the DB
-    // and might require re-authentication or a page reload to get new data.
-    // For now, we find the first user with the new role and switch to them.
     const newUser = mockData.users.find(u => u.role === newRole);
     if (newUser) {
         localStorage.setItem('mockUserId', newUser.id);
+        localStorage.setItem('mockUserRole', newUser.role);
         localStorage.setItem('mockUserName', newUser.name);
-        setName(newUser.name);
         // Force a reload of the page to fetch new data for the new user role.
         window.location.reload();
     }
@@ -97,10 +89,10 @@ export default function DashboardLayout({
     }
   };
   
-  // Pass role to children that are React components
+  // Pass role and userId to children that are React components
   const childrenWithProps = React.Children.map(children, child => {
     if (React.isValidElement(child)) {
-      return React.cloneElement(child, { role } as any);
+      return React.cloneElement(child, { role, userId } as any);
     }
     return child;
   });
