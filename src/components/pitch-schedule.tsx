@@ -3,7 +3,7 @@
 "use client";
 
 import * as React from "react";
-import { addDays, format, startOfDay, isBefore } from "date-fns";
+import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
 import type { Pitch, Reservation, User, Match } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion } from "firebase/firestore";
@@ -79,42 +79,36 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     };
 
     const getStatusForSlot = (slot: string): SlotInfo => {
-        const slotDateTime = new Date(selectedDate);
-        const [hours, minutes] = slot.split(':').map(Number);
-        slotDateTime.setHours(hours, minutes, 0, 0);
+        const [slotHours] = slot.split(':').map(Number);
+        
+        const isSameTime = (date: Date) => {
+            return getYear(date) === getYear(selectedDate) &&
+                   getMonth(date) === getMonth(selectedDate) &&
+                   getDate(date) === getDate(selectedDate) &&
+                   getHours(date) === slotHours;
+        };
 
         // Priority 1: Check for a Match first
-        const match = matches.find(m => {
-            const matchDate = new Date(m.date);
-            return matchDate.getTime() === slotDateTime.getTime();
-        });
+        const match = matches.find(m => isSameTime(new Date(m.date)));
         
         if (match) {
-            // Check if players can apply
             if (match.allowExternalPlayers) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0) + (match.playerApplications?.length || 0);
-                 // Assuming a Fut5, so capacity is 10. This could be dynamic based on pitch.
-                if (totalPlayers < 10) { 
+                if (totalPlayers < 10) { // Assuming Fut5 capacity
                     return { status: 'Open', match };
                 }
             }
-            // If no applications are allowed or the match is full, it's booked.
             return { status: 'Booked', match };
         }
 
         // Priority 2: If no match, check for a Reservation
-        const reservation = reservations.find(r => {
-            const reservationDate = new Date(r.date);
-            return reservationDate.getTime() === slotDateTime.getTime();
-        });
+        const reservation = reservations.find(r => isSameTime(new Date(r.date)));
 
         if (reservation) {
-            // A confirmed reservation without a match yet is considered booked.
             if (reservation.status === 'Confirmed') return { status: 'Booked', reservation };
             if (reservation.status === 'Pending') return { status: 'Pending', reservation };
         }
         
-        // If no match and no reservation, it's available.
         return { status: 'Available' };
     };
 
