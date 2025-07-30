@@ -5,7 +5,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team } from "@/types";
+import type { Reservation, Team, Notification } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -102,6 +102,7 @@ export default function SchedulePage() {
     // Handle Confirmed status
     if (status === "Confirmed" && reservation.teamRef) {
       try {
+        // Step 1: Get team data to ensure it exists and to get player list
         const teamDocRef = doc(db, "teams", reservation.teamRef);
         const teamDoc = await getDoc(teamDocRef);
 
@@ -109,11 +110,10 @@ export default function SchedulePage() {
              toast({ variant: "destructive", title: "Error", description: "Team associated with reservation not found." });
              return;
         }
-        
         const teamData = teamDoc.data() as Team;
         const playerIds = teamData.playerIds || [];
 
-        // Step 1: Create the Match document first to get its ID.
+        // Step 2: Create the Match document first to get its ID.
         const matchDoc = await addDoc(collection(db, "matches"), {
           date: reservation.date,
           pitchRef: reservation.pitchId,
@@ -129,29 +129,40 @@ export default function SchedulePage() {
           managerRef: teamData.managerId || reservation.managerRef || null,
         });
 
-        // Step 2: Use a batch to update the reservation and create all invitations atomically.
+        // Step 3: Use a batch to update the reservation and create all invitations atomically.
         const batch = writeBatch(db);
 
         // Operation 1: Update the reservation status.
         batch.update(reservationRef, { status: "Confirmed" });
 
         // Operation 2: Create invitations for all players in the team.
-        if (playerIds.length > 0) {
-            const invitationsCollection = collection(db, "matchInvitations");
-            for (const playerId of playerIds) {
-                const newInvitationRef = doc(invitationsCollection);
-                batch.set(newInvitationRef, {
-                    matchId: matchDoc.id,
-                    teamId: reservation.teamRef,
-                    playerId: playerId,
-                    managerId: teamData.managerId,
-                    status: "pending",
-                    invitedAt: serverTimestamp(),
-                });
-            }
+        const invitationsCollection = collection(db, "matchInvitations");
+        const notificationsCollection = collection(db, 'notifications');
+
+        for (const playerId of playerIds) {
+            const newInvitationRef = doc(invitationsCollection);
+            batch.set(newInvitationRef, {
+                matchId: matchDoc.id,
+                teamId: reservation.teamRef,
+                playerId: playerId,
+                managerId: teamData.managerId,
+                status: "pending",
+                invitedAt: serverTimestamp(),
+            });
+            
+            // Also create a notification for the player
+            const newNotificationRef = doc(notificationsCollection);
+            const notification: Omit<Notification, 'id'> = {
+                 userId: playerId,
+                 message: `You have been invited to a game with ${teamData.name}!`,
+                 link: '/dashboard/my-games',
+                 read: false,
+                 createdAt: serverTimestamp() as any, // Let server set the timestamp
+            };
+            batch.set(newNotificationRef, notification);
         }
         
-        // Step 3: Commit the batch.
+        // Step 4: Commit the batch.
         await batch.commit(); 
         
         toast({
@@ -320,7 +331,5 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
 
     
