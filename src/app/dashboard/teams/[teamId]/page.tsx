@@ -160,7 +160,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
         // Step 1: Search for users by their name_lowercase
         const usersQuery = query(
             collection(db, "users"),
-            where("role", "==", "PLAYER"),
+            // where("role", "==", "PLAYER"), // Temporarily removed while index builds
             where("name_lowercase", ">=", searchTerm),
             where("name_lowercase", "<=", searchTerm + '\uf8ff')
         );
@@ -172,8 +172,14 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
             return;
         }
 
-        const foundUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        const foundUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)).filter(u => u.role === 'PLAYER');
         const playerUserIds = foundUsers.map(u => u.id);
+        
+        if(playerUserIds.length === 0){
+             setSearchResults([]);
+             setIsSearching(false);
+             return;
+        }
 
         // Step 2: Fetch the player profiles for the found users
         const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerUserIds));
@@ -195,7 +201,7 @@ function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPl
 
     } catch (error) {
         console.error("Error searching players:", error);
-        toast({ variant: "destructive", title: "Search Error", description: "Could not perform search." });
+        toast({ variant: "destructive", title: "Search Error", description: "Could not perform search. The database index might still be building." });
     } finally {
         setIsSearching(false);
     }
