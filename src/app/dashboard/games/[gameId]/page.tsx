@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X } from "lucide-react";
 import { format } from "date-fns";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+
 
 // Component to handle inviting an opponent
 function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponentInvited: (teamId: string) => void }) {
@@ -24,47 +26,42 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
     const { toast } = useToast();
     const { user } = useUser();
 
-    const handleSearch = async () => {
-        const searchTerm = searchQuery.trim().toLowerCase();
+    const handleSearch = async (queryText: string) => {
+        setSearchQuery(queryText);
+        const searchTerm = queryText.trim().toLowerCase();
         if (!searchTerm) {
             setSearchResults([]);
             return;
         }
+
         setIsSearching(true);
         try {
+            // First, try the efficient query on the lowercase field
             const teamsQuery = query(
                 collection(db, "teams"),
                 where("name_lowercase", ">=", searchTerm),
                 where("name_lowercase", "<=", searchTerm + '\uf8ff')
             );
             const querySnapshot = await getDocs(teamsQuery);
-
-            const teams = querySnapshot.docs
+            let teams = querySnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                // Final client-side filter to exclude own team
-                .filter(team => team.id !== match.teamARef);
+                .filter(team => team.id !== match.teamARef); // Exclude own team
+
+            // Fallback for older data without name_lowercase field
+            if (teams.length === 0) {
+                const allTeamsSnapshot = await getDocs(collection(db, "teams"));
+                teams = allTeamsSnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as Team))
+                    .filter(team => 
+                        team.name.toLowerCase().includes(searchTerm) && 
+                        team.id !== match.teamARef
+                    );
+            }
                 
             setSearchResults(teams);
         } catch (error) {
-            console.error("Error searching teams: ", error);
-            // Fallback for older data without lowercase field
-            try {
-                const teamsRef = collection(db, "teams");
-                const fallbackSnapshot = await getDocs(teamsRef);
-                const teams = fallbackSnapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                    .filter(team => 
-                        team.name.toLowerCase().includes(searchTerm) &&
-                        team.id !== match.teamARef
-                    );
-                setSearchResults(teams);
-                if(teams.length === 0) {
-                     toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. A required index might be building." });
-                }
-            } catch (fallbackError) {
-                 console.error("Error on fallback search for teams: ", fallbackError);
-                 toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams." });
-            }
+             console.error("Error searching teams: ", error);
+             toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. A required index might be building." });
         } finally {
             setIsSearching(false);
         }
@@ -115,33 +112,54 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
                 <CardDescription>Search for a team to invite to this match.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="flex gap-2">
+                <div className="relative">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input 
                         placeholder="Search by team name..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="pl-10"
                     />
-                    <Button onClick={handleSearch} disabled={isSearching}>
-                        <Search className="mr-2 h-4 w-4" />
-                        {isSearching ? "Searching..." : "Search"}
-                    </Button>
-                </div>
-                <div className="space-y-2">
-                    {searchResults.length > 0 ? (
-                        searchResults.map(team => (
-                            <div key={team.id} className="flex justify-between items-center p-2 border rounded-md">
-                                <span>{team.name} ({team.city})</span>
-                                <Button size="sm" onClick={() => handleInvite(team)}>
-                                    <UserPlus className="mr-2 h-4 w-4"/>
-                                    Invite
-                                </Button>
-                            </div>
-                        ))
-                    ) : (
-                        !isSearching && searchQuery && <p className="text-sm text-muted-foreground text-center">No teams found.</p>
+                     {searchQuery && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6"
+                            onClick={() => {
+                                setSearchQuery("");
+                                setSearchResults([]);
+                            }}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
                     )}
                 </div>
+                 {isSearching ? (
+                    <div className="mt-2 text-sm text-muted-foreground">Searching...</div>
+                ) : searchResults.length > 0 ? (
+                    <div className="mt-2 border rounded-md max-h-60 overflow-y-auto">
+                        <Table>
+                            <TableBody>
+                                {searchResults.map(team => (
+                                    <TableRow key={team.id}>
+                                        <TableCell>
+                                            <div className="font-medium">{team.name}</div>
+                                            <div className="text-xs text-muted-foreground">{team.city}</div>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                             <Button size="sm" onClick={() => handleInvite(team)}>
+                                                <UserPlus className="mr-2 h-4 w-4"/>
+                                                Invite
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                 ) : searchQuery && !isSearching ? (
+                    <div className="mt-2 text-sm text-muted-foreground text-center py-4">No teams found.</div>
+                ) : null}
             </CardContent>
         </Card>
     );
