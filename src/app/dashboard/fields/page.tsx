@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CreatePitchForm } from "@/components/forms/create-pitch-form";
+import { EditPitchForm } from "@/components/forms/edit-pitch-form";
 import { PlusCircle, MapPin, Users, Shield } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -25,7 +26,8 @@ export default function FieldsPage() {
   const [ownerProfile, setOwnerProfile] = React.useState<OwnerProfile | null>(null);
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [editingPitch, setEditingPitch] = React.useState<Pitch | null>(null);
 
   React.useEffect(() => {
     if (!user) return;
@@ -68,10 +70,12 @@ export default function FieldsPage() {
   }, [ownerProfile]);
   
   const handlePitchCreated = () => {
-    setIsDialogOpen(false);
-    // The onSnapshot listener will automatically update the UI
+    setIsCreateDialogOpen(false);
   };
 
+  const handlePitchUpdated = () => {
+    setEditingPitch(null);
+  }
 
   return (
     <div className="space-y-6">
@@ -80,7 +84,7 @@ export default function FieldsPage() {
             <h1 className="text-3xl font-bold font-headline">My Fields</h1>
             <p className="text-muted-foreground">View, create, and manage your available fields.</p>
          </div>
-         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button disabled={!ownerProfile}>
                 <PlusCircle className="mr-2" />
@@ -126,7 +130,7 @@ export default function FieldsPage() {
                  </div>
               </CardContent>
               <CardFooter>
-                 <Button variant="outline" className="w-full">Edit Details</Button>
+                 <Button variant="outline" className="w-full" onClick={() => setEditingPitch(pitch)}>Edit Details</Button>
               </CardFooter>
             </Card>
           ))}
@@ -138,13 +142,28 @@ export default function FieldsPage() {
                 <CardDescription>You haven't added any fields yet. Get started by adding your first one!</CardDescription>
             </CardHeader>
             <CardContent>
-                 <Button onClick={() => setIsDialogOpen(true)} disabled={!ownerProfile}>
+                 <Button onClick={() => setIsCreateDialogOpen(true)} disabled={!ownerProfile}>
                     <PlusCircle className="mr-2" />
                     Add Your First Field
                 </Button>
             </CardContent>
         </Card>
       )}
+
+      {/* Edit Pitch Dialog */}
+      <Dialog open={!!editingPitch} onOpenChange={(isOpen) => !isOpen && setEditingPitch(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Edit Field Details</DialogTitle>
+            <DialogDescription>
+              Update the information for your field below.
+            </DialogDescription>
+          </DialogHeader>
+          {editingPitch && (
+            <EditPitchForm pitch={editingPitch} onPitchUpdated={handlePitchUpdated} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

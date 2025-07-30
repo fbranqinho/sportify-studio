@@ -32,9 +32,11 @@ const navItems: NavItem[] = [
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "My Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
-  { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
-  { title: "Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
-  { title: "Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
+  // Owner specific ordered items
+  { title: "My Schedule", href: "/dashboard/schedule", icon: CalendarCheck, roles: ["OWNER"] },
+  { title: "My Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
+  { title: "My Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
+  // Promoter specific
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
 ];
 
@@ -44,7 +46,24 @@ interface DashboardNavProps {
 
 export function DashboardNav({ role }: DashboardNavProps) {
   const pathname = usePathname();
-  const filteredNavItems = navItems.filter(item => item.roles.includes(role));
+  
+  const ownerNavOrder: NavItem[] = [
+    navItems.find(item => item.href === "/dashboard")!,
+    navItems.find(item => item.href === "/dashboard/schedule")!,
+    navItems.find(item => item.href === "/dashboard/fields")!,
+    navItems.find(item => item.href === "/dashboard/payments")!,
+    navItems.find(item => item.href === "/dashboard/promos")!,
+    navItems.find(item => item.href === "/dashboard/games")!,
+  ]
+
+  let filteredNavItems: NavItem[];
+
+  if (role === 'OWNER') {
+      filteredNavItems = ownerNavOrder;
+  } else {
+      filteredNavItems = navItems.filter(item => item.roles.includes(role));
+  }
+
 
   return (
     <nav className="p-2">
