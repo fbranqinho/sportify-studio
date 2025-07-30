@@ -89,7 +89,7 @@ export default function SchedulePage() {
       <CardHeader>
         <CardTitle>{reservation.pitchName}</CardTitle>
         <CardDescription className="flex items-center gap-2 pt-1">
-          <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP")}
+          <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
