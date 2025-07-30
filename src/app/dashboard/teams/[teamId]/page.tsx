@@ -342,9 +342,9 @@ export default function ManageTeamPage() {
                            </TableBody>
                         </Table>
                     </div>
-                ) : searchQuery && !isSearching && (
+                ) : searchQuery && !isSearching ? (
                      <div className="mt-2 text-sm text-muted-foreground text-center py-4">No players found.</div>
-                )}
+                ) : null}
             </div>
         </CardContent>
       </Card>
@@ -352,4 +352,5 @@ export default function ManageTeamPage() {
   );
 }
 
+    
     

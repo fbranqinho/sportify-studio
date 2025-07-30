@@ -60,6 +60,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
         // Step 1: Create player profile document in Firestore
         await addDoc(collection(db, "playerProfiles"), {
             ...values,
+            nickname: values.nickname.toLowerCase(), // Save nickname in lowercase
             userRef: userId,
             // Add default values for all other player stats
             recentForm: [],
@@ -182,3 +183,5 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
     </Form>
   )
 }
+
+    
