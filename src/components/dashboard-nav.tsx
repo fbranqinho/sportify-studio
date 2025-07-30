@@ -23,12 +23,12 @@ import {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
+  { title: "Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
   { title: "Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
   { title: "Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER", "PROMOTER"] },
   { title: "Games", href: "/dashboard/games", icon: Calendar, roles: ["PLAYER", "MANAGER", "OWNER", "REFEREE"] },
   { title: "Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
-  { title: "My Fields", href: "/dashboard/fields", icon: Shield, roles: ["OWNER"] },
   { title: "Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
 ];
