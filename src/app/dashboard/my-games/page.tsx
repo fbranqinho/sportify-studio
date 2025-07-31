@@ -4,14 +4,14 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc, documentId } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team, MatchInvitation, Pitch } from "@/types";
+import type { Match, Team, MatchInvitation, Pitch, OwnerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, History, Gamepad2, AlertCircle, Check, X, Mail } from "lucide-react";
+import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
@@ -25,6 +25,7 @@ export default function MyGamesPage() {
   const [teamMatchInvitations, setTeamMatchInvitations] = React.useState<Match[]>([]);
   const [teams, setTeams] = React.useState<Map<string, Team>>(new Map());
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
+  const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Effect to fetch teams and matches based on user role
@@ -38,11 +39,13 @@ export default function MyGamesPage() {
     const unsubscribes: (() => void)[] = [];
     let userTeamIds: string[] = [];
 
-    const fetchDetails = async (collectionName: 'teams' | 'pitches', ids: string[]): Promise<Map<string, any>> => {
+    const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles', ids: string[]): Promise<Map<string, any>> => {
         const newMap = new Map<string, any>();
         if (ids.length === 0) return newMap;
         
-        const uniqueIds = [...new Set(ids)];
+        const uniqueIds = [...new Set(ids)].filter(id => id); // Filter out any falsy ids
+        if (uniqueIds.length === 0) return newMap;
+        
         const chunks = [];
         for (let i = 0; i < uniqueIds.length; i += 30) {
             chunks.push(uniqueIds.slice(i, i + 30));
@@ -50,7 +53,7 @@ export default function MyGamesPage() {
 
         for (const chunk of chunks) {
             if(chunk.length === 0) continue;
-            const docsQuery = query(collection(db, collectionName), where("__name__", "in", chunk));
+            const docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
             const snapshot = await getDocs(docsQuery);
             snapshot.forEach(doc => {
                 newMap.set(doc.id, { id: doc.id, ...doc.data() });
@@ -117,24 +120,32 @@ export default function MyGamesPage() {
                     const allMatches = Array.from(combinedMatches.values());
                     setMatches(allMatches);
 
-                    const detailsToFetch = new Map<"teams" | "pitches", Set<string>>([
-                        ["teams", new Set<string>()],
-                        ["pitches", new Set<string>()],
-                    ]);
-
+                    const teamIdsToFetch = new Set<string>();
+                    const pitchIdsToFetch = new Set<string>();
+                    
                     allMatches.forEach((match: Match) => {
-                        if (match.teamARef) detailsToFetch.get("teams")!.add(match.teamARef);
-                        if (match.teamBRef) detailsToFetch.get("teams")!.add(match.teamBRef);
-                        if (match.pitchRef) detailsToFetch.get("pitches")!.add(match.pitchRef);
+                        if (match.teamARef) teamIdsToFetch.add(match.teamARef);
+                        if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
+                        if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
                     });
                      
-                    if (detailsToFetch.get("teams")!.size > 0) {
-                        const teamsMap = await fetchDetails('teams', Array.from(detailsToFetch.get("teams")!));
+                    if (teamIdsToFetch.size > 0) {
+                        const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
-                     if (detailsToFetch.get("pitches")!.size > 0) {
-                        const pitchesMap = await fetchDetails('pitches', Array.from(detailsToFetch.get("pitches")!));
+                     if (pitchIdsToFetch.size > 0) {
+                        const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
                         setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
+
+                        const ownerIdsToFetch = new Set<string>();
+                        pitchesMap.forEach(pitch => {
+                            if (pitch.ownerRef) ownerIdsToFetch.add(pitch.ownerRef);
+                        })
+
+                        if(ownerIdsToFetch.size > 0){
+                            const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerIdsToFetch));
+                             setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
+                        }
                     }
                  };
                  
@@ -239,6 +250,8 @@ export default function MyGamesPage() {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
     const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
     const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
+    const owner = pitch ? owners.get(pitch.ownerRef) : null;
+
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
 
@@ -269,11 +282,17 @@ export default function MyGamesPage() {
                     <Calendar className="h-4 w-4" /> {format(new Date(match.date), "PPP 'at' HH:mm")}
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-3 text-sm">
                  <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-primary" />
-                    <span>Pitch: <span className="font-semibold">{pitch?.name || "Loading..."}</span></span>
+                    <span><span className="font-semibold">{pitch?.name || "Loading..."}</span> ({pitch?.sport.toUpperCase()})</span>
                  </div>
+                 {owner && (
+                    <div className="flex items-center gap-2">
+                        <Building className="h-4 w-4 text-primary" />
+                        <span>Managed by: <span className="font-semibold">{owner.companyName}</span></span>
+                    </div>
+                 )}
                  <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary" />
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
@@ -374,9 +393,9 @@ export default function MyGamesPage() {
   const LoadingSkeleton = () => (
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-            <Skeleton className="h-56" />
-            <Skeleton className="h-56" />
-            <Skeleton className="h-56" />
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
         </div>
       </div>
   )
