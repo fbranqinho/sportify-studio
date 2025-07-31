@@ -57,6 +57,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [userTeams, setUserTeams] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
+    const [selectedPromo, setSelectedPromo] = React.useState<Promo | null>(null);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [appliedMatchIds, setAppliedMatchIds] = React.useState<string[]>([]);
     const { toast } = useToast();
@@ -240,6 +241,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const handleBookingSuccess = () => {
         setIsDialogOpen(false);
         setSelectedSlot(null);
+        setSelectedPromo(null);
     }
     
     const today = startOfDay(new Date());
@@ -315,7 +317,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                         ) : (
                                             <div className="text-xs flex items-center gap-1">
                                                <UserPlus className="h-3 w-3" />
-                                                {missingPlayers > 0 ? `${missingPlayers} missing` : 'Apply'}
+                                                {missingPlayers > 0 ? `${missingPlayers} available` : 'Apply'}
                                             </div>
                                         )}
                                     </Button>
@@ -328,7 +330,10 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                         <Button
                                             variant={slotInfo.promotion ? "default" : "outline"}
                                             className="h-12 flex-col"
-                                            onClick={() => setSelectedSlot(slot)}
+                                            onClick={() => {
+                                                setSelectedSlot(slot);
+                                                setSelectedPromo(slotInfo.promotion || null);
+                                            }}
                                         >
                                             <span className="font-bold text-base">{slot}</span>
                                             {slotInfo.promotion ? (
@@ -368,7 +373,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                 <BookMarked />
                                 Confirm your Reservation
                             </DialogTitle>
-                            <DialogDescription>
+                             <DialogDescription>
                                 You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedDate, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot}</strong>.
                             </DialogDescription>
                         </DialogHeader>
@@ -379,6 +384,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                 onReservationSuccess={handleBookingSuccess}
                                 selectedDate={selectedDate}
                                 selectedTime={selectedSlot}
+                                promotion={selectedPromo}
                             />
                         )}
                     </DialogContent>
@@ -388,5 +394,3 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
-
-    

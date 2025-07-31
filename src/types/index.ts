@@ -197,6 +197,7 @@ export interface Pitch {
   photoUrl?: string;
   ownerRef: string; // OwnerProfile ID
   sport: PitchSport;
+  basePrice: number;
   coords: { lat: number; lng: number };
 }
 

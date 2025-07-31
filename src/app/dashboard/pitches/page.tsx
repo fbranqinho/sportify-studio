@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { CreatePitchForm } from "@/components/forms/create-pitch-form";
 import { EditPitchForm } from "@/components/forms/edit-pitch-form";
-import { PlusCircle, MapPin, Users, Shield } from "lucide-react";
+import { PlusCircle, MapPin, Users, Shield, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PitchesPage() {
@@ -128,6 +128,10 @@ export default function PitchesPage() {
                  <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
                     <span>Capacity: <span className="font-semibold">{pitch.capacity} people</span></span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-primary" />
+                    <span>Base Price: <span className="font-semibold">{pitch.basePrice}€ / hour</span></span>
                  </div>
               </CardContent>
               <CardFooter>

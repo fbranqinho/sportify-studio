@@ -33,6 +33,7 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
+  basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
 });
 
 interface EditPitchFormProps {
@@ -50,6 +51,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
       city: pitch.city,
       sport: pitch.sport,
       capacity: pitch.capacity,
+      basePrice: pitch.basePrice || 50,
     },
   });
 
@@ -61,6 +63,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
         city: values.city,
         sport: values.sport,
         capacity: values.capacity,
+        basePrice: values.basePrice,
       });
 
       toast({
@@ -140,7 +143,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
             name="capacity"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Capacity</FormLabel>
+                <FormLabel>Spectator Capacity</FormLabel>
                 <FormControl>
                   <Input type="number" placeholder="e.g. 14" {...field} />
                 </FormControl>
@@ -149,6 +152,19 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
             )}
           />
         </div>
+        <FormField
+            control={form.control}
+            name="basePrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Base Price per Hour (€)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="e.g. 50" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
         </Button>

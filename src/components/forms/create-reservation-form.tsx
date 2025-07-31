@@ -3,7 +3,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Pitch, User, Team, Notification } from "@/types";
+import type { Pitch, User, Team, Notification, Promo } from "@/types";
 
 const formSchema = z.object({
   teamRef: z.string().optional(),
@@ -37,9 +37,10 @@ interface CreateReservationFormProps {
   onReservationSuccess: () => void;
   selectedDate: Date;
   selectedTime: string;
+  promotion: Promo | null;
 }
 
-export function CreateReservationForm({ user, pitch, onReservationSuccess, selectedDate, selectedTime }: CreateReservationFormProps) {
+export function CreateReservationForm({ user, pitch, onReservationSuccess, selectedDate, selectedTime, promotion }: CreateReservationFormProps) {
   const { toast } = useToast();
   const [managerTeams, setManagerTeams] = React.useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = React.useState(false);
@@ -65,6 +66,13 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
       fetchManagerTeams();
     }
   }, [user, isManager]);
+
+  const finalPrice = React.useMemo(() => {
+    if (promotion) {
+      return pitch.basePrice * (1 - promotion.discountPercent / 100);
+    }
+    return pitch.basePrice;
+  }, [pitch.basePrice, promotion]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !pitch) {
@@ -95,9 +103,10 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
             status: "Pending",
             pitchId: pitch.id,
             pitchName: pitch.name,
-            ownerProfileId: pitch.ownerRef, // This is the ID of the owner's profile document
+            ownerProfileId: pitch.ownerRef,
+            totalAmount: finalPrice,
+            promoRef: promotion ? promotion.id : null,
             paymentRefs: [],
-            totalAmount: 0,
             actorId: user.id,
             actorName: user.name,
             actorRole: user.role,
@@ -146,7 +155,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {isManager && (
             loadingTeams ? <p className="text-sm text-muted-foreground">Loading your teams...</p> : 
             managerTeams.length > 0 ? (
@@ -182,13 +191,29 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
             )
         )}
         
-        <p className="text-xs text-muted-foreground">Note: For now, all bookings are for a default 1-hour slot. The owner will confirm the request.</p>
+        <div className="p-4 bg-muted/50 rounded-lg text-center">
+            <p className="text-sm text-muted-foreground">Total Price</p>
+            {promotion && (
+                 <div className="flex items-baseline justify-center gap-2">
+                    <span className="text-lg font-semibold text-destructive line-through">{pitch.basePrice.toFixed(2)}€</span>
+                    <span className="text-3xl font-bold text-primary">{finalPrice.toFixed(2)}€</span>
+                 </div>
+            )}
+             {!promotion && (
+                <p className="text-3xl font-bold text-primary">{finalPrice.toFixed(2)}€</p>
+             )}
+            {promotion && (
+                <p className="text-xs font-semibold text-primary mt-1">{promotion.name} (-{promotion.discountPercent}%) applied!</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">Note: For now, all bookings are for a default 1-hour slot. Payment will be handled later.</p>
+        </div>
+
 
         <Button 
             type="submit" 
             className="w-full font-semibold" 
             disabled={form.formState.isSubmitting || (isManager && (loadingTeams || managerTeams.length === 0))}>
-          {form.formState.isSubmitting ? "Requesting..." : "Confirm & Request Reservation"}
+          {form.formState.isSubmitting ? "Requesting..." : `Request Reservation for ${finalPrice.toFixed(2)}€`}
         </Button>
       </form>
     </Form>

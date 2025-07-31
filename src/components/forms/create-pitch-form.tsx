@@ -33,6 +33,7 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
+  basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
 });
 
 interface CreatePitchFormProps {
@@ -49,7 +50,8 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
       name: "",
       city: "",
       sport: "fut7",
-      capacity: 14,
+      capacity: 150,
+      basePrice: 50,
     },
   });
 
@@ -70,6 +72,7 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
         city: values.city,
         sport: values.sport,
         capacity: values.capacity,
+        basePrice: values.basePrice,
         // Using owner's coordinates as the default for the pitch
         coords: {
           lat: ownerProfile.latitude,
@@ -155,15 +158,28 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
             name="capacity"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Capacity</FormLabel>
+                <FormLabel>Spectator Capacity</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="e.g. 14" {...field} />
+                  <Input type="number" placeholder="e.g. 150" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
+         <FormField
+            control={form.control}
+            name="basePrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Base Price per Hour (€)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="e.g. 50" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Creating..." : "Create Field"}
         </Button>
