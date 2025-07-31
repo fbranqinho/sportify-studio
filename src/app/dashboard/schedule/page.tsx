@@ -99,7 +99,7 @@ export default function SchedulePage() {
                 toast({ variant: "destructive", title: "Error", description: "Team associated with reservation not found." });
                 return;
             }
-            const teamData = teamDoc.data() as Team;
+            const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
             const playerIds = teamData.playerIds || [];
             
             const batch = writeBatch(db);
@@ -378,3 +378,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
