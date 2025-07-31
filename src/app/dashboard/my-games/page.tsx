@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Match, Team, MatchInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -151,12 +151,29 @@ export default function MyGamesPage() {
 
   }, [user, toast]);
 
-  const handlePlayerInvitationResponse = async (invitationId: string, accepted: boolean) => {
-     const invitationRef = doc(db, "matchInvitations", invitationId);
+  const handlePlayerInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
+     if (!user) return;
+     const batch = writeBatch(db);
+     const invitationRef = doc(db, "matchInvitations", invitation.id);
+     const matchRef = doc(db, "matches", invitation.matchId);
+
      try {
-        await updateDoc(invitationRef, {
+        // Step 1: Update the invitation status
+        batch.update(invitationRef, {
             status: accepted ? "accepted" : "declined"
         });
+
+        // Step 2: If accepted, add player to the match's player list
+        if (accepted) {
+            // This assumes the player is joining Team A. This might need to be more robust
+            // if players can be invited to either team (e.g. for pickup games)
+            batch.update(matchRef, {
+                teamAPlayers: arrayUnion(user.id)
+            });
+        }
+        
+        await batch.commit();
+
         toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
      } catch (error) {
         console.error("Error responding to invitation:", error);
@@ -258,10 +275,10 @@ export default function MyGamesPage() {
             <p className="text-sm">You have been invited to play in an upcoming game.</p>
           </CardContent>
            <CardFooter className="gap-2">
-              <Button size="sm" onClick={() => handlePlayerInvitationResponse(invitation.id, true)}>
+              <Button size="sm" onClick={() => handlePlayerInvitationResponse(invitation, true)}>
                  <Check className="mr-2 h-4 w-4" /> Accept
               </Button>
-              <Button size="sm" variant="destructive" onClick={() => handlePlayerInvitationResponse(invitation.id, false)}>
+              <Button size="sm" variant="destructive" onClick={() => handlePlayerInvitationResponse(invitation, false)}>
                  <X className="mr-2 h-4 w-4" /> Decline
               </Button>
             </CardFooter>

@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team, Notification } from "@/types";
+import type { Reservation, Team, Notification, MatchInvitation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -101,15 +101,18 @@ export default function SchedulePage() {
             }
             const teamData = teamDoc.data() as Team;
             const playerIds = teamData.playerIds || [];
+            
+            const batch = writeBatch(db);
 
-            const matchDoc = await addDoc(collection(db, "matches"), {
+            const matchDocRef = doc(collection(db, "matches"));
+            const matchData = {
                 date: reservation.date,
                 pitchRef: reservation.pitchId,
                 reservationRef: reservation.id, // Link reservation to match
                 status: "PendingOpponent", 
                 teamARef: reservation.teamRef,
                 teamBRef: null,
-                teamAPlayers: [],
+                teamAPlayers: [], // Initially empty, players must accept invitation
                 teamBPlayers: [],
                 playerApplications: [],
                 allowExternalPlayers: true,
@@ -118,30 +121,43 @@ export default function SchedulePage() {
                 refereeId: null,
                 attendance: 0,
                 managerRef: teamData.managerId || reservation.managerRef || null,
-            });
-
-            const batch = writeBatch(db);
+            };
+            batch.set(matchDocRef, matchData);
+            
             batch.update(reservationRef, { status: "Confirmed" });
             
             const notificationsCollection = collection(db, 'notifications');
+            const matchInvitationsCollection = collection(db, 'matchInvitations');
             
             // Notification for the Manager
             const managerNotificationRef = doc(notificationsCollection);
             const managerNotification: Omit<Notification, 'id'> = {
                 userId: teamData.managerId,
                 message: `Your booking for ${reservation.pitchName} was confirmed. A practice match has been created.`,
-                link: `/dashboard/games/${matchDoc.id}`,
+                link: `/dashboard/games/${matchDocRef.id}`,
                 read: false,
                 createdAt: serverTimestamp() as any,
             };
             batch.set(managerNotificationRef, managerNotification);
 
-            // Notifications for each Player on the team
+            // Create invitations for each Player on the team
             playerIds.forEach(playerId => {
+                const playerInvitationRef = doc(matchInvitationsCollection);
+                const playerInvitation: Omit<MatchInvitation, 'id'> = {
+                    matchId: matchDocRef.id,
+                    teamId: teamData.id,
+                    playerId: playerId,
+                    managerId: teamData.managerId,
+                    status: "pending",
+                    invitedAt: serverTimestamp() as any,
+                };
+                batch.set(playerInvitationRef, playerInvitation);
+                
+                 // Also create a simple notification to alert them of the invitation
                 const playerNotificationRef = doc(notificationsCollection);
                 const playerNotification: Omit<Notification, 'id'> = {
                     userId: playerId,
-                    message: `A new game for your team, ${teamData.name}, has been scheduled!`,
+                    message: `You've been invited to a new game for your team, ${teamData.name}!`,
                     link: '/dashboard/my-games',
                     read: false,
                     createdAt: serverTimestamp() as any,
@@ -154,7 +170,7 @@ export default function SchedulePage() {
             
             toast({
             title: "Reservation Confirmed!",
-            description: `A practice match has been scheduled for ${teamData.name}. Manager and players notified.`,
+            description: `A practice match has been scheduled and players have been invited.`,
             });
         
         // --- Player Booking (Pick-up Game) ---
