@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team, MatchInvitation } from "@/types";
+import type { Match, Team, MatchInvitation, Pitch } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,7 @@ export default function MyGamesPage() {
   const [invitations, setInvitations] = React.useState<MatchInvitation[]>([]);
   const [teamMatchInvitations, setTeamMatchInvitations] = React.useState<Match[]>([]);
   const [teams, setTeams] = React.useState<Map<string, Team>>(new Map());
+  const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Effect to fetch teams and matches based on user role
@@ -37,28 +38,28 @@ export default function MyGamesPage() {
     const unsubscribes: (() => void)[] = [];
     let userTeamIds: string[] = [];
 
-    const fetchTeamDetails = async (teamIds: string[]): Promise<Map<string, Team>> => {
-        const newTeamsMap = new Map<string, Team>();
-        if (teamIds.length === 0) return newTeamsMap;
+    const fetchDetails = async (collectionName: 'teams' | 'pitches', ids: string[]): Promise<Map<string, any>> => {
+        const newMap = new Map<string, any>();
+        if (ids.length === 0) return newMap;
         
-        const uniqueTeamIds = [...new Set(teamIds)];
-        // Firestore 'in' query is limited to 30 elements
+        const uniqueIds = [...new Set(ids)];
         const chunks = [];
-        for (let i = 0; i < uniqueTeamIds.length; i += 30) {
-            chunks.push(uniqueTeamIds.slice(i, i + 30));
+        for (let i = 0; i < uniqueIds.length; i += 30) {
+            chunks.push(uniqueIds.slice(i, i + 30));
         }
 
         for (const chunk of chunks) {
             if(chunk.length === 0) continue;
-            const teamDocsQuery = query(collection(db, "teams"), where("__name__", "in", chunk));
-            const teamsSnapshot = await getDocs(teamDocsQuery);
-            teamsSnapshot.forEach(doc => {
-                newTeamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team);
+            const docsQuery = query(collection(db, collectionName), where("__name__", "in", chunk));
+            const snapshot = await getDocs(docsQuery);
+            snapshot.forEach(doc => {
+                newMap.set(doc.id, { id: doc.id, ...doc.data() });
             });
         }
         
-        return newTeamsMap;
+        return newMap;
     };
+
 
     const setupListeners = async () => {
         try {
@@ -73,7 +74,7 @@ export default function MyGamesPage() {
                 userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
             }
             if (userTeamIds.length > 0) {
-                 const teamsMap = await fetchTeamDetails(userTeamIds);
+                 const teamsMap = await fetchDetails('teams', userTeamIds);
                  setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
 
@@ -85,7 +86,7 @@ export default function MyGamesPage() {
                     setInvitations(invs);
                     if (invs.length > 0) {
                         const teamIds = invs.map(inv => inv.teamId);
-                        const teamsMap = await fetchTeamDetails(teamIds);
+                        const teamsMap = await fetchDetails('teams', teamIds);
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
                 }, (error) => console.error("Error fetching invitations:", error));
@@ -100,7 +101,7 @@ export default function MyGamesPage() {
                     setTeamMatchInvitations(teamInvs);
                      if (teamInvs.length > 0) {
                         const hostTeamIds = teamInvs.map(inv => inv.teamARef).filter((id): id is string => !!id);
-                        const teamsMap = await fetchTeamDetails(hostTeamIds);
+                        const teamsMap = await fetchDetails('teams', hostTeamIds);
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
                 }, (error) => console.error("Error fetching team match invitations:", error));
@@ -110,40 +111,58 @@ export default function MyGamesPage() {
             // --- Listener for Confirmed Matches ---
             if (userTeamIds.length > 0) {
                  const combinedMatches = new Map<string, Match>();
+                 
+                 const processMatchesSnapshot = async (snapshot: DocumentData) => {
+                    snapshot.docs.forEach((doc: DocumentData) => combinedMatches.set(doc.id, { id: doc.id, ...doc.data()} as Match));
+                    const allMatches = Array.from(combinedMatches.values());
+                    setMatches(allMatches);
+
+                    const detailsToFetch = new Map<"teams" | "pitches", Set<string>>([
+                        ["teams", new Set<string>()],
+                        ["pitches", new Set<string>()],
+                    ]);
+
+                    allMatches.forEach((match: Match) => {
+                        if (match.teamARef) detailsToFetch.get("teams")!.add(match.teamARef);
+                        if (match.teamBRef) detailsToFetch.get("teams")!.add(match.teamBRef);
+                        if (match.pitchRef) detailsToFetch.get("pitches")!.add(match.pitchRef);
+                    });
+                     
+                    if (detailsToFetch.get("teams")!.size > 0) {
+                        const teamsMap = await fetchDetails('teams', Array.from(detailsToFetch.get("teams")!));
+                        setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                    }
+                     if (detailsToFetch.get("pitches")!.size > 0) {
+                        const pitchesMap = await fetchDetails('pitches', Array.from(detailsToFetch.get("pitches")!));
+                        setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
+                    }
+                 };
+                 
                  const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
                  const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
 
-                 const unsub1 = onSnapshot(q1, (snapshot) => {
-                     snapshot.docs.forEach(doc => combinedMatches.set(doc.id, { id: doc.id, ...doc.data()} as Match));
-                     setMatches(Array.from(combinedMatches.values()));
-                 });
-                 const unsub2 = onSnapshot(q2, async (snapshot) => {
-                     snapshot.docs.forEach(doc => combinedMatches.set(doc.id, { id: doc.id, ...doc.data()} as Match));
-                     const allMatches = Array.from(combinedMatches.values());
-                     setMatches(allMatches);
-
-                     const teamIdsFromMatches = new Set<string>();
-                     allMatches.forEach((match: Match) => {
-                         if (match.teamARef) teamIdsFromMatches.add(match.teamARef);
-                         if (match.teamBRef) teamIdsFromMatches.add(match.teamBRef);
-                     });
-                     if(teamIdsFromMatches.size > 0) {
-                         const teamsMap = await fetchTeamDetails(Array.from(teamIdsFromMatches));
-                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-                     }
-                 });
+                 const unsub1 = onSnapshot(q1, processMatchesSnapshot);
+                 const unsub2 = onSnapshot(q2, processMatchesSnapshot);
+                 
                  unsubscribes.push(unsub1, unsub2);
+            } else {
+                 setLoading(false);
             }
 
         } catch (error) {
             console.error("Error setting up listeners: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
         } finally {
-            setLoading(false);
+            if (unsubscribes.length === 0) setLoading(false);
         }
     };
     
-    setupListeners();
+    const initialLoad = async () => {
+        await setupListeners();
+        setLoading(false);
+    }
+
+    initialLoad();
     
     return () => {
         unsubscribes.forEach(unsub => unsub());
@@ -158,21 +177,26 @@ export default function MyGamesPage() {
      const matchRef = doc(db, "matches", invitation.matchId);
 
      try {
-        // Step 1: Update the invitation status
-        batch.update(invitationRef, {
-            status: accepted ? "accepted" : "declined"
-        });
+        batch.update(invitationRef, { status: accepted ? "accepted" : "declined" });
 
-        // Step 2: If accepted, add player to the match's player list
         if (accepted) {
-            // This assumes the player is joining Team A. This might need to be more robust
-            // if players can be invited to either team (e.g. for pickup games)
-            batch.update(matchRef, {
-                teamAPlayers: arrayUnion(user.id)
-            });
+            batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
         }
         
         await batch.commit();
+
+        if (accepted) {
+            // Check if game is now full
+            const matchDoc = await getDocs(query(collection(db, "matches"), where("__name__", "==", invitation.matchId)));
+            const match = {id: matchDoc.docs[0].id, ...matchDoc.docs[0].data()} as Match;
+            const pitch = pitches.get(match.pitchRef);
+            if(pitch) {
+                 const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+                 if (confirmedPlayers >= pitch.capacity) {
+                     await updateDoc(matchRef, { status: "Scheduled" });
+                 }
+            }
+        }
 
         toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
      } catch (error) {
@@ -193,7 +217,7 @@ export default function MyGamesPage() {
               toast({ title: "Match Accepted!", description: "The match is now scheduled."});
           } else {
               await updateDoc(matchRef, {
-                  status: "PendingOpponent", // Back to original state before invite
+                  status: "PendingOpponent", 
                   invitedTeamId: null,
               });
               toast({ title: "Match Declined", description: "The match invitation has been declined."});
@@ -212,8 +236,13 @@ export default function MyGamesPage() {
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
     const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
+    const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
+
+    const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+    const capacity = pitch?.capacity || 0;
+    const missingPlayers = capacity - confirmedPlayers;
     
     const getMatchTitle = () => {
       if (teamA && !teamB) {
@@ -241,11 +270,15 @@ export default function MyGamesPage() {
             <CardContent className="space-y-2 text-sm">
                  <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-primary" />
-                    <span>Pitch: <span className="font-semibold">Placeholder Pitch Name</span></span>
+                    <span>Pitch: <span className="font-semibold">{pitch?.name || "Loading..."}</span></span>
                  </div>
                  <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary" />
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
+                 </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span>Players: <span className="font-semibold">{confirmedPlayers} / {capacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
                  </div>
             </CardContent>
             {(!isFinished && isManager) && (
@@ -337,9 +370,9 @@ export default function MyGamesPage() {
   const LoadingSkeleton = () => (
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-            <Skeleton className="h-52" />
-            <Skeleton className="h-52" />
-            <Skeleton className="h-52" />
+            <Skeleton className="h-56" />
+            <Skeleton className="h-56" />
+            <Skeleton className="h-56" />
         </div>
       </div>
   )
