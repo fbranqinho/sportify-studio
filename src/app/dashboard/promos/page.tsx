@@ -17,10 +17,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CreatePromoForm } from "@/components/forms/create-promo-form";
-import { PlusCircle, Tag, Calendar, Clock, Percent, Shield, Trash2 } from "lucide-react";
+import { PlusCircle, Tag, Calendar, Clock, Percent, Shield, Trash2, Edit } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { EditPromoForm } from "@/components/forms/edit-promo-form";
 
 const dayOfWeekAsString = (dayIndex: number) => {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayIndex];
@@ -33,6 +34,7 @@ export default function PromosPage() {
   const [ownerPitches, setOwnerPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [editingPromo, setEditingPromo] = React.useState<Promo | null>(null);
 
   React.useEffect(() => {
     if (!user) return;
@@ -46,7 +48,6 @@ export default function PromosPage() {
           const profile = { id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile;
           setOwnerProfile(profile);
 
-          // Correctly fetch pitches associated with this owner
           const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", profile.id));
           const pitchesSnapshot = await getDocs(pitchesQuery);
           const pitchesData = pitchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
@@ -81,6 +82,10 @@ export default function PromosPage() {
   
   const handlePromoCreated = () => {
     setIsCreateDialogOpen(false);
+  };
+  
+  const handlePromoUpdated = () => {
+    setEditingPromo(null);
   };
 
   return (
@@ -162,9 +167,12 @@ export default function PromosPage() {
                     </div>
                  </div>
               </CardContent>
-              <CardFooter>
-                 <Button variant="outline" size="sm" className="w-full" disabled>
-                    <Trash2 className="mr-2 h-4 w-4"/> Delete (Coming Soon)
+              <CardFooter className="gap-2">
+                 <Button variant="outline" size="sm" className="w-full" onClick={() => setEditingPromo(promo)}>
+                    <Edit className="mr-2 h-4 w-4"/> Edit Details
+                  </Button>
+                  <Button variant="destructive" size="sm" disabled>
+                    <Trash2 className="mr-2 h-4 w-4"/>
                   </Button>
               </CardFooter>
             </Card>
@@ -185,6 +193,25 @@ export default function PromosPage() {
             </CardContent>
         </Card>
       )}
+
+      {/* Edit Promo Dialog */}
+       <Dialog open={!!editingPromo} onOpenChange={(isOpen) => !isOpen && setEditingPromo(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Edit Promotion</DialogTitle>
+            <DialogDescription>
+              Update the details for your promotion below.
+            </DialogDescription>
+          </DialogHeader>
+          {editingPromo && (
+            <EditPromoForm
+              promo={editingPromo}
+              ownerPitches={ownerPitches}
+              onPromoUpdated={handlePromoUpdated}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
