@@ -4,9 +4,9 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc, documentId } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc, documentId, addDoc, serverTimestamp } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team, MatchInvitation, Pitch, OwnerProfile } from "@/types";
+import type { Match, Team, MatchInvitation, Pitch, OwnerProfile, Notification } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -202,30 +202,34 @@ export default function MyGamesPage() {
         
         await batch.commit();
 
+        // Separate read/write after initial commit
         if (accepted) {
-            // Check if game is now full
-            const matchDoc = await getDoc(doc(db, "matches", invitation.matchId));
+            const matchDoc = await getDoc(matchRef);
             if (matchDoc.exists()) {
                 const match = {id: matchDoc.id, ...matchDoc.data()} as Match;
                 const pitch = pitches.get(match.pitchRef);
                 if(pitch) {
-                    const confirmedPlayers = (match.teamAPlayers?.length || 0) + 1; // +1 for the current accepting player
-                     const getPlayerCapacity = (sport: Pitch["sport"]) => {
-                        switch (sport) {
-                            case 'fut5':
-                            case 'futsal':
-                                return 10;
-                            case 'fut7':
-                                return 14;
-                            case 'fut11':
-                                return 22;
-                            default:
-                                return 0;
-                        }
-                    };
+                    const confirmedPlayers = (match.teamAPlayers?.length || 0); // Player was added in batch, so count is up to date
                     const playerCapacity = getPlayerCapacity(pitch.sport);
-                    if (confirmedPlayers >= playerCapacity && playerCapacity > 0) {
-                        await updateDoc(matchRef, { status: "Scheduled" });
+                    if (playerCapacity > 0 && confirmedPlayers >= playerCapacity) {
+                        const gameFullBatch = writeBatch(db);
+                        gameFullBatch.update(matchRef, { status: "Scheduled" });
+
+                        // Notify owner that the game is now full
+                        const ownerProfile = owners.get(pitch.ownerRef);
+                        if (ownerProfile) {
+                             const newNotificationRef = doc(collection(db, "notifications"));
+                             const notification: Omit<Notification, 'id'> = {
+                                ownerProfileId: ownerProfile.id,
+                                message: `The game scheduled for ${format(new Date(match.date), 'PPp')} on '${pitch.name}' is now full.`,
+                                link: `/dashboard/schedule`,
+                                read: false,
+                                createdAt: serverTimestamp() as any,
+                            };
+                            gameFullBatch.set(newNotificationRef, notification);
+                        }
+                        
+                        await gameFullBatch.commit();
                     }
                 }
             }
@@ -266,6 +270,21 @@ export default function MyGamesPage() {
   const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const pastMatches = matches.filter(m => new Date(m.date) < now).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
+  const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
+    if (!sport) return 0;
+    switch (sport) {
+        case 'fut5':
+        case 'futsal':
+            return 10;
+        case 'fut7':
+            return 14;
+        case 'fut11':
+            return 22;
+        default:
+            return 0; // Should not happen
+    }
+  };
+
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
     const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
@@ -277,20 +296,6 @@ export default function MyGamesPage() {
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     
-    const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
-        if (!sport) return 0;
-        switch (sport) {
-            case 'fut5':
-            case 'futsal':
-                return 10;
-            case 'fut7':
-                return 14;
-            case 'fut11':
-                return 22;
-            default:
-                return 0; // Should not happen
-        }
-    };
     const playerCapacity = getPlayerCapacity(pitch?.sport);
     const missingPlayers = playerCapacity > 0 ? playerCapacity - confirmedPlayers : 0;
     
@@ -499,3 +504,5 @@ export default function MyGamesPage() {
     </div>
   );
 }
+
+    
