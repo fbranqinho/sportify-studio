@@ -3,20 +3,19 @@
 "use client";
 
 import * as React from "react";
-import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours, getDay } from "date-fns";
+import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours, getDay, eachDayOfInterval, startOfWeek, endOfWeek } from "date-fns";
 import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
-// Generate hourly time slots from 09:00 to 23:00
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
     const hour = i + 9;
     return `${hour.toString().padStart(2, '0')}:00`;
@@ -28,215 +27,118 @@ interface PitchScheduleProps {
 }
 
 interface SlotInfo {
-  status: 'Available' | 'Pending' | 'Booked' | 'Open';
+  status: 'Available' | 'Pending' | 'Booked' | 'Open' | 'Past';
   match?: Match;
   reservation?: Reservation;
   promotion?: Promo;
+  price: number;
 }
 
 const getPlayerCapacity = (sport: PitchSport): number => {
     switch (sport) {
-        case 'fut5':
-        case 'futsal':
-            return 10;
-        case 'fut7':
-            return 14;
-        case 'fut11':
-            return 22;
-        default:
-            return 0; // Should not happen
+        case 'fut5': case 'futsal': return 10;
+        case 'fut7': return 14;
+        case 'fut11': return 22;
+        default: return 0;
     }
 };
 
-
 export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
-    const [selectedDate, setSelectedDate] = React.useState(startOfDay(new Date()));
+    const [currentDate, setCurrentDate] = React.useState(startOfDay(new Date()));
     const [reservations, setReservations] = React.useState<Reservation[]>([]);
     const [matches, setMatches] = React.useState<Match[]>([]);
     const [promos, setPromos] = React.useState<Promo[]>([]);
     const [userTeams, setUserTeams] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
+    const [selectedSlot, setSelectedSlot] = React.useState<{ date: Date, time: string} | null>(null);
     const [selectedPromo, setSelectedPromo] = React.useState<Promo | null>(null);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [appliedMatchIds, setAppliedMatchIds] = React.useState<string[]>([]);
     const { toast } = useToast();
 
+    const week = React.useMemo(() => {
+        const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+        const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+        return eachDayOfInterval({ start, end });
+    }, [currentDate]);
+
     React.useEffect(() => {
         setLoading(true);
+        const qReservations = query(collection(db, "reservations"), where("pitchId", "==", pitch.id));
+        const qMatches = query(collection(db, "matches"), where("pitchRef", "==", pitch.id));
+        const qPlayerTeams = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
+        const qPromos = query(collection(db, "promos"), where("ownerProfileId", "==", pitch.ownerRef));
 
-        const qReservations = query(
-            collection(db, "reservations"), 
-            where("pitchId", "==", pitch.id)
-        );
-        const qMatches = query(
-            collection(db, "matches"),
-            where("pitchRef", "==", pitch.id)
-        );
-        const qPlayerTeams = query(
-            collection(db, "teams"),
-            where("playerIds", "array-contains", user.id)
-        );
-        const qPromos = query(
-            collection(db, "promos"),
-            where("ownerProfileId", "==", pitch.ownerRef)
-        );
+        const unsubReservations = onSnapshot(qReservations, (snap) => setReservations(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation)));
+        const unsubMatches = onSnapshot(qMatches, (snap) => setMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match)));
+        const unsubUserTeams = onSnapshot(qPlayerTeams, (snap) => setUserTeams(snap.docs.map(doc => doc.id)));
+        const unsubPromos = onSnapshot(qPromos, (snap) => setPromos(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo)));
 
-        const unsubscribeReservations = onSnapshot(qReservations, (snapshot) => {
-            setReservations(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation));
-        }, (error) => console.error("Error fetching reservations: ", error));
-        
-        const unsubscribeMatches = onSnapshot(qMatches, (snapshot) => {
-            setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match));
-        }, (error) => console.error("Error fetching matches: ", error));
-        
-        const unsubscribeUserTeams = onSnapshot(qPlayerTeams, (snapshot) => {
-            setUserTeams(snapshot.docs.map(doc => doc.id));
-        }, (error) => console.error("Error fetching user teams: ", error));
-
-        const unsubscribePromos = onSnapshot(qPromos, (snapshot) => {
-            setPromos(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo));
-        }, (error) => console.error("Error fetching promotions: ", error));
-
-
-        // A simple way to wait for all initial data loads
-        Promise.all([
-            getDocs(qReservations), 
-            getDocs(qMatches), 
-            getDocs(qPlayerTeams),
-            getDocs(qPromos)
-        ]).then(() => {
-            setLoading(false);
-        }).catch((err) => {
-            console.error("Error during initial data fetch:", err);
-            setLoading(false);
-        });
+        Promise.all([getDocs(qReservations), getDocs(qMatches), getDocs(qPlayerTeams), getDocs(qPromos)])
+          .then(() => setLoading(false))
+          .catch(() => setLoading(false));
 
         return () => {
-            unsubscribeReservations();
-            unsubscribeMatches();
-            unsubscribeUserTeams();
-            unsubscribePromos();
+            unsubReservations();
+            unsubMatches();
+            unsubUserTeams();
+            unsubPromos();
         };
     }, [pitch.id, pitch.ownerRef, user.id]);
 
-    const handleDateChange = (days: number) => {
-        setSelectedDate(prev => addDays(prev, days));
+    const handleDateChange = (weeks: number) => {
+        setCurrentDate(prev => addDays(prev, weeks * 7));
     };
 
-    const getStatusForSlot = (slot: string): SlotInfo => {
-        const [slotHours] = slot.split(':').map(Number);
-        
-        const isSameTime = (date: Date) => {
-            return getYear(date) === getYear(selectedDate) &&
-                   getMonth(date) === getMonth(selectedDate) &&
-                   getDate(date) === getDate(selectedDate) &&
-                   getHours(date) === slotHours;
-        };
+    const getStatusForSlot = (day: Date, time: string): SlotInfo => {
+        const [slotHours] = time.split(':').map(Number);
+        const slotDateTime = new Date(day);
+        slotDateTime.setHours(slotHours, 0, 0, 0);
 
-        // Priority 1: Check for a Match first
+        if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice };
+
+        const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
+
         const match = matches.find(m => isSameTime(new Date(m.date)));
-        
         if (match) {
-             const isPlayerInGame = (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id));
-             if (isPlayerInGame) {
-                 return { status: 'Booked', match }; // User is already in, show as booked
-             }
-             
-             // Check if the match is for one of the user's teams
-             const isUserTeamMatch = (match.teamARef && userTeams.includes(match.teamARef)) || (match.teamBRef && userTeams.includes(match.teamBRef));
-             if (isUserTeamMatch) {
-                 return { status: 'Booked', match };
-             }
-
-            if (match.allowExternalPlayers) {
+            if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && !match.teamBPlayers.includes(user.id)) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                const playerCapacity = getPlayerCapacity(pitch.sport);
-                if (playerCapacity > 0 && totalPlayers < playerCapacity) { 
-                    return { status: 'Open', match };
-                }
+                if (totalPlayers < getPlayerCapacity(pitch.sport)) return { status: 'Open', match, price: 0 };
             }
-            return { status: 'Booked', match };
+            return { status: 'Booked', match, price: 0 };
         }
 
-        // Priority 2: If no match, check for a Reservation
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
-
         if (reservation) {
-            if (reservation.status === 'Confirmed' || reservation.status === 'Scheduled') return { status: 'Booked', reservation };
-            if (reservation.status === 'Pending') return { status: 'Pending', reservation };
+            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: 0 };
         }
         
-        // Priority 3: Check for promotions on available slots
-        const dayOfWeek = getDay(selectedDate);
+        const dayOfWeek = getDay(day);
         const applicablePromo = promos
-            .filter(p => {
-                const validFrom = new Date(p.validFrom);
-                const validTo = new Date(p.validTo);
-                const isDateInRange = selectedDate >= startOfDay(validFrom) && selectedDate <= startOfDay(validTo);
-                const isDayApplicable = p.applicableDays.includes(dayOfWeek);
-                const isHourApplicable = p.applicableHours.includes(slotHours);
-                const isPitchApplicable = p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id);
-                return isDateInRange && isDayApplicable && isHourApplicable && isPitchApplicable;
-            })
-            // Find the best discount if multiple apply
-            .sort((a, b) => b.discountPercent - a.discountPercent)[0]; 
+            .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
+            .sort((a, b) => b.discountPercent - a.discountPercent)[0];
 
-        return { status: 'Available', promotion: applicablePromo };
+        const finalPrice = applicablePromo ? pitch.basePrice * (1 - applicablePromo.discountPercent / 100) : pitch.basePrice;
+
+        return { status: 'Available', promotion: applicablePromo, price: finalPrice };
     };
-
 
     const handleApplyToGame = async (match: Match) => {
-        if (!user || !user.id) {
-            toast({ variant: "destructive", title: "You must be logged in to apply." });
-            return;
-        }
+        if (!user.id) return toast({ variant: "destructive", title: "You must be logged in." });
+        if(appliedMatchIds.includes(match.id) || match.playerApplications?.includes(user.id)) return toast({ title: "You have already applied." });
 
-        const matchRef = doc(db, "matches", match.id);
+        const batch = writeBatch(db);
+        batch.update(doc(db, "matches", match.id), { playerApplications: arrayUnion(user.id) });
+
+        if (match.managerRef) {
+            const notification: Omit<Notification, 'id'> = { userId: match.managerRef, message: `${user.name} applied to your game.`, link: `/dashboard/games/${match.id}`, read: false, createdAt: serverTimestamp() as any };
+            batch.set(doc(collection(db, "notifications")), notification);
+        }
         
-        if(match.playerApplications?.includes(user.id) || appliedMatchIds.includes(match.id)) {
-            toast({ title: "You have already applied to this game." });
-            return;
-        }
-        
-        if (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id)) {
-             toast({ title: "You are already confirmed in this game." });
-            return;
-        }
-
-        try {
-            const batch = writeBatch(db);
-
-            // Step 1: Update match with the application
-            batch.update(matchRef, {
-                playerApplications: arrayUnion(user.id)
-            });
-
-            // Step 2: Create a notification for the match manager
-            if (match.managerRef) {
-                const notification: Omit<Notification, 'id'> = {
-                    userId: match.managerRef,
-                    message: `${user.name} has applied to play in your game.`,
-                    link: `/dashboard/games/${match.id}`,
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                };
-                const notificationsCollection = collection(db, "notifications");
-                const newNotificationRef = doc(notificationsCollection);
-                batch.set(newNotificationRef, notification);
-            }
-            
-            await batch.commit();
-
-            // Add to local state for instant UI feedback
-            setAppliedMatchIds(prev => [...prev, match.id]);
-
-            toast({ title: "Application sent!", description: "The team manager has been notified of your interest." });
-        } catch(error) {
-            console.error("Error applying to game:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not send your application." });
-        }
-    }
+        await batch.commit();
+        setAppliedMatchIds(prev => [...prev, match.id]);
+        toast({ title: "Application sent!" });
+    };
 
     const handleBookingSuccess = () => {
         setIsDialogOpen(false);
@@ -244,146 +146,121 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         setSelectedPromo(null);
     }
     
-    const today = startOfDay(new Date());
-
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline">Book a Slot</CardTitle>
-                <CardDescription>Select a day and time to make a reservation or apply to join an open game.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {/* Date Selector */}
-                <div className="flex items-center justify-between p-2 border rounded-md">
-                    <Button variant="ghost" size="icon" onClick={() => handleDateChange(-1)} disabled={isBefore(selectedDate, addDays(today,1))}>
-                        <ChevronLeft />
-                    </Button>
-                    <div className="text-lg font-bold font-headline">
-                        {format(selectedDate, "eeee, dd MMMM yyyy")}
+                 <div className="flex items-center justify-between">
+                    <CardDescription>Select a day and time to make a reservation or apply to join an open game.</CardDescription>
+                    <div className="flex items-center justify-center p-2 rounded-md gap-4">
+                        <Button variant="outline" size="icon" onClick={() => handleDateChange(-1)} disabled={isBefore(week[0], startOfDay(new Date()))}>
+                            <ChevronLeft />
+                        </Button>
+                        <div className="text-lg font-semibold font-headline whitespace-nowrap">
+                            {format(week[0], "dd MMM")} - {format(week[6], "dd MMM yyyy")}
+                        </div>
+                        <Button variant="outline" size="icon" onClick={() => handleDateChange(1)}>
+                            <ChevronRight />
+                        </Button>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDateChange(1)}>
-                        <ChevronRight />
-                    </Button>
                 </div>
-
-                {/* Time Slots */}
+            </CardHeader>
+            <CardContent>
                 {loading ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {timeSlots.map(slot => <Skeleton key={slot} className="h-12"/>)}
+                    <div className="grid grid-cols-7 gap-1">
+                        {Array.from({length: 7}).map((_, i) => (
+                           <div key={i} className="space-y-2">
+                               <Skeleton className="h-10 w-full" />
+                               {timeSlots.map(slot => <Skeleton key={slot} className="h-16 w-full"/>)}
+                           </div>
+                        ))}
                     </div>
                 ) : (
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {timeSlots.map(slot => {
-                            const slotInfo = getStatusForSlot(slot);
-                            const slotDateTime = new Date(selectedDate);
-                            const [hours] = slot.split(':').map(Number);
-                            slotDateTime.setHours(hours, 0, 0, 0);
-                            const isPast = isBefore(slotDateTime, new Date());
-                            
-                            if (isPast) {
-                                return (
-                                     <Button
-                                        key={slot}
-                                        variant="secondary"
-                                        disabled
-                                        className="h-12 flex-col"
-                                    >
-                                        <span className="font-bold text-base">{slot}</span>
-                                        <div className="text-xs">Unavailable</div>
-                                    </Button>
-                                )
-                            }
-                            
-                            if (slotInfo.status === 'Open' && slotInfo.match) {
-                                const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0);
-                                const playerCapacity = getPlayerCapacity(pitch.sport);
-                                const missingPlayers = playerCapacity > 0 ? playerCapacity - totalPlayers : 0;
-                                const hasApplied = appliedMatchIds.includes(slotInfo.match.id) || slotInfo.match.playerApplications?.includes(user.id);
-                                
-                                return (
-                                    <Button
-                                        key={slot}
-                                        variant={hasApplied ? "secondary" : "outline"}
-                                        className="h-12 flex-col"
-                                        onClick={() => handleApplyToGame(slotInfo.match!)}
-                                        disabled={hasApplied}
-                                    >
-                                        <span className="font-bold text-base">{slot}</span>
-                                         {hasApplied ? (
-                                            <div className="text-xs flex items-center gap-1 text-primary">
-                                               <Send className="h-3 w-3" /> Application Sent!
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs flex items-center gap-1">
-                                               <UserPlus className="h-3 w-3" />
-                                                {missingPlayers > 0 ? `${missingPlayers} available` : 'Apply'}
-                                            </div>
-                                        )}
-                                    </Button>
-                                );
-                            }
-                            
-                             if (slotInfo.status === 'Available') {
-                                return (
-                                    <DialogTrigger asChild key={slot}>
-                                        <Button
-                                            variant={slotInfo.promotion ? "default" : "outline"}
-                                            className="h-12 flex-col"
-                                            onClick={() => {
-                                                setSelectedSlot(slot);
-                                                setSelectedPromo(slotInfo.promotion || null);
-                                            }}
-                                        >
-                                            <span className="font-bold text-base">{slot}</span>
-                                            {slotInfo.promotion ? (
-                                                 <div className="text-xs flex items-center gap-1 font-bold">
-                                                    <Tag className="h-3 w-3" /> {slotInfo.promotion.discountPercent}% OFF
-                                                </div>
-                                            ) : (
-                                                <div className="text-xs flex items-center gap-1">
-                                                    <CheckCircle className="h-3 w-3 text-green-500" /> Available
-                                                </div>
-                                            )}
-                                        </Button>
-                                    </DialogTrigger>
-                                )
-                            }
-                            
-                            // For Booked or Pending slots
-                            return (
-                                 <Button
-                                    key={slot}
-                                    variant="secondary"
-                                    disabled
-                                    className="h-12 flex-col"
-                                >
-                                    <span className="font-bold text-base">{slot}</span>
-                                    <div className="text-xs flex items-center gap-1">
-                                        {slotInfo.status === 'Pending' && <><Clock className="h-3 w-3 text-amber-500" /> Pending</>}
-                                        {slotInfo.status === 'Booked' && <><Ban className="h-3 w-3 text-red-500" /> Booked</>}
-                                    </div>
-                                </Button>
-                            )
-                        })}
+                    <div className="grid grid-cols-7 gap-px bg-border overflow-hidden rounded-lg border">
+                        {week.map(day => (
+                            <div key={day.toString()} className="flex flex-col bg-background">
+                                <div className="text-center font-semibold py-2 border-b">
+                                    <p className="text-sm">{format(day, "EEE")}</p>
+                                    <p className="text-lg">{format(day, "d")}</p>
+                                </div>
+                                <div className="flex flex-col gap-px">
+                                    {timeSlots.map(time => {
+                                        const slotInfo = getStatusForSlot(day, time);
+                                        const hasApplied = slotInfo.match && (appliedMatchIds.includes(slotInfo.match.id) || slotInfo.match.playerApplications?.includes(user.id));
+                                        
+                                        let content;
+                                        switch (slotInfo.status) {
+                                            case 'Available':
+                                                content = (
+                                                    <DialogTrigger asChild>
+                                                        <Button
+                                                            variant={slotInfo.promotion ? "default" : "outline"}
+                                                            className="h-16 flex-col w-full rounded-none border-0"
+                                                            onClick={() => {
+                                                                setSelectedSlot({ date: day, time });
+                                                                setSelectedPromo(slotInfo.promotion || null);
+                                                                setIsDialogOpen(true);
+                                                            }}
+                                                        >
+                                                            {slotInfo.promotion && (
+                                                                <div className="flex items-center gap-2 text-xs font-bold text-destructive">
+                                                                     <span className="line-through">{pitch.basePrice.toFixed(2)}€</span>
+                                                                     <Badge variant="destructive" className="gap-1"><Tag className="h-3 w-3"/>{slotInfo.promotion.discountPercent}%</Badge>
+                                                                </div>
+                                                            )}
+                                                            <span className="font-bold text-lg">{slotInfo.price.toFixed(2)}€</span>
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                );
+                                                break;
+                                            case 'Open':
+                                                content = (
+                                                    <Button
+                                                        variant={hasApplied ? "secondary" : "outline"}
+                                                        className="h-16 flex-col w-full rounded-none border-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                        onClick={() => handleApplyToGame(slotInfo.match!)}
+                                                        disabled={hasApplied}
+                                                    >
+                                                        {hasApplied ? <Send className="h-4 w-4 mb-1" /> : <UserPlus className="h-4 w-4 mb-1" />}
+                                                        <span className="font-bold">{hasApplied ? 'Sent' : 'Apply'}</span>
+                                                        <span className="text-xs">{(getPlayerCapacity(pitch.sport) - (slotInfo.match?.teamAPlayers.length || 0))} slots left</span>
+                                                    </Button>
+                                                );
+                                                break;
+                                            case 'Pending':
+                                            case 'Booked':
+                                            case 'Past':
+                                                content = (
+                                                    <Button variant="secondary" disabled className="h-16 flex-col w-full rounded-none border-0">
+                                                        <span className="font-semibold">{time}</span>
+                                                        <div className="text-xs flex items-center gap-1">
+                                                            {slotInfo.status === 'Pending' && <Clock className="h-3 w-3" />}
+                                                            {slotInfo.status === 'Booked' && <Ban className="h-3 w-3" />}
+                                                            {slotInfo.status === 'Past' && <Info className="h-3 w-3" />}
+                                                            <span>{slotInfo.status}</span>
+                                                        </div>
+                                                    </Button>
+                                                );
+                                                break;
+                                        }
+                                        
+                                        return <div key={time} className="w-full">{content}</div>;
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                      <DialogContent className="sm:max-w-[480px]">
                         <DialogHeader>
-                            <DialogTitle className="font-headline flex items-center gap-2">
-                                <BookMarked />
-                                Confirm your Reservation
-                            </DialogTitle>
-                             <DialogDescription>
-                                You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedDate, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot}</strong>.
-                            </DialogDescription>
+                            <DialogTitle className="font-headline flex items-center gap-2"> <BookMarked /> Confirm your Reservation </DialogTitle>
+                             {selectedSlot && <DialogDescription> You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedSlot.date, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot.time}</strong>. </DialogDescription>}
                         </DialogHeader>
                         {user && selectedSlot && (
                             <CreateReservationForm
-                                user={user}
-                                pitch={pitch}
+                                user={user} pitch={pitch}
                                 onReservationSuccess={handleBookingSuccess}
-                                selectedDate={selectedDate}
-                                selectedTime={selectedSlot}
+                                selectedDate={selectedSlot.date} selectedTime={selectedSlot.time}
                                 promotion={selectedPromo}
                             />
                         )}
