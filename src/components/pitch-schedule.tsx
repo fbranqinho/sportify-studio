@@ -3,17 +3,18 @@
 "use client";
 
 import * as React from "react";
-import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
-import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport } from "@/types";
+import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours, getDay } from "date-fns";
+import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 // Generate hourly time slots from 09:00 to 23:00
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
@@ -30,6 +31,7 @@ interface SlotInfo {
   status: 'Available' | 'Pending' | 'Booked' | 'Open';
   match?: Match;
   reservation?: Reservation;
+  promotion?: Promo;
 }
 
 const getPlayerCapacity = (sport: PitchSport): number => {
@@ -51,6 +53,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [selectedDate, setSelectedDate] = React.useState(startOfDay(new Date()));
     const [reservations, setReservations] = React.useState<Reservation[]>([]);
     const [matches, setMatches] = React.useState<Match[]>([]);
+    const [promos, setPromos] = React.useState<Promo[]>([]);
     const [userTeams, setUserTeams] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
@@ -73,33 +76,48 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             collection(db, "teams"),
             where("playerIds", "array-contains", user.id)
         );
+        const qPromos = query(
+            collection(db, "promos"),
+            where("ownerProfileId", "==", pitch.ownerRef)
+        );
 
         const unsubscribeReservations = onSnapshot(qReservations, (snapshot) => {
             setReservations(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation));
-        }, (error) => {
-            console.error("Error fetching reservations: ", error);
-        });
+        }, (error) => console.error("Error fetching reservations: ", error));
         
         const unsubscribeMatches = onSnapshot(qMatches, (snapshot) => {
             setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match));
-             setLoading(false); // Consider loading finished after matches are fetched
-        }, (error) => {
-             console.error("Error fetching matches: ", error);
-             setLoading(false);
-        });
+        }, (error) => console.error("Error fetching matches: ", error));
         
-         const unsubscribeUserTeams = onSnapshot(qPlayerTeams, (snapshot) => {
+        const unsubscribeUserTeams = onSnapshot(qPlayerTeams, (snapshot) => {
             setUserTeams(snapshot.docs.map(doc => doc.id));
-        }, (error) => {
-             console.error("Error fetching user teams: ", error);
+        }, (error) => console.error("Error fetching user teams: ", error));
+
+        const unsubscribePromos = onSnapshot(qPromos, (snapshot) => {
+            setPromos(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo));
+        }, (error) => console.error("Error fetching promotions: ", error));
+
+
+        // A simple way to wait for all initial data loads
+        Promise.all([
+            getDocs(qReservations), 
+            getDocs(qMatches), 
+            getDocs(qPlayerTeams),
+            getDocs(qPromos)
+        ]).then(() => {
+            setLoading(false);
+        }).catch((err) => {
+            console.error("Error during initial data fetch:", err);
+            setLoading(false);
         });
 
         return () => {
             unsubscribeReservations();
             unsubscribeMatches();
             unsubscribeUserTeams();
+            unsubscribePromos();
         };
-    }, [pitch.id, user.id]);
+    }, [pitch.id, pitch.ownerRef, user.id]);
 
     const handleDateChange = (days: number) => {
         setSelectedDate(prev => addDays(prev, days));
@@ -144,11 +162,26 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
 
         if (reservation) {
-            if (reservation.status === 'Confirmed') return { status: 'Booked', reservation };
+            if (reservation.status === 'Confirmed' || reservation.status === 'Scheduled') return { status: 'Booked', reservation };
             if (reservation.status === 'Pending') return { status: 'Pending', reservation };
         }
         
-        return { status: 'Available' };
+        // Priority 3: Check for promotions on available slots
+        const dayOfWeek = getDay(selectedDate);
+        const applicablePromo = promos
+            .filter(p => {
+                const validFrom = new Date(p.validFrom);
+                const validTo = new Date(p.validTo);
+                const isDateInRange = selectedDate >= startOfDay(validFrom) && selectedDate <= startOfDay(validTo);
+                const isDayApplicable = p.applicableDays.includes(dayOfWeek);
+                const isHourApplicable = p.applicableHours.includes(slotHours);
+                const isPitchApplicable = p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id);
+                return isDateInRange && isDayApplicable && isHourApplicable && isPitchApplicable;
+            })
+            // Find the best discount if multiple apply
+            .sort((a, b) => b.discountPercent - a.discountPercent)[0]; 
+
+        return { status: 'Available', promotion: applicablePromo };
     };
 
 
@@ -293,14 +326,20 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                 return (
                                     <DialogTrigger asChild key={slot}>
                                         <Button
-                                            variant="outline"
+                                            variant={slotInfo.promotion ? "default" : "outline"}
                                             className="h-12 flex-col"
                                             onClick={() => setSelectedSlot(slot)}
                                         >
                                             <span className="font-bold text-base">{slot}</span>
-                                            <div className="text-xs flex items-center gap-1">
-                                                <CheckCircle className="h-3 w-3 text-green-500" /> Available
-                                            </div>
+                                            {slotInfo.promotion ? (
+                                                 <div className="text-xs flex items-center gap-1 font-bold">
+                                                    <Tag className="h-3 w-3" /> {slotInfo.promotion.discountPercent}% OFF
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs flex items-center gap-1">
+                                                    <CheckCircle className="h-3 w-3 text-green-500" /> Available
+                                                </div>
+                                            )}
                                         </Button>
                                     </DialogTrigger>
                                 )
@@ -349,3 +388,5 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
+    
