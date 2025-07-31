@@ -137,13 +137,19 @@ export default function MyGamesPage() {
                         const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
                         setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
-                        const ownerIdsToFetch = new Set<string>();
+                        const ownerRefsToFetch = new Set<string>();
                         pitchesMap.forEach(pitch => {
-                            if (pitch.ownerRef) ownerIdsToFetch.add(pitch.ownerRef);
+                            if (pitch.ownerRef) ownerRefsToFetch.add(pitch.ownerRef);
                         })
 
-                        if(ownerIdsToFetch.size > 0){
-                            const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerIdsToFetch));
+                        if(ownerRefsToFetch.size > 0){
+                            const q = query(collection(db, "ownerProfiles"), where("userRef", "in", Array.from(ownerRefsToFetch)));
+                            const ownerSnapshot = await getDocs(q);
+                            const ownersMap = new Map<string, OwnerProfile>();
+                            ownerSnapshot.forEach(doc => {
+                                const ownerData = { id: doc.id, ...doc.data() } as OwnerProfile;
+                                ownersMap.set(ownerData.userRef, ownerData);
+                            });
                              setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
                         }
                     }
@@ -204,7 +210,21 @@ export default function MyGamesPage() {
                 const pitch = pitches.get(match.pitchRef);
                 if(pitch) {
                     const confirmedPlayers = (match.teamAPlayers?.length || 0) + 1; // +1 for the current accepting player
-                    if (confirmedPlayers >= pitch.capacity) {
+                     const getPlayerCapacity = (sport: Pitch["sport"]) => {
+                        switch (sport) {
+                            case 'fut5':
+                            case 'futsal':
+                                return 10;
+                            case 'fut7':
+                                return 14;
+                            case 'fut11':
+                                return 22;
+                            default:
+                                return 0;
+                        }
+                    };
+                    const playerCapacity = getPlayerCapacity(pitch.sport);
+                    if (confirmedPlayers >= playerCapacity && playerCapacity > 0) {
                         await updateDoc(matchRef, { status: "Scheduled" });
                     }
                 }
@@ -256,8 +276,23 @@ export default function MyGamesPage() {
     const isManager = user?.id === teamA?.managerId;
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-    const capacity = pitch?.capacity || 0;
-    const missingPlayers = capacity > 0 ? capacity - confirmedPlayers : 0;
+    
+    const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
+        if (!sport) return 0;
+        switch (sport) {
+            case 'fut5':
+            case 'futsal':
+                return 10;
+            case 'fut7':
+                return 14;
+            case 'fut11':
+                return 22;
+            default:
+                return 0; // Should not happen
+        }
+    };
+    const playerCapacity = getPlayerCapacity(pitch?.sport);
+    const missingPlayers = playerCapacity > 0 ? playerCapacity - confirmedPlayers : 0;
     
     const getMatchTitle = () => {
       if (teamA && !teamB) {
@@ -297,10 +332,10 @@ export default function MyGamesPage() {
                     <Shield className="h-4 w-4 text-primary" />
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
                  </div>
-                 {capacity > 0 && (
+                 {playerCapacity > 0 && (
                     <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
-                        <span>Players: <span className="font-semibold">{confirmedPlayers} / {capacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
+                        <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
                     </div>
                  )}
             </CardContent>
