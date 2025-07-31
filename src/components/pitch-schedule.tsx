@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
-import type { Pitch, Reservation, User, Match, Notification } from "@/types";
+import type { Pitch, Reservation, User, Match, Notification, Team } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [selectedDate, setSelectedDate] = React.useState(startOfDay(new Date()));
     const [reservations, setReservations] = React.useState<Reservation[]>([]);
     const [matches, setMatches] = React.useState<Match[]>([]);
+    const [userTeams, setUserTeams] = React.useState<string[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
@@ -54,6 +55,10 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             collection(db, "matches"),
             where("pitchRef", "==", pitch.id)
         );
+        const qPlayerTeams = query(
+            collection(db, "teams"),
+            where("playerIds", "array-contains", user.id)
+        );
 
         const unsubscribeReservations = onSnapshot(qReservations, (snapshot) => {
             setReservations(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation));
@@ -68,12 +73,19 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
              console.error("Error fetching matches: ", error);
              setLoading(false);
         });
+        
+         const unsubscribeUserTeams = onSnapshot(qPlayerTeams, (snapshot) => {
+            setUserTeams(snapshot.docs.map(doc => doc.id));
+        }, (error) => {
+             console.error("Error fetching user teams: ", error);
+        });
 
         return () => {
             unsubscribeReservations();
             unsubscribeMatches();
+            unsubscribeUserTeams();
         };
-    }, [pitch.id]);
+    }, [pitch.id, user.id]);
 
     const handleDateChange = (days: number) => {
         setSelectedDate(prev => addDays(prev, days));
@@ -97,9 +109,16 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
              if (isPlayerInGame) {
                  return { status: 'Booked', match }; // User is already in, show as booked
              }
+             
+             // Check if the match is for one of the user's teams
+             const isUserTeamMatch = (match.teamARef && userTeams.includes(match.teamARef)) || (match.teamBRef && userTeams.includes(match.teamBRef));
+             if (isUserTeamMatch) {
+                 return { status: 'Booked', match };
+             }
+
             if (match.allowExternalPlayers) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (totalPlayers < (pitch.capacity || 10)) { 
+                if (totalPlayers < pitch.capacity) { 
                     return { status: 'Open', match };
                 }
             }
@@ -228,7 +247,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             
                             if (slotInfo.status === 'Open' && slotInfo.match) {
                                 const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0);
-                                const missingPlayers = (pitch.capacity || 10) - totalPlayers;
+                                const missingPlayers = pitch.capacity - totalPlayers;
                                 const hasApplied = appliedMatchIds.includes(slotInfo.match.id) || slotInfo.match.playerApplications?.includes(user.id);
                                 
                                 return (
@@ -314,4 +333,3 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
-
