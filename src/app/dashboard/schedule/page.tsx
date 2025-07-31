@@ -122,22 +122,39 @@ export default function SchedulePage() {
 
             const batch = writeBatch(db);
             batch.update(reservationRef, { status: "Confirmed" });
+            
             const notificationsCollection = collection(db, 'notifications');
-            const newNotificationRef = doc(notificationsCollection);
-            const notification: Omit<Notification, 'id'> = {
+            
+            // Notification for the Manager
+            const managerNotificationRef = doc(notificationsCollection);
+            const managerNotification: Omit<Notification, 'id'> = {
                 userId: teamData.managerId,
                 message: `Your booking for ${reservation.pitchName} was confirmed. A practice match has been created.`,
                 link: `/dashboard/games/${matchDoc.id}`,
                 read: false,
                 createdAt: serverTimestamp() as any,
             };
-            batch.set(newNotificationRef, notification);
+            batch.set(managerNotificationRef, managerNotification);
+
+            // Notifications for each Player on the team
+            playerIds.forEach(playerId => {
+                const playerNotificationRef = doc(notificationsCollection);
+                const playerNotification: Omit<Notification, 'id'> = {
+                    userId: playerId,
+                    message: `A new game for your team, ${teamData.name}, has been scheduled!`,
+                    link: '/dashboard/my-games',
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                batch.set(playerNotificationRef, playerNotification);
+            });
+
 
             await batch.commit(); 
             
             toast({
             title: "Reservation Confirmed!",
-            description: `A practice match has been scheduled for ${teamData.name}.`,
+            description: `A practice match has been scheduled for ${teamData.name}. Manager and players notified.`,
             });
         
         // --- Player Booking (Pick-up Game) ---
