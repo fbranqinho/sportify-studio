@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -578,7 +577,8 @@ export default function GameDetailsPage() {
     };
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-    const missingPlayers = (pitch?.capacity || 10) - confirmedPlayers;
+    const missingPlayers = (pitch?.capacity || 0) - confirmedPlayers;
+
 
     const getMatchStatus = () => {
         if (match.status === 'PendingOpponent') {
@@ -667,3 +667,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
