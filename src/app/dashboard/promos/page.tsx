@@ -46,13 +46,11 @@ export default function PromosPage() {
           const profile = { id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile;
           setOwnerProfile(profile);
 
-          if (profile.pitches && profile.pitches.length > 0) {
-            const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", profile.id));
-            const pitchesSnapshot = await getDocs(pitchesQuery);
-            const pitchesData = pitchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
-            setOwnerPitches(pitchesData);
-          }
-
+          // Correctly fetch pitches associated with this owner
+          const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", profile.id));
+          const pitchesSnapshot = await getDocs(pitchesQuery);
+          const pitchesData = pitchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
+          setOwnerPitches(pitchesData);
         }
       } catch (error) {
         console.error("Error fetching owner profile and pitches:", error);
