@@ -10,7 +10,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
-          <Icons.logo className="h-8 w-8" />
+          <Icons.logo className="h-10 w-10" />
           <span>Sportify</span>
         </Link>
         <nav>
