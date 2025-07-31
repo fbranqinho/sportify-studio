@@ -30,7 +30,6 @@ const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Field name must be at least 2 characters." }),
-  city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
   basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
@@ -48,7 +47,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: pitch.name,
-      city: pitch.city,
       sport: pitch.sport,
       capacity: pitch.capacity,
       basePrice: pitch.basePrice || 50,
@@ -60,7 +58,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
       const pitchRef = doc(db, "pitches", pitch.id);
       await updateDoc(pitchRef, {
         name: values.name,
-        city: values.city,
         sport: values.sport,
         capacity: values.capacity,
         basePrice: values.basePrice,
@@ -85,8 +82,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+        <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
@@ -99,20 +95,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
               </FormItem>
             )}
           />
-           <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>City</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lisbon" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <FormField
             control={form.control}

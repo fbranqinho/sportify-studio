@@ -30,7 +30,6 @@ const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Field name must be at least 2 characters." }),
-  city: z.string().min(2, { message: "City is required." }),
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
   basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
@@ -48,7 +47,6 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      city: "",
       sport: "fut7",
       capacity: 150,
       basePrice: 50,
@@ -65,11 +63,16 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
       return;
     }
 
+    // A simple heuristic to extract city from the address string.
+    const addressParts = ownerProfile.companyAddress.split(',').map(part => part.trim());
+    const city = addressParts.length > 1 ? addressParts[addressParts.length - 1] : "Unknown City";
+
+
     try {
       await addDoc(collection(db, "pitches"), {
         name: values.name,
         address: ownerProfile.companyAddress, // Use owner's address
-        city: values.city,
+        city: city,
         sport: values.sport,
         capacity: values.capacity,
         basePrice: values.basePrice,
@@ -100,8 +103,7 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+        <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
@@ -114,20 +116,6 @@ export function CreatePitchForm({ ownerProfile, onPitchCreated }: CreatePitchFor
               </FormItem>
             )}
           />
-           <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>City</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lisbon" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <FormField
             control={form.control}

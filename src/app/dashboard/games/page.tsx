@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -87,7 +88,7 @@ export default function GamesPage() {
 
   const filteredPitches = pitches.filter(pitch =>
     pitch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (pitch.city && pitch.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    pitch.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
     pitch.sport.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
