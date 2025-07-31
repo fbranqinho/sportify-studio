@@ -13,11 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -162,6 +163,93 @@ function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponent
                  ) : searchQuery && !isSearching ? (
                     <div className="mt-2 text-sm text-muted-foreground text-center py-4">No teams found.</div>
                 ) : null}
+            </CardContent>
+        </Card>
+    );
+}
+
+function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
+    const { toast } = useToast();
+    const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
+    const [scoreA, setScoreA] = React.useState(match.scoreA);
+    const [scoreB, setScoreB] = React.useState(match.scoreB);
+
+    const handleStartGame = async () => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { status: "InProgress" });
+            onMatchUpdate({ status: "InProgress" });
+            toast({ title: "Game Started!", description: "The game is now live." });
+        } catch (error) {
+            console.error("Error starting game:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not start the game." });
+        }
+    };
+
+    const handleEndGame = async () => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { 
+                status: "Finished",
+                scoreA: scoreA,
+                scoreB: scoreB,
+             });
+            onMatchUpdate({ status: "Finished", scoreA, scoreB });
+            toast({ title: "Game Finished", description: "The final score has been recorded." });
+            setIsEndGameOpen(false);
+        } catch (error) {
+            console.error("Error ending game:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not end the game." });
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Game Control</CardTitle>
+                <CardDescription>Manage the game flow from start to finish.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center gap-4">
+                {match.status === 'Scheduled' && (
+                    <Button onClick={handleStartGame} size="lg">
+                        <Play className="mr-2" /> Start Game
+                    </Button>
+                )}
+                {match.status === 'InProgress' && (
+                     <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="destructive" size="lg">
+                                <Flag className="mr-2" /> End Game
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Set Final Score</DialogTitle>
+                                <DialogDescription>Enter the final score to finish the game.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-2 gap-4 items-center">
+                                <div className="space-y-2 text-center">
+                                    <Label htmlFor="scoreA" className="text-lg font-bold">{match.teamARef ? "Team A" : "Home"}</Label>
+                                    <Input id="scoreA" type="number" value={scoreA} onChange={(e) => setScoreA(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
+                                </div>
+                                <div className="space-y-2 text-center">
+                                     <Label htmlFor="scoreB" className="text-lg font-bold">{match.teamBRef ? "Team B" : "Away"}</Label>
+                                    <Input id="scoreB" type="number" value={scoreB} onChange={(e) => setScoreB(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsEndGameOpen(false)}>Cancel</Button>
+                                <Button onClick={handleEndGame}><Trophy className="mr-2"/>Confirm & Finish</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
+                 {match.status === 'Finished' && (
+                    <div className="text-center">
+                        <p className="text-muted-foreground">Final Score</p>
+                        <p className="text-4xl font-bold font-headline">{match.scoreA} - {match.scoreB}</p>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -572,11 +660,17 @@ export default function GameDetailsPage() {
         </div>
     }
 
-    if (!match || !teamA) {
-        return <div>Match not found or team data is missing.</div>;
+    if (!match) {
+        return <div>Match not found.</div>;
     }
+    
+    // Team A might not exist for pickup games, but manager actions depend on it.
+    // So we check for teamA for manager-specific actions.
+    const isManager = user?.id === teamA?.managerId;
+
 
     const getMatchTitle = () => {
+        if (match.status === 'Finished') return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;
         if (teamA && !teamB && !match.invitedTeamId && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         if (teamA && match.invitedTeamId && !teamB) {
@@ -590,16 +684,24 @@ export default function GameDetailsPage() {
     const missingPlayers = (pitch?.capacity || 0) - confirmedPlayers;
 
 
-    const getMatchStatus = () => {
-        if (match.status === 'PendingOpponent') {
-            if (match.invitedTeamId) return 'Awaiting Opponent Confirmation';
-            return `Waiting players... ${missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'}`;
+    const getStatusInfo = () => {
+        switch (match.status) {
+            case 'PendingOpponent':
+                if (match.invitedTeamId) return { text: 'Awaiting Opponent', icon: Clock, color: 'text-amber-600' };
+                return { text: `Waiting players... ${missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'}`, icon: Users, color: 'text-amber-600' };
+            case 'Scheduled':
+                 return { text: 'Scheduled', icon: CheckCircle, color: 'text-blue-600' };
+            case 'InProgress':
+                 return { text: 'In Progress', icon: Play, color: 'text-green-600 animate-pulse' };
+            case 'Finished':
+                 return { text: 'Finished', icon: Trophy, color: 'text-primary' };
+            default:
+                return { text: match.status, icon: Shield, color: 'text-muted-foreground' };
         }
-        return match.status;
     };
-    
-    const isManager = user?.id === teamA?.managerId;
 
+    const statusInfo = getStatusInfo();
+    
 
     return (
         <div className="space-y-6">
@@ -622,8 +724,8 @@ export default function GameDetailsPage() {
                     <CardContent>
                        <div className="text-sm space-y-2">
                             <div className="flex items-center gap-2">
-                                <Shield className="h-4 w-4 text-muted-foreground"/>
-                                <span>Status: <span className="font-semibold">{getMatchStatus()}</span></span>
+                                <statusInfo.icon className={cn("h-4 w-4", statusInfo.color)}/>
+                                <span>Status: <span className="font-semibold">{statusInfo.text}</span></span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground"/>
@@ -665,12 +767,14 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-             <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />
+            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} />}
+            
+            <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />
             
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
 
-            {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
-
+            {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
+            
             {/* Invite Opponent section, shown only if there's no opponent and no invitation sent */}
             {isManager && match.teamARef && !match.teamBRef && !match.invitedTeamId && (
                 <InviteOpponent match={match} onOpponentInvited={() => fetchGameDetails()} />
@@ -678,7 +782,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    
-
-    
