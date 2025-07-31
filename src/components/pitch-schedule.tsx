@@ -9,7 +9,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
@@ -40,6 +40,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const [appliedMatchIds, setAppliedMatchIds] = React.useState<string[]>([]);
     const { toast } = useToast();
 
     React.useEffect(() => {
@@ -98,7 +99,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
              }
             if (match.allowExternalPlayers) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (totalPlayers < 10) { // Assuming Fut5 capacity
+                if (totalPlayers < (pitch.capacity || 10)) { 
                     return { status: 'Open', match };
                 }
             }
@@ -125,7 +126,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
         const matchRef = doc(db, "matches", match.id);
         
-        if(match.playerApplications?.includes(user.id)) {
+        if(match.playerApplications?.includes(user.id) || appliedMatchIds.includes(match.id)) {
             toast({ title: "You have already applied to this game." });
             return;
         }
@@ -158,6 +159,9 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             }
             
             await batch.commit();
+
+            // Add to local state for instant UI feedback
+            setAppliedMatchIds(prev => [...prev, match.id]);
 
             toast({ title: "Application sent!", description: "The team manager has been notified of your interest." });
         } catch(error) {
@@ -224,19 +228,28 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             
                             if (slotInfo.status === 'Open' && slotInfo.match) {
                                 const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0);
-                                const missingPlayers = 10 - totalPlayers;
+                                const missingPlayers = (pitch.capacity || 10) - totalPlayers;
+                                const hasApplied = appliedMatchIds.includes(slotInfo.match.id) || slotInfo.match.playerApplications?.includes(user.id);
+                                
                                 return (
                                     <Button
                                         key={slot}
-                                        variant="outline"
+                                        variant={hasApplied ? "secondary" : "outline"}
                                         className="h-12 flex-col"
                                         onClick={() => handleApplyToGame(slotInfo.match!)}
+                                        disabled={hasApplied}
                                     >
                                         <span className="font-bold text-base">{slot}</span>
-                                        <div className="text-xs flex items-center gap-1">
-                                           <UserPlus className="h-3 w-3" />
-                                            {missingPlayers > 0 ? `${missingPlayers} missing` : 'Apply'}
-                                        </div>
+                                         {hasApplied ? (
+                                            <div className="text-xs flex items-center gap-1 text-primary">
+                                               <Send className="h-3 w-3" /> Application Sent!
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs flex items-center gap-1">
+                                               <UserPlus className="h-3 w-3" />
+                                                {missingPlayers > 0 ? `${missingPlayers} missing` : 'Apply'}
+                                            </div>
+                                        )}
                                     </Button>
                                 );
                             }
@@ -301,3 +314,4 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
