@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Match, Team, MatchInvitation, Pitch } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -187,14 +187,16 @@ export default function MyGamesPage() {
 
         if (accepted) {
             // Check if game is now full
-            const matchDoc = await getDocs(query(collection(db, "matches"), where("__name__", "==", invitation.matchId)));
-            const match = {id: matchDoc.docs[0].id, ...matchDoc.docs[0].data()} as Match;
-            const pitch = pitches.get(match.pitchRef);
-            if(pitch) {
-                 const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                 if (confirmedPlayers >= pitch.capacity) {
-                     await updateDoc(matchRef, { status: "Scheduled" });
-                 }
+            const matchDoc = await getDoc(doc(db, "matches", invitation.matchId));
+            if (matchDoc.exists()) {
+                const match = {id: matchDoc.id, ...matchDoc.data()} as Match;
+                const pitch = pitches.get(match.pitchRef);
+                if(pitch) {
+                    const confirmedPlayers = (match.teamAPlayers?.length || 0) + 1; // +1 for the current accepting player
+                    if (confirmedPlayers >= pitch.capacity) {
+                        await updateDoc(matchRef, { status: "Scheduled" });
+                    }
+                }
             }
         }
 
@@ -242,7 +244,7 @@ export default function MyGamesPage() {
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     const capacity = pitch?.capacity || 0;
-    const missingPlayers = capacity - confirmedPlayers;
+    const missingPlayers = capacity > 0 ? capacity - confirmedPlayers : 0;
     
     const getMatchTitle = () => {
       if (teamA && !teamB) {
@@ -276,10 +278,12 @@ export default function MyGamesPage() {
                     <Shield className="h-4 w-4 text-primary" />
                     <span>Status: <span className="font-semibold">{match.status}</span></span>
                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span>Players: <span className="font-semibold">{confirmedPlayers} / {capacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
-                 </div>
+                 {capacity > 0 && (
+                    <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-primary" />
+                        <span>Players: <span className="font-semibold">{confirmedPlayers} / {capacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
+                    </div>
+                 )}
             </CardContent>
             {(!isFinished && isManager) && (
             <CardFooter>
