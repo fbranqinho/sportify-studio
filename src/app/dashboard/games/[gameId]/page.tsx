@@ -415,11 +415,21 @@ function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team |
             const confirmedPlayers: ConfirmedPlayer[] = allPlayerIds.map(id => {
                 const user = usersMap.get(id);
                 let teamName = "External Player";
-                if (match.teamAPlayers?.includes(id)) {
-                    teamName = teamA?.name || "Team A";
-                } else if (match.teamBPlayers?.includes(id)) {
-                    teamName = teamB?.name || "Team B";
+                
+                // Check if player is officially in team A
+                if (teamA && teamA.playerIds.includes(id) && match.teamAPlayers?.includes(id)) {
+                    teamName = teamA.name;
+                // Check if player is officially in team B
+                } else if (teamB && teamB.playerIds.includes(id) && match.teamBPlayers?.includes(id)) {
+                    teamName = teamB.name;
+                // Player might be in team A's player list for the match but not an official member (i.e., external)
+                } else if (teamA && match.teamAPlayers?.includes(id)) {
+                    teamName = "External Player";
+                // Player might be in team B's player list for the match but not an official member
+                } else if (teamB && match.teamBPlayers?.includes(id)) {
+                    teamName = "External Player";
                 }
+
                 return {
                     id: id,
                     name: user?.name || "Unknown Player",
@@ -457,7 +467,7 @@ function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team |
                                 <TableRow key={player.id}>
                                     <TableCell className="font-medium">{player.name}</TableCell>
                                     <TableCell>
-                                        <Badge variant="secondary">{player.teamName}</Badge>
+                                        <Badge variant={player.teamName === 'External Player' ? 'secondary' : 'default'}>{player.teamName}</Badge>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -655,8 +665,9 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
+             <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />
+            
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
-            {isManager && <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />}
 
             {isManager && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
 
@@ -667,5 +678,7 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
 
     
