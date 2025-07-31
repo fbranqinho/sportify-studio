@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours } from "date-fns";
-import type { Pitch, Reservation, User, Match, Notification, Team } from "@/types";
+import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,20 @@ interface SlotInfo {
   match?: Match;
   reservation?: Reservation;
 }
+
+const getPlayerCapacity = (sport: PitchSport): number => {
+    switch (sport) {
+        case 'fut5':
+        case 'futsal':
+            return 10;
+        case 'fut7':
+            return 14;
+        case 'fut11':
+            return 22;
+        default:
+            return 0; // Should not happen
+    }
+};
 
 
 export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
@@ -118,7 +132,8 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
             if (match.allowExternalPlayers) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (totalPlayers < pitch.capacity) { 
+                const playerCapacity = getPlayerCapacity(pitch.sport);
+                if (playerCapacity > 0 && totalPlayers < playerCapacity) { 
                     return { status: 'Open', match };
                 }
             }
@@ -247,7 +262,8 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             
                             if (slotInfo.status === 'Open' && slotInfo.match) {
                                 const totalPlayers = (slotInfo.match.teamAPlayers?.length || 0) + (slotInfo.match.teamBPlayers?.length || 0);
-                                const missingPlayers = pitch.capacity - totalPlayers;
+                                const playerCapacity = getPlayerCapacity(pitch.sport);
+                                const missingPlayers = playerCapacity > 0 ? playerCapacity - totalPlayers : 0;
                                 const hasApplied = appliedMatchIds.includes(slotInfo.match.id) || slotInfo.match.playerApplications?.includes(user.id);
                                 
                                 return (
