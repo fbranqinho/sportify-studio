@@ -69,7 +69,7 @@ export default function CompleteProfilePage() {
      <div className="flex items-center justify-center min-h-screen bg-background">
        <div className="absolute top-4 left-4">
           <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
-            <Icons.logo className="h-12 w-12" />
+            <Icons.logo className="h-14 w-14" />
             <span>Sportify</span>
           </Link>
         </div>
