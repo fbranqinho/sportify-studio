@@ -31,6 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 
 // Component to handle inviting an opponent
