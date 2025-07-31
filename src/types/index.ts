@@ -280,12 +280,19 @@ export interface Payment {
 }
 
 export interface Promo {
-    id: string;
-    name: string;
-    discountPercent: number;
-    validFrom: string; // ISO 8601 string
-    validTo: string; // ISO 8601 string
-    validHours: number[]; // e.g., [8, 9, 10] for 8h-10h
+  id: string;
+  ownerProfileId: string;
+  name: string;
+  discountPercent: number;
+  validFrom: string; // ISO 8601 Date
+  validTo: string; // ISO 8601 Date
+  // Integer representation of day of week, 0 (Sunday) to 6 (Saturday)
+  applicableDays: number[];
+  // Hour of the day, 0-23
+  applicableHours: number[];
+  // Which pitches this promotion applies to. If empty, applies to all.
+  pitchIds: string[];
+  createdAt: FieldValue;
 }
 
 
