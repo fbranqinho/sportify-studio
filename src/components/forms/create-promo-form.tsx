@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { OwnerProfile, Pitch } from "@/types";
+import type { OwnerProfile, Pitch, Notification, User } from "@/types";
 import { DateRange } from "react-day-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
@@ -77,7 +77,11 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
     }
 
     try {
-      await addDoc(collection(db, "promos"), {
+      const batch = writeBatch(db);
+
+      // Step 1: Create the new promotion document
+      const newPromoRef = doc(collection(db, "promos"));
+      batch.set(newPromoRef, {
         ownerProfileId: ownerProfile.id,
         name: values.name,
         discountPercent: values.discountPercent,
@@ -88,9 +92,35 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
         pitchIds: selectedPitches.map(p => p.id),
         createdAt: serverTimestamp(),
       });
-      toast({ title: "Promotion Created!", description: "Your new promotion is now active." });
+      
+      // Step 2: Fetch all managers to notify them
+      const managersQuery = query(collection(db, "users"), where("role", "==", "MANAGER"));
+      const managersSnapshot = await getDocs(managersQuery);
+      
+      // Step 3: Create a notification for each manager
+      const ownerName = ownerProfile.companyName || "A pitch owner";
+      const notificationMessage = `New promotion from ${ownerName}: ${values.name} (${values.discountPercent}% OFF)!`;
+      
+      managersSnapshot.forEach(managerDoc => {
+          const manager = managerDoc.data() as User;
+          const newNotificationRef = doc(collection(db, "notifications"));
+          const notification: Omit<Notification, 'id'> = {
+              userId: manager.id,
+              message: notificationMessage,
+              link: '/dashboard/games',
+              read: false,
+              createdAt: serverTimestamp() as any,
+          };
+          batch.set(newNotificationRef, notification);
+      });
+
+      // Step 4: Commit the batch
+      await batch.commit();
+
+      toast({ title: "Promotion Created!", description: "Managers have been notified of your new promotion." });
       form.reset();
       onPromoCreated();
+
     } catch (error: any) {
       toast({ variant: "destructive", title: "Something went wrong", description: error.message });
     }
@@ -267,3 +297,5 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
     </Form>
   );
 }
+
+    
