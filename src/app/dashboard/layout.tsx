@@ -201,7 +201,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <Sidebar variant="sidebar" collapsible="icon">
           <SidebarHeader className="items-center justify-center gap-2 data-[collapsible=icon]:-ml-1 data-[collapsible=icon]:justify-center">
             <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
-              <Icons.logo className="size-10" />
+              <Icons.logo className="size-12" />
               <span className="duration-300 group-data-[collapsible=icon]:hidden">
                 Sportify
               </span>
