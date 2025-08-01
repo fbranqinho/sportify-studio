@@ -175,6 +175,8 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
     const [scoreB, setScoreB] = React.useState(match.scoreB);
+    const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
+
 
     const handleStartGame = async () => {
         const matchRef = doc(db, "matches", match.id);
@@ -221,7 +223,7 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                     teamAResult = "D";
                     teamBResult = "D";
                     batch.update(teamARef, { draws: increment(1) });
-                    batch.update(teamBRef, { draws: increment(1) });
+                    batch.update(teamBRef, { wins: increment(1) });
                 }
 
                 // Update recent form for both teams
@@ -266,11 +268,11 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                             </DialogHeader>
                             <div className="grid grid-cols-2 gap-4 items-center">
                                 <div className="space-y-2 text-center">
-                                    <Label htmlFor="scoreA" className="text-lg font-bold">{match.teamBRef ? "Team A" : "Vests A"}</Label>
+                                    <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (match.teamBRef ? "Team A" : "Vests A")}</Label>
                                     <Input id="scoreA" type="number" value={scoreA} onChange={(e) => setScoreA(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                                 <div className="space-y-2 text-center">
-                                     <Label htmlFor="scoreB" className="text-lg font-bold">{match.teamBRef ? "Team B" : "Vests B"}</Label>
+                                     <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (match.teamBRef ? "Team B" : "Vests B")}</Label>
                                     <Input id="scoreB" type="number" value={scoreB} onChange={(e) => setScoreB(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                             </div>
@@ -513,19 +515,33 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
     )
 }
 
-interface ConfirmedPlayer {
-    id: string;
-    name: string;
+interface RosterPlayer extends User {
+    team: 'A' | 'B' | null;
     teamName: string;
 }
 
-function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team | null; teamB: Team | null }) {
-    const [players, setPlayers] = React.useState<ConfirmedPlayer[]>([]);
+function PlayerRoster({ 
+    match, 
+    teamA, 
+    teamB, 
+    isManager, 
+    isPracticeMatch, 
+    onUpdate 
+}: { 
+    match: Match; 
+    teamA: Team | null; 
+    teamB: Team | null;
+    isManager: boolean;
+    isPracticeMatch: boolean;
+    onUpdate: (data: Partial<Match>) => void;
+}) {
+    const [players, setPlayers] = React.useState<RosterPlayer[]>([]);
     const [loading, setLoading] = React.useState(true);
+    const { toast } = useToast();
 
     React.useEffect(() => {
         const fetchPlayers = async () => {
-            const allPlayerIds = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
+            const allPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
             if (allPlayerIds.length === 0) {
                 setPlayers([]);
                 setLoading(false);
@@ -537,132 +553,59 @@ function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team |
             const usersSnapshot = await getDocs(usersQuery);
             const usersMap = new Map(usersSnapshot.docs.map(doc => [doc.id, doc.data() as User]));
             
-            const confirmedPlayers: ConfirmedPlayer[] = allPlayerIds.map(id => {
+            const rosterPlayers: RosterPlayer[] = allPlayerIds.map(id => {
                 const user = usersMap.get(id);
+                let team: 'A' | 'B' | null = null;
                 let teamName = "External Player";
+
+                if (match.teamAPlayers?.includes(id)) team = 'A';
+                if (match.teamBPlayers?.includes(id)) team = 'B';
                 
-                // Check if player is officially in team A
-                if (teamA && teamA.playerIds.includes(id) && match.teamAPlayers?.includes(id)) {
-                    teamName = teamA.name;
-                // Check if player is officially in team B
-                } else if (teamB && teamB.playerIds.includes(id) && match.teamBPlayers?.includes(id)) {
-                    teamName = teamB.name;
-                // Player might be in team A's player list for the match but not an official member (i.e., external)
-                } else if (teamA && match.teamAPlayers?.includes(id)) {
-                    teamName = "External Player";
-                // Player might be in team B's player list for the match but not an official member
-                } else if (teamB && match.teamBPlayers?.includes(id)) {
-                    teamName = "External Player";
-                }
+                if (teamA && teamA.playerIds.includes(id) && match.teamAPlayers?.includes(id)) teamName = teamA.name;
+                else if (teamB && teamB.playerIds.includes(id) && match.teamBPlayers?.includes(id)) teamName = teamB.name;
+                else if (teamA && match.teamAPlayers?.includes(id)) teamName = isPracticeMatch ? "Vests A" : "External Player";
+                else if (teamB && match.teamBPlayers?.includes(id)) teamName = isPracticeMatch ? "Vests B" : "External Player";
+                
 
                 return {
+                    ...(user as User),
                     id: id,
                     name: user?.name || "Unknown Player",
-                    teamName: teamName,
+                    team,
+                    teamName
                 };
-            });
-            setPlayers(confirmedPlayers);
+            }).filter(p => p.name !== "Unknown Player");
+
+            setPlayers(rosterPlayers);
             setLoading(false);
         };
 
         fetchPlayers();
-    }, [match, teamA, teamB]);
-    
-    if ((match.teamAPlayers?.length || 0) === 0 && (match.teamBPlayers?.length || 0) === 0) {
-        return null;
-    }
+    }, [match, teamA, teamB, isPracticeMatch]);
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">Confirmed Players</CardTitle>
-                <CardDescription>Players who have confirmed their attendance for this game.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {loading ? <Skeleton className="h-20 w-full" /> : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Player</TableHead>
-                                <TableHead>Team</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {players.map(player => (
-                                <TableRow key={player.id}>
-                                    <TableCell className="font-medium">{player.name}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={player.teamName === 'External Player' ? 'secondary' : 'default'}>{player.teamName}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-function SplitTeams({ match, onUpdate }: { match: Match; onUpdate: (data: Partial<Match>) => void }) {
-    const [allPlayers, setAllPlayers] = React.useState<(User & { team: 'A' | 'B' | null })[]>([]);
-    const [loading, setLoading] = React.useState(true);
-    const { toast } = useToast();
-
-    React.useEffect(() => {
-        const fetchPlayers = async () => {
-            const allPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
-            if (allPlayerIds.length === 0) {
-                setAllPlayers([]);
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-            const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
-            const usersSnapshot = await getDocs(usersQuery);
-            const playersWithTeams = usersSnapshot.docs.map(doc => {
-                const user = { id: doc.id, ...doc.data() } as User;
-                let team: 'A' | 'B' | null = null;
-                if (match.teamAPlayers?.includes(user.id)) team = 'A';
-                if (match.teamBPlayers?.includes(user.id)) team = 'B';
-                return { ...user, team };
-            });
-
-            setAllPlayers(playersWithTeams);
-            setLoading(false);
-        };
-
-        fetchPlayers();
-    }, [match]);
-
-    const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
-        setAllPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
+     const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
     };
     
     const handleShuffle = () => {
-        const shuffled = [...allPlayers].sort(() => 0.5 - Math.random());
+        const shuffled = [...players].sort(() => 0.5 - Math.random());
         const half = Math.ceil(shuffled.length / 2);
-        const teamA = shuffled.slice(0, half);
-        const teamB = shuffled.slice(half);
+        const teamAPlayers = shuffled.slice(0, half);
+        const teamBPlayers = shuffled.slice(half);
 
-        const newAssignments = allPlayers.map(player => {
-            if (teamA.some(p => p.id === player.id)) {
-                return { ...player, team: 'A' as const };
-            }
-            if (teamB.some(p => p.id === player.id)) {
-                return { ...player, team: 'B' as const };
-            }
+        const newAssignments = players.map(player => {
+            if (teamAPlayers.some(p => p.id === player.id)) return { ...player, team: 'A' as const };
+            if (teamBPlayers.some(p => p.id === player.id)) return { ...player, team: 'B' as const };
             return player;
         });
 
-        setAllPlayers(newAssignments);
+        setPlayers(newAssignments);
         toast({ title: "Teams Shuffled!", description: "Review the new teams and click Save."});
     };
 
     const handleSaveChanges = async () => {
-        const teamAPlayers = allPlayers.filter(p => p.team === 'A').map(p => p.id);
-        const teamBPlayers = allPlayers.filter(p => p.team === 'B').map(p => p.id);
+        const teamAPlayers = players.filter(p => p.team === 'A').map(p => p.id);
+        const teamBPlayers = players.filter(p => p.team === 'B').map(p => p.id);
         
         const matchRef = doc(db, "matches", match.id);
         try {
@@ -674,52 +617,66 @@ function SplitTeams({ match, onUpdate }: { match: Match; onUpdate: (data: Partia
             toast({ variant: "destructive", title: "Error", description: "Could not save team assignments." });
         }
     };
-
-    if (loading) return <Skeleton className="h-48" />;
+    
+    if (loading) {
+        return <Card><CardContent><Skeleton className="h-48" /></CardContent></Card>;
+    }
+    
+    if (players.length === 0) {
+        return null;
+    }
+    
+    const title = isPracticeMatch && isManager ? "Split Practice Teams" : "Confirmed Players";
+    const description = isPracticeMatch && isManager ? "Assign confirmed players to a temporary team for this practice match." : "Players who have confirmed their attendance for this game.";
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="font-headline">Split Practice Teams</CardTitle>
-                <CardDescription>Assign confirmed players to a temporary team for this practice match.</CardDescription>
+                <CardTitle className="font-headline">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
-                <Table>
+                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Player</TableHead>
-                            <TableHead className="w-[200px]">Assign Team</TableHead>
+                            <TableHead>{isPracticeMatch && isManager ? "Assign Team" : "Team"}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {allPlayers.map(player => (
+                        {players.map(player => (
                             <TableRow key={player.id}>
                                 <TableCell className="font-medium">{player.name}</TableCell>
                                 <TableCell>
-                                    <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Unassigned" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                                            <SelectItem value="A">Vests A</SelectItem>
-                                            <SelectItem value="B">Vests B</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    {isPracticeMatch && isManager ? (
+                                         <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                            <SelectTrigger className="w-[150px]">
+                                                <SelectValue placeholder="Unassigned" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                <SelectItem value="A">Vests A</SelectItem>
+                                                <SelectItem value="B">Vests B</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Badge variant={player.teamName === 'External Player' ? 'secondary' : 'default'}>{player.teamName}</Badge>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </CardContent>
-            <CardFooter className="gap-2">
-                 <Button onClick={handleSaveChanges}>Save Teams</Button>
-                 <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
-            </CardFooter>
+            {isPracticeMatch && isManager && (
+                 <CardFooter className="gap-2">
+                    <Button onClick={handleSaveChanges}>Save Teams</Button>
+                    <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
+                </CardFooter>
+            )}
         </Card>
     );
 }
-
 
 export default function GameDetailsPage() {
     const params = useParams();
@@ -802,6 +759,9 @@ export default function GameDetailsPage() {
 
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
+        if (data.teamAPlayers || data.teamBPlayers) {
+            fetchGameDetails(); // Re-fetch to get correct player states
+        }
     }
 
     if (loading) {
@@ -919,12 +879,15 @@ export default function GameDetailsPage() {
             
             {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} />}
             
-            <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />
+            <PlayerRoster 
+                match={match} 
+                teamA={teamA} 
+                teamB={teamB} 
+                isManager={isManager} 
+                isPracticeMatch={isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished"}
+                onUpdate={handleMatchUpdate}
+            />
             
-            {isManager && isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished" && (
-                <SplitTeams match={match} onUpdate={handleMatchUpdate} />
-            )}
-
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
 
             {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
