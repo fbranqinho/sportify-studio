@@ -36,8 +36,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { v4 as uuidv4 } from 'uuid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+const getGameDuration = (sport: PitchSport): number => {
+    switch (sport) {
+        case 'fut11': return 90;
+        case 'fut7': return 50;
+        case 'fut5': case 'futsal': return 40;
+        default: return 90;
+    }
+};
 
-function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[], teamAName?: string, teamBName?: string }) {
+function EventTimeline({ events, teamAName, teamBName, duration }: { events: MatchEvent[], teamAName?: string, teamBName?: string, duration: number }) {
     if (!events || events.length === 0) {
         return (
             <div className="text-center text-sm text-muted-foreground py-4">
@@ -47,6 +55,7 @@ function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[],
     }
 
     const sortedEvents = [...events].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+    const halfTime = duration / 2;
 
     const getEventIcon = (type: MatchEventType) => {
         switch (type) {
@@ -81,8 +90,8 @@ function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[],
                 {/* Timeline Axis Labels */}
                 <div className="absolute -top-5 w-full flex justify-between text-xs text-muted-foreground">
                     <span>0'</span>
-                    <span>45'</span>
-                    <span>90'</span>
+                    <span>{halfTime}'</span>
+                    <span>{duration}'</span>
                 </div>
                 <div className="absolute top-1/2 h-4 w-px bg-muted-foreground" style={{ left: '50%' }} />
 
@@ -92,7 +101,7 @@ function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[],
                     <TooltipTrigger asChild>
                         <div
                         className={cn("absolute -top-1/2 w-4 h-4 rounded-full border-2 border-background cursor-pointer hover:scale-125 transition-transform", getEventColor(event.type))}
-                        style={{ left: `calc(${(event.minute ?? 0) / 90 * 100}% - 8px)` }}
+                        style={{ left: `calc(${(event.minute ?? 0) / duration * 100}% - 8px)` }}
                         />
                     </TooltipTrigger>
                     <TooltipContent>
@@ -113,12 +122,13 @@ function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[],
     );
 }
 
-function GameFlowManager({ match, onMatchUpdate, teamA, teamB }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null }) {
+function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null }) {
     const { toast } = useToast();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
     const [scoreB, setScoreB] = React.useState(match.scoreB);
     const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
+    const gameDuration = pitch ? getGameDuration(pitch.sport) : 90;
 
 
     const handleStartGame = async () => {
@@ -249,7 +259,7 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB }: { match: Match,
                 {(match.status === 'InProgress' || match.status === 'Finished') && match.events && (
                      <div className="border-t pt-4">
                         <h4 className="font-semibold mb-2 text-center">Event Timeline</h4>
-                        <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name}/>
+                        <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name} duration={gameDuration}/>
                     </div>
                 )}
             </CardContent>
@@ -1028,7 +1038,7 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} />}
+            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} />}
             
             <PlayerRoster 
                 match={match} 
@@ -1044,5 +1054,7 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
 
     
