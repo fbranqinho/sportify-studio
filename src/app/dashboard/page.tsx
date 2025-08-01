@@ -1,15 +1,18 @@
 
 "use client";
 
-import type { User, UserRole } from "@/types";
+import * as React from "react";
+import { collection, query, where, getDocs, Timestamp, limit, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile } from "@/types";
 import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
 import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
 import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import React from "react";
 import { useUser } from "@/hooks/use-user";
+import { Skeleton } from "@/components/ui/skeleton";
 
 
 interface WelcomeHeaderProps {
@@ -39,22 +42,133 @@ const AdminDashboard = () => (
     </Card>
 );
 
+const LoadingDashboard = () => (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Skeleton className="h-36" />
+        <Skeleton className="h-36" />
+        <Skeleton className="h-36" />
+        <Skeleton className="h-36" />
+    </div>
+);
+
 
 export default function DashboardPage() {
-  const { user, loading } = useUser();
+  const { user } = useUser();
+  const [dashboardData, setDashboardData] = React.useState<any>(null);
+  const [loadingData, setLoadingData] = React.useState(true);
 
-  if (loading || !user) {
-    return <div>Loading...</div>;
+  React.useEffect(() => {
+    if (!user) return;
+
+    const fetchData = async () => {
+        setLoadingData(true);
+        try {
+            switch(user.role) {
+                case "PLAYER": {
+                    const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", user.id), limit(1));
+                    const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
+                    
+                    const [profileSnap, teamsSnap] = await Promise.all([getDocs(playerProfileQuery), getDocs(playerTeamsQuery)]);
+                    
+                    const profile = profileSnap.empty ? null : {id: profileSnap.docs[0].id, ...profileSnap.docs[0].data()} as PlayerProfile;
+                    const teamIds = teamsSnap.docs.map(doc => doc.id);
+                    
+                    let upcomingGames = 0;
+                    if (teamIds.length > 0) {
+                        const gamesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]), where("date", ">=", Timestamp.now()));
+                        const gamesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]), where("date", ">=", Timestamp.now()));
+                        const [gamesASnap, gamesBSnap] = await Promise.all([getDocs(gamesAQuery), getDocs(gamesBQuery)]);
+                        upcomingGames = gamesASnap.size + gamesBSnap.size;
+                    }
+                    
+                    setDashboardData({ profile, upcomingGames });
+                    break;
+                }
+                case "MANAGER": {
+                    const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id), orderBy("name"), limit(1)); // get primary team
+                    const compsQuery = query(collection(db, "competitions")); // Simplified for now
+                    
+                    const [teamsSnap, compsSnap] = await Promise.all([getDocs(teamsQuery), getDocs(compsQuery)]);
+                    
+                    const team = teamsSnap.empty ? null : {id: teamsSnap.docs[0].id, ...teamsSnap.docs[0].data()} as Team;
+                    let nextMatch: Match | null = null;
+                    if(team) {
+                        const nextMatchQuery = query(
+                            collection(db, "matches"), 
+                            where("teamARef", "==", team.id), 
+                            where("status", "==", "Scheduled"), 
+                            where("date", ">=", Timestamp.now()),
+                            orderBy("date"),
+                            limit(1)
+                        );
+                        const nextMatchSnap = await getDocs(nextMatchQuery);
+                        if(!nextMatchSnap.empty) {
+                            nextMatch = {id: nextMatchSnap.docs[0].id, ...nextMatchSnap.docs[0].data()} as Match;
+                        }
+                    }
+
+                    setDashboardData({ team, nextMatch, competitions: compsSnap.size });
+                    break;
+                }
+                 case "OWNER": {
+                    const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
+                    const profileSnap = await getDocs(ownerProfileQuery);
+                    
+                    if (profileSnap.empty) {
+                        setDashboardData({ pitches: [], bookings: 0, promos: 0 });
+                        break;
+                    }
+                    const ownerProfileId = profileSnap.docs[0].id;
+                    
+                    const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", ownerProfileId));
+                    
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    
+                    const bookingsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId), where("date", ">=", todayStart.toISOString()), where("date", "<=", todayEnd.toISOString()));
+                    const promosQuery = query(collection(db, "promos"), where("ownerProfileId", "==", ownerProfileId), where("validTo", ">=", Timestamp.now().toDate().toISOString()));
+
+                    const [pitchesSnap, bookingsSnap, promosSnap] = await Promise.all([
+                        getDocs(pitchesQuery),
+                        getDocs(bookingsQuery),
+                        getDocs(promosQuery),
+                    ]);
+
+                    setDashboardData({ pitches: pitchesSnap.docs.map(d => ({id: d.id, ...d.data()})), bookings: bookingsSnap.size, promos: promosSnap.size });
+                    break;
+                }
+                default:
+                    setDashboardData({}); // No data to fetch for other roles yet
+                    break;
+            }
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+        } finally {
+            setLoadingData(false);
+        }
+    };
+    fetchData();
+  }, [user]);
+
+  if (loadingData || !user) {
+    return (
+       <div className="space-y-6">
+        <WelcomeHeader role="PLAYER" name="..." />
+        <LoadingDashboard />
+      </div>
+    );
   }
 
   const renderDashboard = () => {
     switch (user.role) {
       case "PLAYER":
-        return <PlayerDashboard />;
+        return <PlayerDashboard data={dashboardData} />;
       case "MANAGER":
-        return <ManagerDashboard />;
+        return <ManagerDashboard data={dashboardData} />;
       case "OWNER":
-        return <OwnerDashboard />;
+        return <OwnerDashboard data={dashboardData} />;
       case "PROMOTER":
         return <PromoterDashboard />;
       case "REFEREE":

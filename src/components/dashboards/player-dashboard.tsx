@@ -1,9 +1,24 @@
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Calendar, ShieldCheck, DollarSign } from "lucide-react";
+import type { PlayerProfile } from "@/types";
+import Link from "next/link";
+import { Skeleton } from "../ui/skeleton";
 
-export function PlayerDashboard() {
+interface PlayerDashboardProps {
+  data: {
+    profile: PlayerProfile | null;
+    upcomingGames: number;
+  }
+}
+
+export function PlayerDashboard({ data }: PlayerDashboardProps) {
+  if (!data) return <Skeleton className="h-32 w-full col-span-4"/>;
+
+  const { profile, upcomingGames } = data;
+  
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
       <Card>
@@ -12,9 +27,11 @@ export function PlayerDashboard() {
           <Calendar className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">2</div>
-          <p className="text-xs text-muted-foreground">vs. Team Rocket on Sunday</p>
-          <Button size="sm" className="mt-2">View Games</Button>
+          <div className="text-2xl font-bold">{upcomingGames}</div>
+          <p className="text-xs text-muted-foreground">games on your schedule</p>
+          <Button size="sm" className="mt-2" asChild>
+            <Link href="/dashboard/my-games">View Games</Link>
+          </Button>
         </CardContent>
       </Card>
       <Card>
@@ -23,8 +40,8 @@ export function PlayerDashboard() {
           <AlertCircle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-           <div className="text-2xl font-bold">1 <span className="text-sm font-normal">Yellow Card</span></div>
-           <p className="text-xs text-muted-foreground">0 Red Cards</p>
+           <div className="text-2xl font-bold">{profile?.yellowCards ?? 0} <span className="text-sm font-normal">Yellows</span></div>
+           <p className="text-xs text-muted-foreground">{profile?.redCards ?? 0} Red Cards</p>
            <p className="text-xs text-muted-foreground mt-2 text-green-600 font-semibold">Clean record this month</p>
         </CardContent>
       </Card>
@@ -35,11 +52,13 @@ export function PlayerDashboard() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-1">
-             <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
-             <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
-             <Badge className="bg-red-500 hover:bg-red-500 text-white">L</Badge>
-             <Badge className="bg-gray-400 hover:bg-gray-400 text-white">D</Badge>
-             <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
+             {(profile?.recentForm?.length > 0 ? profile.recentForm : ['N','A','N','A','N']).slice(0,5).map((form, i) => (
+               <Badge key={i} className={
+                form === 'W' ? 'bg-green-500 hover:bg-green-500' :
+                form === 'L' ? 'bg-red-500 hover:bg-red-500' :
+                'bg-gray-400 hover:bg-gray-400'
+               }>{form}</Badge>
+             ))}
           </div>
            <p className="text-xs text-muted-foreground mt-2">Last 5 matches</p>
         </CardContent>
@@ -50,7 +69,7 @@ export function PlayerDashboard() {
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-           <div className="text-2xl font-bold text-red-600">$15.00</div>
+           <div className="text-2xl font-bold text-destructive">$15.00</div>
            <p className="text-xs text-muted-foreground">Team fee for May</p>
            <Button size="sm" variant="destructive" className="mt-2">Pay Now</Button>
         </CardContent>
