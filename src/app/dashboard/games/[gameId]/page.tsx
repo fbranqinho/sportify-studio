@@ -639,6 +639,26 @@ function SplitTeams({ match, onUpdate }: { match: Match; onUpdate: (data: Partia
     const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
         setAllPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
     };
+    
+    const handleShuffle = () => {
+        const shuffled = [...allPlayers].sort(() => 0.5 - Math.random());
+        const half = Math.ceil(shuffled.length / 2);
+        const teamA = shuffled.slice(0, half);
+        const teamB = shuffled.slice(half);
+
+        const newAssignments = allPlayers.map(player => {
+            if (teamA.some(p => p.id === player.id)) {
+                return { ...player, team: 'A' as const };
+            }
+            if (teamB.some(p => p.id === player.id)) {
+                return { ...player, team: 'B' as const };
+            }
+            return player;
+        });
+
+        setAllPlayers(newAssignments);
+        toast({ title: "Teams Shuffled!", description: "Review the new teams and click Save."});
+    };
 
     const handleSaveChanges = async () => {
         const teamAPlayers = allPlayers.filter(p => p.team === 'A').map(p => p.id);
@@ -692,8 +712,9 @@ function SplitTeams({ match, onUpdate }: { match: Match; onUpdate: (data: Partia
                     </TableBody>
                 </Table>
             </CardContent>
-            <CardFooter>
-                 <Button onClick={handleSaveChanges}><Shuffle className="mr-2 h-4 w-4"/>Save Teams</Button>
+            <CardFooter className="gap-2">
+                 <Button onClick={handleSaveChanges}>Save Teams</Button>
+                 <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
             </CardFooter>
         </Card>
     );
@@ -915,3 +936,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
