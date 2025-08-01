@@ -1,75 +1,71 @@
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Calendar, Award, DollarSign } from "lucide-react";
+import { Users, Calendar, AlertTriangle, DollarSign, ArrowRight } from "lucide-react";
 import type { Team, Match } from "@/types";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
 
 interface ManagerDashboardProps {
   data: {
-    team: Team | null;
-    nextMatch: Match | null;
-    competitions: number;
+    teams: Team[];
+    upcomingMatches: Match[];
+    unavailablePlayers: number;
+    pendingPayments: number;
   }
 }
 
 export function ManagerDashboard({ data }: ManagerDashboardProps) {
   if (!data) return <Skeleton className="h-32 w-full col-span-4"/>;
   
-  const { team, nextMatch, competitions } = data;
+  const { teams, upcomingMatches, unavailablePlayers, pendingPayments } = data;
+  const primaryTeam = teams?.[0];
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-      <Card>
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
+      <Card className="xl:col-span-2">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Main Team Roster</CardTitle>
-          <Users className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{team?.playerIds?.length ?? 0}</div>
-          <p className="text-xs text-muted-foreground">{team?.name ?? 'No team created'}</p>
-          <Button size="sm" className="mt-2" asChild>
-            <Link href={team ? `/dashboard/teams/${team.id}`: '/dashboard/teams'}>Manage Team</Link>
-          </Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Next Match</CardTitle>
+          <CardTitle className="text-sm font-medium">Upcoming Games</CardTitle>
           <Calendar className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          {nextMatch ? (
-            <>
-              <div className="text-2xl font-bold">{formatDistanceToNow(new Date(nextMatch.date), { addSuffix: true })}</div>
-              <p className="text-xs text-muted-foreground">vs. The All-Stars at 3:00 PM</p>
-              <Button size="sm" className="mt-2" variant="outline" asChild>
-                <Link href={`/dashboard/games/${nextMatch.id}`}>Set Lineup</Link>
-              </Button>
-            </>
-          ) : (
-             <>
-              <div className="text-2xl font-bold">-</div>
-              <p className="text-xs text-muted-foreground">No upcoming matches scheduled</p>
-               <Button size="sm" className="mt-2" variant="outline" asChild>
-                <Link href="/dashboard/games">Find a Pitch</Link>
-              </Button>
-            </>
-          )}
+            {upcomingMatches.length > 0 ? (
+                <div className="space-y-4">
+                    {upcomingMatches.map(match => (
+                        <div key={match.id} className="flex items-center justify-between">
+                            <div>
+                                <p className="font-semibold">{format(new Date(match.date), "EEE, MMM d 'at' HH:mm")}</p>
+                                <p className="text-xs text-muted-foreground">Practice / Friendly</p>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild>
+                                <Link href={`/dashboard/games/${match.id}`}>
+                                    Manage <ArrowRight className="ml-2 h-4 w-4"/>
+                                </Link>
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">No upcoming matches scheduled.</p>
+                    <Button size="sm" className="mt-2" variant="outline" asChild>
+                        <Link href="/dashboard/games">Find a Pitch & Book</Link>
+                    </Button>
+                </div>
+            )}
         </CardContent>
       </Card>
-      <Card>
+       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Active Competitions</CardTitle>
-          <Award className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium">Team Status</CardTitle>
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{competitions}</div>
-           <p className="text-xs text-muted-foreground">leagues & cups available</p>
+          <div className="text-2xl font-bold">{unavailablePlayers}</div>
+           <p className="text-xs text-muted-foreground">players injured or unavailable</p>
            <Button size="sm" className="mt-2" asChild>
-            <Link href="/dashboard/competitions">View Standings</Link>
+            <Link href={primaryTeam ? `/dashboard/teams/${primaryTeam.id}`: '/dashboard/teams'}>Manage Roster</Link>
             </Button>
         </CardContent>
       </Card>
@@ -79,9 +75,11 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-           <div className="text-2xl font-bold">3</div>
+           <div className="text-2xl font-bold">{pendingPayments}</div>
            <p className="text-xs text-muted-foreground">players with outstanding fees</p>
-           <Button size="sm" className="mt-2" variant="secondary">Send Reminders</Button>
+           <Button size="sm" className="mt-2" variant="secondary" asChild>
+             <Link href="/dashboard/payments">Send Reminders</Link>
+            </Button>
         </CardContent>
       </Card>
     </div>

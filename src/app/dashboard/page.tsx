@@ -68,7 +68,7 @@ export default function DashboardPage() {
                     const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", user.id), limit(1));
                     const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
                     
-                    const [profileSnap, teamsSnap] = await Promise.all([getDocs(playerProfileQuery), getDocs(playerTeamsQuery)]);
+                    const [profileSnap, teamsSnap] = await Promise.all([getDocs(playerProfileQuery), getDocs(teamsSnap)]);
                     
                     const profile = profileSnap.empty ? null : {id: profileSnap.docs[0].id, ...profileSnap.docs[0].data()} as PlayerProfile;
                     const teamIds = teamsSnap.docs.map(doc => doc.id);
@@ -85,29 +85,39 @@ export default function DashboardPage() {
                     break;
                 }
                 case "MANAGER": {
-                    const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id), orderBy("name"), limit(1)); // get primary team
-                    const compsQuery = query(collection(db, "competitions")); // Simplified for now
+                    const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
+                    const teamsSnap = await getDocs(teamsQuery);
+                    const teams = teamsSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Team);
+                    const teamIds = teams.map(t => t.id);
+
+                    let upcomingMatches: Match[] = [];
+                    let teamPlayers: PlayerProfile[] = [];
+                    let unavailablePlayers = 0;
                     
-                    const [teamsSnap, compsSnap] = await Promise.all([getDocs(teamsQuery), getDocs(compsQuery)]);
-                    
-                    const team = teamsSnap.empty ? null : {id: teamsSnap.docs[0].id, ...teamsSnap.docs[0].data()} as Team;
-                    let nextMatch: Match | null = null;
-                    if(team) {
-                        const nextMatchQuery = query(
+                    if (teamIds.length > 0) {
+                        // Fetch upcoming matches for all teams
+                        const matchesQuery = query(
                             collection(db, "matches"), 
-                            where("teamARef", "==", team.id), 
-                            where("status", "==", "Scheduled"), 
+                            where("teamARef", "in", teamIds), 
+                            where("status", "in", ["Scheduled", "PendingOpponent"]), 
                             where("date", ">=", Timestamp.now()),
                             orderBy("date"),
-                            limit(1)
+                            limit(3)
                         );
-                        const nextMatchSnap = await getDocs(nextMatchQuery);
-                        if(!nextMatchSnap.empty) {
-                            nextMatch = {id: nextMatchSnap.docs[0].id, ...nextMatchSnap.docs[0].data()} as Match;
+                        const matchesSnap = await getDocs(matchesQuery);
+                        upcomingMatches = matchesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
+
+                        // Fetch players for the primary team to check status
+                        const primaryTeam = teams[0];
+                        if (primaryTeam && primaryTeam.playerIds.length > 0) {
+                            const playersQuery = query(collection(db, "playerProfiles"), where("userRef", "in", primaryTeam.playerIds));
+                            const playersSnap = await getDocs(playersQuery);
+                            teamPlayers = playersSnap.docs.map(doc => doc.data() as PlayerProfile);
+                            unavailablePlayers = teamPlayers.filter(p => p.injured || p.suspended || !p.availableToPlay).length;
                         }
                     }
 
-                    setDashboardData({ team, nextMatch, competitions: compsSnap.size });
+                    setDashboardData({ teams, upcomingMatches, unavailablePlayers, pendingPayments: 3 }); // Static pending payments for now
                     break;
                 }
                  case "OWNER": {
