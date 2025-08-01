@@ -36,7 +36,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { v4 as uuidv4 } from 'uuid';
 
 
-function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
+function EventTimeline({ events, teamAName, teamBName }: { events: MatchEvent[], teamAName?: string, teamBName?: string }) {
+    if (!events || events.length === 0) {
+        return (
+            <div className="text-center text-sm text-muted-foreground py-4">
+                No events recorded yet.
+            </div>
+        );
+    }
+
+    const sortedEvents = [...events].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+
+    const getEventIcon = (type: MatchEventType) => {
+        switch (type) {
+            case 'Goal': return <Goal className="h-4 w-4 text-green-600" />;
+            case 'Assist': return <CirclePlus className="h-4 w-4 text-blue-600" />;
+            case 'YellowCard': return <Square className="h-4 w-4 text-yellow-500 fill-current" />;
+            case 'RedCard': return <Square className="h-4 w-4 text-red-600 fill-current" />;
+            default: return null;
+        }
+    };
+    
+    const getTeamName = (teamId: string) => {
+        if (teamId === 'A') return teamAName || 'Vests A';
+        if (teamId === 'B') return teamBName || 'Vests B';
+        return 'Unknown Team';
+    }
+
+    return (
+        <div className="space-y-4">
+            {sortedEvents.map(event => (
+                <div key={event.id} className="flex items-center gap-4 text-sm">
+                    <div className="font-mono font-semibold w-8 text-right">{event.minute}'</div>
+                    <div className="flex items-center gap-2">{getEventIcon(event.type)} <span className="font-semibold capitalize">{event.type}</span></div>
+                    <div className="flex-1">
+                        <span className="font-bold">{event.playerName}</span>
+                        <span className="text-muted-foreground"> ({getTeamName(event.teamId)})</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function GameFlowManager({ match, onMatchUpdate, teamA, teamB }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null }) {
     const { toast } = useToast();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
@@ -126,45 +169,53 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                 <CardTitle>Game Control</CardTitle>
                 <CardDescription>Manage the game flow from start to finish.</CardDescription>
             </CardHeader>
-            <CardContent className="flex items-center justify-center gap-4">
-                {canStartGame && (
-                    <Button onClick={handleStartGame} size="lg">
-                        <Play className="mr-2" /> Start Game
-                    </Button>
-                )}
-                {match.status === 'InProgress' && (
-                     <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="destructive" size="lg">
-                                <Flag className="mr-2" /> End Game
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Set Final Score</DialogTitle>
-                                <DialogDescription>The score is calculated automatically based on recorded goals. Confirm to finish.</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                                <div className="space-y-2 text-center">
-                                    <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (match.teamBRef ? "Team A" : "Vests A")}</Label>
-                                    <Input id="scoreA" type="number" value={scoreA} disabled className="text-center text-4xl h-20 font-bold"/>
+            <CardContent className="space-y-4">
+                 <div className="flex items-center justify-center gap-4">
+                    {canStartGame && (
+                        <Button onClick={handleStartGame} size="lg">
+                            <Play className="mr-2" /> Start Game
+                        </Button>
+                    )}
+                    {match.status === 'InProgress' && (
+                         <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="destructive" size="lg">
+                                    <Flag className="mr-2" /> End Game
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Set Final Score</DialogTitle>
+                                    <DialogDescription>The score is calculated automatically based on recorded goals. Confirm to finish.</DialogDescription>
+                                </DialogHeader>
+                                <div className="grid grid-cols-2 gap-4 items-center">
+                                    <div className="space-y-2 text-center">
+                                        <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (teamA?.name || "Team A")}</Label>
+                                        <Input id="scoreA" type="number" value={scoreA} disabled className="text-center text-4xl h-20 font-bold"/>
+                                    </div>
+                                    <div className="space-y-2 text-center">
+                                         <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (teamB?.name || "Team B")}</Label>
+                                        <Input id="scoreB" type="number" value={scoreB} disabled className="text-center text-4xl h-20 font-bold"/>
+                                    </div>
                                 </div>
-                                <div className="space-y-2 text-center">
-                                     <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (match.teamBRef ? "Team B" : "Vests B")}</Label>
-                                    <Input id="scoreB" type="number" value={scoreB} disabled className="text-center text-4xl h-20 font-bold"/>
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsEndGameOpen(false)}>Cancel</Button>
-                                <Button onClick={handleEndGame}><Trophy className="mr-2"/>Confirm & Finish</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
-                 {match.status === 'Finished' && (
-                    <div className="text-center">
-                        <p className="text-muted-foreground">Final Score</p>
-                        <p className="text-4xl font-bold font-headline">{match.scoreA} - {match.scoreB}</p>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setIsEndGameOpen(false)}>Cancel</Button>
+                                    <Button onClick={handleEndGame}><Trophy className="mr-2"/>Confirm & Finish</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+                     {match.status === 'Finished' && (
+                        <div className="text-center">
+                            <p className="text-muted-foreground">Final Score</p>
+                            <p className="text-4xl font-bold font-headline">{match.scoreA} - {match.scoreB}</p>
+                        </div>
+                    )}
+                </div>
+                {(match.status === 'InProgress' || match.status === 'Finished') && match.events && (
+                     <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-2 text-center">Event Timeline</h4>
+                        <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name}/>
                     </div>
                 )}
             </CardContent>
@@ -943,7 +994,7 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} />}
+            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} />}
             
             <PlayerRoster 
                 match={match} 
