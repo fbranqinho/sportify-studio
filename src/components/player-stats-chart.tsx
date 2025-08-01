@@ -30,13 +30,13 @@ export function PlayerStatsChart({ playerProfile }: PlayerStatsChartProps) {
   ];
 
   const detailedStats = [
-      { metric: "Games Played", value: (playerProfile.victories + playerProfile.defeats + playerProfile.draws) },
-      { metric: "Goals", value: playerProfile.goals },
-      { metric: "Assists", value: playerProfile.assists },
-      { metric: "Yellow Cards", value: playerProfile.yellowCards },
-      { metric: "Red Cards", value: playerProfile.redCards },
-      { metric: "MVPs", value: playerProfile.mvps },
-      { metric: "Overall Rating", value: playerProfile.overall },
+      { metric: "Games Played", value: (playerProfile.victories || 0) + (playerProfile.defeats || 0) + (playerProfile.draws || 0) },
+      { metric: "Goals", value: playerProfile.goals || 0 },
+      { metric: "Assists", value: playerProfile.assists || 0 },
+      { metric: "Yellow Cards", value: playerProfile.yellowCards || 0 },
+      { metric: "Red Cards", value: playerProfile.redCards || 0 },
+      { metric: "MVPs", value: playerProfile.mvps || 0 },
+      { metric: "Overall Rating", value: playerProfile.overall || 50 },
   ]
 
   return (
