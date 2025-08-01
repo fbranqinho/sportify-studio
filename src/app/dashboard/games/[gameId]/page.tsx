@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -89,7 +89,7 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                     teamAResult = "D";
                     teamBResult = "D";
                     batch.update(teamARef, { draws: increment(1) });
-                    batch.update(teamBRef, { wins: increment(1) });
+                    batch.update(teamBRef, { draws: increment(1) });
                 }
 
                 // Update recent form for both teams
@@ -648,6 +648,97 @@ function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match;
     )
 }
 
+interface EnrichedInvitation extends MatchInvitation {
+    playerName: string;
+}
+
+function InvitationStatus({ matchId }: { matchId: string }) {
+    const [invitations, setInvitations] = React.useState<EnrichedInvitation[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const { toast } = useToast();
+
+    React.useEffect(() => {
+        const fetchInvitations = async () => {
+            setLoading(true);
+            try {
+                const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", matchId));
+                const invSnapshot = await getDocs(invQuery);
+                const invs = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchInvitation));
+                
+                if (invs.length > 0) {
+                    const playerIds = [...new Set(invs.map(i => i.playerId))];
+                    const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
+                    const usersSnapshot = await getDocs(usersQuery);
+                    const usersMap = new Map(usersSnapshot.docs.map(d => [d.id, d.data() as User]));
+
+                    const enrichedInvs = invs.map(inv => ({
+                        ...inv,
+                        playerName: usersMap.get(inv.playerId)?.name || "Unknown Player"
+                    })).sort((a,b) => a.playerName.localeCompare(b.playerName));
+
+                    setInvitations(enrichedInvs);
+                } else {
+                    setInvitations([]);
+                }
+            } catch (error) {
+                console.error("Error fetching invitation statuses:", error);
+                toast({ variant: "destructive", title: "Error", description: "Could not load invitation statuses." });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchInvitations();
+    }, [matchId, toast]);
+
+    if (loading) {
+        return <Card><CardContent><Skeleton className="h-24" /></CardContent></Card>;
+    }
+    
+    if (invitations.length === 0) return null;
+    
+    const getStatusIcon = (status: InvitationStatus) => {
+        switch (status) {
+            case 'accepted': return <UserCheck className="h-5 w-5 text-green-600" />;
+            case 'declined': return <UserX className="h-5 w-5 text-red-600" />;
+            case 'pending': return <MailQuestion className="h-5 w-5 text-amber-600" />;
+            default: return null;
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline">Invitation Status</CardTitle>
+                <CardDescription>See who has responded to the game invitation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Player</TableHead>
+                            <TableHead className="text-right">Status</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {invitations.map(inv => (
+                            <TableRow key={inv.id}>
+                                <TableCell className="font-medium">{inv.playerName}</TableCell>
+                                <TableCell className="text-right">
+                                    <Badge variant="outline" className="gap-2">
+                                        {getStatusIcon(inv.status)}
+                                        <span className="capitalize">{inv.status}</span>
+                                    </Badge>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function GameDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -867,6 +958,8 @@ export default function GameDetailsPage() {
                 isPracticeMatch={isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished"}
                 onUpdate={handleMatchUpdate}
             />
+
+            {isManager && <InvitationStatus matchId={match.id} />}
             
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
 
