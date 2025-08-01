@@ -391,29 +391,29 @@ interface RosterPlayer extends User {
 function PlayerRoster({ 
     match, 
     isManager, 
-    isPracticeMatch, 
-    onUpdate 
+    onUpdate,
+    onEventAdded,
 }: { 
     match: Match; 
     isManager: boolean;
-    isPracticeMatch: boolean;
     onUpdate: (data: Partial<Match>) => void;
+    onEventAdded: (event: MatchEvent) => void;
 }) {
     const [players, setPlayers] = React.useState<RosterPlayer[]>([]);
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
 
+    const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
+    const isLive = match.status === 'InProgress';
+
     React.useEffect(() => {
         const fetchPlayersAndInvitations = async () => {
             setLoading(true);
-
-            // Fetch all invitations for the match
             const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", match.id));
             const invSnapshot = await getDocs(invQuery);
             const invitations = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchInvitation));
             const invitationMap = new Map(invitations.map(inv => [inv.playerId, inv]));
 
-            // Get all unique player IDs from both invitations and confirmed players
             const allPlayerIds = [...new Set([
                 ...invitations.map(inv => inv.playerId), 
                 ...(match.teamAPlayers || []), 
@@ -426,7 +426,6 @@ function PlayerRoster({
                 return;
             }
 
-            // Fetch user data for all involved players
             const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
             const usersSnapshot = await getDocs(usersQuery);
             const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
@@ -490,119 +489,7 @@ function PlayerRoster({
             toast({ variant: "destructive", title: "Error", description: "Could not save team assignments." });
         }
     };
-
-    const getStatusIcon = (status: InvitationStatus | 'confirmed') => {
-        switch (status) {
-            case 'confirmed': return <UserCheck className="h-5 w-5 text-green-600" />;
-            case 'declined': return <UserX className="h-5 w-5 text-red-600" />;
-            case 'pending': return <MailQuestion className="h-5 w-5 text-amber-600" />;
-            default: return null;
-        }
-    }
     
-    if (loading) {
-        return <Card><CardContent><Skeleton className="h-48" /></CardContent></Card>;
-    }
-    
-    if (players.length === 0) {
-        return null;
-    }
-    
-    const title = "Player Roster & Status";
-    const description = isPracticeMatch && isManager 
-        ? "Assign confirmed players to a team for this practice match." 
-        : "Overview of all invited players and their invitation status.";
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">{title}</CardTitle>
-                <CardDescription>{description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Player</TableHead>
-                            <TableHead>Status</TableHead>
-                            {isPracticeMatch && isManager && <TableHead>Assign Team</TableHead>}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {players.map(player => (
-                            <TableRow key={player.id}>
-                                <TableCell className="font-medium">{player.name}</TableCell>
-                                <TableCell>
-                                     <Badge variant="outline" className="gap-2">
-                                        {getStatusIcon(player.status)}
-                                        <span className="capitalize">{player.status}</span>
-                                    </Badge>
-                                </TableCell>
-                                {isPracticeMatch && isManager && (
-                                     <TableCell>
-                                        {player.status === 'confirmed' ? (
-                                            <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                                <SelectTrigger className="w-[150px]">
-                                                    <SelectValue placeholder="Unassigned" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                    <SelectItem value="A">Vests A</SelectItem>
-                                                    <SelectItem value="B">Vests B</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground">-</span>
-                                        )}
-                                     </TableCell>
-                                )}
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-            {isPracticeMatch && isManager && (
-                 <CardFooter className="gap-2">
-                    <Button onClick={handleSaveChanges}>Save Teams</Button>
-                    <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
-                </CardFooter>
-            )}
-        </Card>
-    );
-}
-
-function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match; teamA: Team | null; teamB: Team | null; onEventAdded: (event: MatchEvent) => void; }) {
-    const { toast } = useToast();
-    const [teamAPlayers, setTeamAPlayers] = React.useState<User[]>([]);
-    const [teamBPlayers, setTeamBPlayers] = React.useState<User[]>([]);
-    const [loading, setLoading] = React.useState(true);
-    
-    React.useEffect(() => {
-        const fetchPlayers = async () => {
-            setLoading(true);
-            const teamAPlayerIds = match.teamAPlayers || [];
-            const teamBPlayerIds = match.teamBPlayers || [];
-            
-            const fetchUsers = async (ids: string[]) => {
-                if (ids.length === 0) return [];
-                const usersQuery = query(collection(db, "users"), where(documentId(), "in", ids));
-                const snapshot = await getDocs(usersQuery);
-                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            };
-
-            const [playersA, playersB] = await Promise.all([
-                fetchUsers(teamAPlayerIds),
-                fetchUsers(teamBPlayerIds)
-            ]);
-            
-            setTeamAPlayers(playersA);
-            setTeamBPlayers(playersB);
-            setLoading(false);
-        };
-
-        fetchPlayers();
-    }, [match.teamAPlayers, match.teamBPlayers]);
-
     const handleAddEvent = async (player: User, type: MatchEventType, teamId: string | null) => {
         if (!teamId) {
             toast({ variant: "destructive", title: "Error", description: "Cannot add event, player team is not identified."});
@@ -631,10 +518,6 @@ function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match;
             toast({ variant: "destructive", title: "Error", description: "Could not add the event." });
         }
     };
-    
-    if (loading) {
-        return <Card><CardContent><Skeleton className="h-64" /></CardContent></Card>;
-    }
 
     const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => (
         <div className="flex gap-1">
@@ -645,34 +528,105 @@ function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match;
         </div>
     );
 
+    const getStatusIcon = (status: InvitationStatus | 'confirmed') => {
+        switch (status) {
+            case 'confirmed': return <UserCheck className="h-5 w-5 text-green-600" />;
+            case 'declined': return <UserX className="h-5 w-5 text-red-600" />;
+            case 'pending': return <MailQuestion className="h-5 w-5 text-amber-600" />;
+            default: return null;
+        }
+    }
+    
+    if (loading) {
+        return <Card><CardContent><Skeleton className="h-48" /></CardContent></Card>;
+    }
+    
+    if (players.length === 0) {
+        return null;
+    }
+    
+    const title = "Player Roster & Status";
+    let description = "Overview of all invited players and their invitation status.";
+
+    if (isLive) {
+        description = "Record in-game events as they happen.";
+    } else if (isPracticeMatch && isManager) {
+        description = "Assign confirmed players to a team for this practice match.";
+    }
+
+    const showTeamAssignment = isPracticeMatch && isManager && !isLive;
+    const showLiveActions = isManager && isLive;
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Live Stats Tracker</CardTitle>
-                <CardDescription>Record in-game events as they happen.</CardDescription>
+                <CardTitle className="font-headline">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
             </CardHeader>
-            <CardContent className="grid md:grid-cols-2 gap-6">
-                 <div>
-                    <h3 className="font-bold mb-2">{teamA?.name || "Vests A"}</h3>
-                     <Table>
-                        <TableHeader><TableRow><TableHead>Player</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {teamAPlayers.map(p => <TableRow key={p.id}><TableCell>{p.name}</TableCell><TableCell className="text-right"><PlayerActions player={p} teamId={teamA?.id || null} /></TableCell></TableRow>)}
-                        </TableBody>
-                    </Table>
-                 </div>
-                  <div>
-                    <h3 className="font-bold mb-2">{teamB?.name || "Vests B"}</h3>
-                     <Table>
-                        <TableHeader><TableRow><TableHead>Player</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                           {teamBPlayers.map(p => <TableRow key={p.id}><TableCell>{p.name}</TableCell><TableCell className="text-right"><PlayerActions player={p} teamId={teamB?.id || null} /></TableCell></TableRow>)}
-                        </TableBody>
-                    </Table>
-                 </div>
+            <CardContent>
+                 <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Player</TableHead>
+                            <TableHead>Status</TableHead>
+                            {showTeamAssignment && <TableHead>Assign Team</TableHead>}
+                            {showLiveActions && <TableHead>Team</TableHead>}
+                            {showLiveActions && <TableHead className="text-right">Live Actions</TableHead>}
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {players.map(player => (
+                            <TableRow key={player.id}>
+                                <TableCell className="font-medium">{player.name}</TableCell>
+                                <TableCell>
+                                     <Badge variant="outline" className="gap-2">
+                                        {getStatusIcon(player.status)}
+                                        <span className="capitalize">{player.status}</span>
+                                    </Badge>
+                                </TableCell>
+                                {showTeamAssignment && (
+                                     <TableCell>
+                                        {player.status === 'confirmed' ? (
+                                            <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                                <SelectTrigger className="w-[150px]">
+                                                    <SelectValue placeholder="Unassigned" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    <SelectItem value="A">Vests A</SelectItem>
+                                                    <SelectItem value="B">Vests B</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span className="text-sm text-muted-foreground">-</span>
+                                        )}
+                                     </TableCell>
+                                )}
+                                {showLiveActions && (
+                                    <>
+                                        <TableCell>{player.team ? `Vests ${player.team}` : '-'}</TableCell>
+                                        <TableCell className="text-right">
+                                            {player.team ? (
+                                                <PlayerActions player={player} teamId={player.team} />
+                                            ) : (
+                                                <span className="text-sm text-muted-foreground">-</span>
+                                            )}
+                                        </TableCell>
+                                    </>
+                                )}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </CardContent>
+            {showTeamAssignment && (
+                 <CardFooter className="gap-2">
+                    <Button onClick={handleSaveChanges}>Save Teams</Button>
+                    <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
+                </CardFooter>
+            )}
         </Card>
-    )
+    );
 }
 
 const getPlayerCapacity = (sport: PitchSport): number => {
@@ -922,14 +876,12 @@ export default function GameDetailsPage() {
             </div>
             
             {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} />}
-
-            {isManager && match.status === 'InProgress' && <GameStatsTracker match={match} teamA={teamA} teamB={teamB} onEventAdded={handleEventAdded} />}
             
             <PlayerRoster 
                 match={match} 
                 isManager={isManager} 
-                isPracticeMatch={isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished"}
                 onUpdate={handleMatchUpdate}
+                onEventAdded={handleEventAdded}
             />
             
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
