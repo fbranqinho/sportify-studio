@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History } from "lucide-react";
+import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
@@ -267,8 +267,9 @@ export default function MyGamesPage() {
 
 
   const now = new Date();
-  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const pastMatches = matches.filter(m => new Date(m.date) < now).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const pastMatches = matches.filter(m => m.status === 'Finished' || new Date(m.date) < now).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   
   const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
     if (!sport) return 0;
@@ -344,13 +345,18 @@ export default function MyGamesPage() {
                     </div>
                  )}
             </CardContent>
-            {(!isFinished && isManager) && (
-            <CardFooter>
+             <CardFooter className="gap-2">
                 <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/dashboard/games/${match.id}`}>Manage Game</Link>
+                    <Link href={`/dashboard/games/${match.id}`}>
+                        {isManager && !isFinished ? "Manage Game" : "View Details"}
+                    </Link>
                 </Button>
+                {isFinished && (
+                     <Button variant="secondary" disabled>
+                        <Trophy className="mr-2" /> Match Report
+                    </Button>
+                )}
             </CardFooter>
-            )}
         </Card>
     )
   }
@@ -504,5 +510,3 @@ export default function MyGamesPage() {
     </div>
   );
 }
-
-    
