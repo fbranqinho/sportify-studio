@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { collection, query, where, getDocs, Timestamp, limit, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit, orderBy, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile, Reservation } from "@/types";
 import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
@@ -51,6 +51,11 @@ const LoadingDashboard = () => (
     </div>
 );
 
+// Helper type for enriched match data
+interface EnrichedMatch extends Match {
+    teamAName?: string;
+    teamBName?: string;
+}
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -94,26 +99,52 @@ export default function DashboardPage() {
                     const teams = teamsSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Team);
                     const teamIds = teams.map(t => t.id);
 
-                    let upcomingMatches: Match[] = [];
+                    let upcomingMatches: EnrichedMatch[] = [];
                     let teamPlayers: PlayerProfile[] = [];
                     let unavailablePlayers = 0;
                     
                     if (teamIds.length > 0) {
-                        // Fetch upcoming matches for all teams
-                        const matchesQuery = query(
-                            collection(db, "matches"), 
-                            where("teamARef", "in", teamIds), 
-                            where("status", "in", ["Scheduled", "PendingOpponent"])
-                        );
-                        const matchesSnap = await getDocs(matchesQuery);
-                        const allMatches = matchesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
+                        const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
+                        const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
                         
+                        const [matchesASnap, matchesBSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery)]);
+
+                        const allMatchesMap = new Map<string, Match>();
+                        matchesASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+                        matchesBSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+                        
+                        const allMatches = Array.from(allMatchesMap.values());
                         const now = new Date();
-                        // Sort client-side and take the first 3
-                        upcomingMatches = allMatches
-                            .filter(match => new Date(match.date) >= now)
+                        
+                        const futureMatches = allMatches.filter(match => new Date(match.date) >= now);
+
+                        // Enrich matches with team names
+                        const allTeamIds = new Set<string>();
+                        futureMatches.forEach(m => {
+                            if (m.teamARef) allTeamIds.add(m.teamARef);
+                            if (m.teamBRef) allTeamIds.add(m.teamBRef);
+                        });
+
+                        const teamsData = new Map<string, Team>();
+                        // Add already fetched manager teams to map
+                        teams.forEach(t => teamsData.set(t.id, t));
+
+                        const missingTeamIds = Array.from(allTeamIds).filter(id => !teamsData.has(id));
+
+                        if (missingTeamIds.length > 0) {
+                            const opponentTeamsQuery = query(collection(db, "teams"), where(documentId(), "in", missingTeamIds));
+                            const opponentTeamsSnap = await getDocs(opponentTeamsQuery);
+                            opponentTeamsSnap.forEach(doc => teamsData.set(doc.id, {id: doc.id, ...doc.data()} as Team));
+                        }
+
+                        upcomingMatches = futureMatches
                             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                            .slice(0, 3);
+                            .slice(0, 3)
+                            .map(match => ({
+                                ...match,
+                                teamAName: match.teamARef ? teamsData.get(match.teamARef)?.name : "Unknown",
+                                teamBName: match.teamBRef ? teamsData.get(match.teamBRef)?.name : "TBD",
+                            }));
 
 
                         // Fetch players for the primary team to check status
@@ -140,12 +171,12 @@ export default function DashboardPage() {
                     const ownerProfileId = profileSnap.docs[0].id;
                     
                     const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", ownerProfileId));
-                    const bookingsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
-                    const promosQuery = query(collection(db, "promos"), where("ownerProfileId", "==", ownerProfileId), where("validTo", ">=", Timestamp.now().toDate().toISOString()));
+                    const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+                    const promosQuery = query(collection(db, "promos"), where("validTo", ">=", new Date().toISOString()));
 
-                    const [pitchesSnap, bookingsSnap, promosSnap] = await Promise.all([
+                    const [pitchesSnap, reservationsSnap, promosSnap] = await Promise.all([
                         getDocs(pitchesQuery),
-                        getDocs(bookingsQuery),
+                        getDocs(reservationsQuery),
                         getDocs(promosQuery),
                     ]);
 
@@ -154,7 +185,7 @@ export default function DashboardPage() {
                     const todayEnd = new Date();
                     todayEnd.setHours(23, 59, 59, 999);
                     
-                    const todaysBookings = bookingsSnap.docs.filter(doc => {
+                    const todaysBookings = reservationsSnap.docs.filter(doc => {
                         const reservation = doc.data() as Reservation;
                         const reservationDate = new Date(reservation.date);
                         return reservationDate >= todayStart && reservationDate <= todayEnd;

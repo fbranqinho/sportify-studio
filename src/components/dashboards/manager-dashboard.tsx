@@ -7,10 +7,16 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
 
+// Helper type for enriched match data, also add team names
+interface EnrichedMatch extends Match {
+    teamAName?: string;
+    teamBName?: string;
+}
+
 interface ManagerDashboardProps {
   data: {
     teams: Team[];
-    upcomingMatches: Match[];
+    upcomingMatches: EnrichedMatch[];
     unavailablePlayers: number;
     pendingPayments: number;
   }
@@ -22,9 +28,16 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
   const { teams, upcomingMatches, unavailablePlayers, pendingPayments } = data;
   const primaryTeam = teams?.[0];
 
+  const getMatchTitle = (match: EnrichedMatch) => {
+    if (match.teamAName && match.teamBName && match.teamBName !== 'TBD') {
+        return `${match.teamAName} vs ${match.teamBName}`;
+    }
+    return `${match.teamAName} (Practice / Open)`;
+  }
+
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
-      <Card className="xl:col-span-2">
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-2">
+      <Card className="xl:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Upcoming Games</CardTitle>
           <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -35,8 +48,8 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
                     {upcomingMatches.map(match => (
                         <div key={match.id} className="flex items-center justify-between">
                             <div>
-                                <p className="font-semibold">{format(new Date(match.date), "EEE, MMM d 'at' HH:mm")}</p>
-                                <p className="text-xs text-muted-foreground">Practice / Friendly</p>
+                                <p className="font-semibold">{getMatchTitle(match)}</p>
+                                <p className="text-xs text-muted-foreground">{format(new Date(match.date), "EEE, MMM d 'at' HH:mm")}</p>
                             </div>
                             <Button variant="ghost" size="sm" asChild>
                                 <Link href={`/dashboard/games/${match.id}`}>
@@ -56,6 +69,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
             )}
         </CardContent>
       </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
        <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Team Status</CardTitle>
@@ -82,6 +96,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
             </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }
