@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 // Component to handle inviting an opponent
@@ -265,11 +266,11 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                             </DialogHeader>
                             <div className="grid grid-cols-2 gap-4 items-center">
                                 <div className="space-y-2 text-center">
-                                    <Label htmlFor="scoreA" className="text-lg font-bold">{match.teamARef ? "Team A" : "Home"}</Label>
+                                    <Label htmlFor="scoreA" className="text-lg font-bold">{match.teamBRef ? "Team A" : "Vests A"}</Label>
                                     <Input id="scoreA" type="number" value={scoreA} onChange={(e) => setScoreA(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                                 <div className="space-y-2 text-center">
-                                     <Label htmlFor="scoreB" className="text-lg font-bold">{match.teamBRef ? "Team B" : "Away"}</Label>
+                                     <Label htmlFor="scoreB" className="text-lg font-bold">{match.teamBRef ? "Team B" : "Vests B"}</Label>
                                     <Input id="scoreB" type="number" value={scoreB} onChange={(e) => setScoreB(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                             </div>
@@ -603,6 +604,100 @@ function ConfirmedPlayers({ match, teamA, teamB }: { match: Match; teamA: Team |
     );
 }
 
+function SplitTeams({ match, onUpdate }: { match: Match; onUpdate: (data: Partial<Match>) => void }) {
+    const [allPlayers, setAllPlayers] = React.useState<(User & { team: 'A' | 'B' | null })[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const { toast } = useToast();
+
+    React.useEffect(() => {
+        const fetchPlayers = async () => {
+            const allPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
+            if (allPlayerIds.length === 0) {
+                setAllPlayers([]);
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
+            const usersSnapshot = await getDocs(usersQuery);
+            const playersWithTeams = usersSnapshot.docs.map(doc => {
+                const user = { id: doc.id, ...doc.data() } as User;
+                let team: 'A' | 'B' | null = null;
+                if (match.teamAPlayers?.includes(user.id)) team = 'A';
+                if (match.teamBPlayers?.includes(user.id)) team = 'B';
+                return { ...user, team };
+            });
+
+            setAllPlayers(playersWithTeams);
+            setLoading(false);
+        };
+
+        fetchPlayers();
+    }, [match]);
+
+    const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
+        setAllPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
+    };
+
+    const handleSaveChanges = async () => {
+        const teamAPlayers = allPlayers.filter(p => p.team === 'A').map(p => p.id);
+        const teamBPlayers = allPlayers.filter(p => p.team === 'B').map(p => p.id);
+        
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { teamAPlayers, teamBPlayers });
+            toast({ title: "Teams Saved", description: "The practice teams have been updated." });
+            onUpdate({ teamAPlayers, teamBPlayers });
+        } catch (error) {
+            console.error("Error saving teams:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not save team assignments." });
+        }
+    };
+
+    if (loading) return <Skeleton className="h-48" />;
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline">Split Practice Teams</CardTitle>
+                <CardDescription>Assign confirmed players to a temporary team for this practice match.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Player</TableHead>
+                            <TableHead className="w-[200px]">Assign Team</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {allPlayers.map(player => (
+                            <TableRow key={player.id}>
+                                <TableCell className="font-medium">{player.name}</TableCell>
+                                <TableCell>
+                                    <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Unassigned" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                            <SelectItem value="A">Vests A</SelectItem>
+                                            <SelectItem value="B">Vests B</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+            <CardFooter>
+                 <Button onClick={handleSaveChanges}><Shuffle className="mr-2 h-4 w-4"/>Save Teams</Button>
+            </CardFooter>
+        </Card>
+    );
+}
 
 
 export default function GameDetailsPage() {
@@ -700,10 +795,8 @@ export default function GameDetailsPage() {
         return <div>Match not found.</div>;
     }
     
-    // Team A might not exist for pickup games, but manager actions depend on it.
-    // So we check for teamA for manager-specific actions.
     const isManager = user?.id === teamA?.managerId;
-
+    const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
 
     const getMatchTitle = () => {
         if (match.status === 'Finished') return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;
@@ -716,8 +809,8 @@ export default function GameDetailsPage() {
         return 'Match Details';
     };
 
-    const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-    const missingPlayers = (pitch?.capacity || 0) - confirmedPlayers;
+    const confirmedPlayersCount = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+    const missingPlayers = (pitch?.capacity || 0) - confirmedPlayersCount;
 
 
     const getStatusInfo = () => {
@@ -765,7 +858,7 @@ export default function GameDetailsPage() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground"/>
-                                <span>Confirmed Players: <span className="font-semibold">{confirmedPlayers}</span></span>
+                                <span>Confirmed Players: <span className="font-semibold">{confirmedPlayersCount}</span></span>
                             </div>
                         </div>
                     </CardContent>
@@ -807,6 +900,10 @@ export default function GameDetailsPage() {
             
             <ConfirmedPlayers match={match} teamA={teamA} teamB={teamB} />
             
+            {isManager && isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished" && (
+                <SplitTeams match={match} onUpdate={handleMatchUpdate} />
+            )}
+
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
 
             {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
