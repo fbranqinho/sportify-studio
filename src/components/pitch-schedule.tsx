@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -271,3 +270,5 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
+    
