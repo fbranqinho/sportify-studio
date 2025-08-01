@@ -158,6 +158,7 @@ export interface Team {
   suspensions: number;
   latePayments: number;
   debts: number;
+  recentForm: ("W" | "D" | "L")[];
 }
 
 export type InvitationStatus = "pending" | "accepted" | "declined";

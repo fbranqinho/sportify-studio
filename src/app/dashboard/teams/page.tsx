@@ -85,12 +85,25 @@ function ManagerTeamsView() {
                     </div>
                      <div className="flex justify-between items-center text-sm">
                         <span className="font-semibold">Recent Form</span>
-                        <div className="flex items-center gap-1">
-                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
-                            <Badge className="bg-red-500 hover:bg-red-500 text-white">L</Badge>
-                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
-                            <Badge className="bg-gray-400 hover:bg-gray-400 text-white">D</Badge>
-                            <Badge className="bg-green-500 hover:bg-green-500 text-white">W</Badge>
+                         <div className="flex items-center gap-1">
+                            {(team.recentForm && team.recentForm.length > 0) ? (
+                                team.recentForm.slice(0, 5).map((form, i) => (
+                                    <Badge
+                                    key={i}
+                                    className={
+                                        form === "W"
+                                        ? "bg-green-500 hover:bg-green-500 text-white"
+                                        : form === "L"
+                                        ? "bg-red-500 hover:bg-red-500 text-white"
+                                        : "bg-gray-400 hover:bg-gray-400 text-white"
+                                    }
+                                    >
+                                    {form}
+                                    </Badge>
+                                ))
+                            ) : (
+                                <span className="text-xs text-muted-foreground">No games played</span>
+                            )}
                         </div>
                     </div>
                      <div className="flex justify-between items-center text-sm">

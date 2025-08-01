@@ -71,6 +71,7 @@ export function CreateTeamForm({ managerId }: CreateTeamFormProps) {
         latePayments: 0,
         debts: 0,
         competitions: [],
+        recentForm: [],
       });
 
       toast({
