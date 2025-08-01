@@ -104,12 +104,12 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                 if (totalPlayers < getPlayerCapacity(pitch.sport)) return { status: 'Open', match, price: 0 };
             }
-            return { status: 'Booked', match, price: 0 };
+            return { status: 'Booked', match, price: pitch.basePrice };
         }
 
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         if (reservation) {
-            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: 0 };
+            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: pitch.basePrice };
         }
         
         const dayOfWeek = getDay(day);
