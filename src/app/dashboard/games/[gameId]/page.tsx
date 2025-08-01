@@ -382,21 +382,17 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
 }
 
 interface RosterPlayer extends User {
+    status: InvitationStatus | 'confirmed';
     team: 'A' | 'B' | null;
-    teamName: string;
 }
 
 function PlayerRoster({ 
     match, 
-    teamA, 
-    teamB, 
     isManager, 
     isPracticeMatch, 
     onUpdate 
 }: { 
     match: Match; 
-    teamA: Team | null; 
-    teamB: Team | null;
     isManager: boolean;
     isPracticeMatch: boolean;
     onUpdate: (data: Partial<Match>) => void;
@@ -406,63 +402,72 @@ function PlayerRoster({
     const { toast } = useToast();
 
     React.useEffect(() => {
-        const fetchPlayers = async () => {
-            const allPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
+        const fetchPlayersAndInvitations = async () => {
+            setLoading(true);
+
+            // Fetch all invitations for the match
+            const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", match.id));
+            const invSnapshot = await getDocs(invQuery);
+            const invitations = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchInvitation));
+            const invitationMap = new Map(invitations.map(inv => [inv.playerId, inv]));
+
+            // Get all unique player IDs from both invitations and confirmed players
+            const allPlayerIds = [...new Set([
+                ...invitations.map(inv => inv.playerId), 
+                ...(match.teamAPlayers || []), 
+                ...(match.teamBPlayers || [])
+            ])];
+
             if (allPlayerIds.length === 0) {
                 setPlayers([]);
                 setLoading(false);
                 return;
             }
-            setLoading(true);
 
+            // Fetch user data for all involved players
             const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
             const usersSnapshot = await getDocs(usersQuery);
-            const usersMap = new Map(usersSnapshot.docs.map(doc => [doc.id, doc.data() as User]));
-            
-            const rosterPlayers: RosterPlayer[] = allPlayerIds.map(id => {
-                const user = usersMap.get(id);
+            const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+
+            const rosterPlayers = usersData.map(user => {
+                const invitation = invitationMap.get(user.id);
+                const isConfirmedA = match.teamAPlayers?.includes(user.id);
+                const isConfirmedB = match.teamBPlayers?.includes(user.id);
+                let status: InvitationStatus | 'confirmed' = 'pending';
+                if (isConfirmedA || isConfirmedB) {
+                    status = 'confirmed';
+                } else if (invitation) {
+                    status = invitation.status;
+                }
+                
                 let team: 'A' | 'B' | null = null;
-                let teamName = "External Player";
+                if(isConfirmedA) team = 'A';
+                if(isConfirmedB) team = 'B';
 
-                if (match.teamAPlayers?.includes(id)) team = 'A';
-                if (match.teamBPlayers?.includes(id)) team = 'B';
-                
-                if (teamA && teamA.playerIds.includes(id) && match.teamAPlayers?.includes(id)) teamName = teamA.name;
-                else if (teamB && teamB.playerIds.includes(id) && match.teamBPlayers?.includes(id)) teamName = teamB.name;
-                else if (teamA && match.teamAPlayers?.includes(id)) teamName = isPracticeMatch ? "Vests A" : "External Player";
-                else if (teamB && match.teamBPlayers?.includes(id)) teamName = isPracticeMatch ? "Vests B" : "External Player";
-                
-
-                return {
-                    ...(user as User),
-                    id: id,
-                    name: user?.name || "Unknown Player",
-                    team,
-                    teamName
-                };
-            }).filter(p => p.name !== "Unknown Player");
+                return { ...user, status, team };
+            }).sort((a, b) => a.name.localeCompare(b.name));
 
             setPlayers(rosterPlayers);
             setLoading(false);
         };
 
-        fetchPlayers();
-    }, [match, teamA, teamB, isPracticeMatch]);
+        fetchPlayersAndInvitations();
+    }, [match]);
 
      const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
     };
     
     const handleShuffle = () => {
-        const shuffled = [...players].sort(() => 0.5 - Math.random());
+        const confirmedPlayers = players.filter(p => p.status === 'confirmed');
+        const shuffled = [...confirmedPlayers].sort(() => 0.5 - Math.random());
         const half = Math.ceil(shuffled.length / 2);
         const teamAPlayers = shuffled.slice(0, half);
-        const teamBPlayers = shuffled.slice(half);
-
+        
         const newAssignments = players.map(player => {
+            if (player.status !== 'confirmed') return player;
             if (teamAPlayers.some(p => p.id === player.id)) return { ...player, team: 'A' as const };
-            if (teamBPlayers.some(p => p.id === player.id)) return { ...player, team: 'B' as const };
-            return player;
+            return { ...player, team: 'B' as const };
         });
 
         setPlayers(newAssignments);
@@ -483,6 +488,15 @@ function PlayerRoster({
             toast({ variant: "destructive", title: "Error", description: "Could not save team assignments." });
         }
     };
+
+    const getStatusIcon = (status: InvitationStatus | 'confirmed') => {
+        switch (status) {
+            case 'confirmed': return <UserCheck className="h-5 w-5 text-green-600" />;
+            case 'declined': return <UserX className="h-5 w-5 text-red-600" />;
+            case 'pending': return <MailQuestion className="h-5 w-5 text-amber-600" />;
+            default: return null;
+        }
+    }
     
     if (loading) {
         return <Card><CardContent><Skeleton className="h-48" /></CardContent></Card>;
@@ -492,8 +506,10 @@ function PlayerRoster({
         return null;
     }
     
-    const title = isPracticeMatch && isManager ? "Split Practice Teams" : "Confirmed Players";
-    const description = isPracticeMatch && isManager ? "Assign confirmed players to a temporary team for this practice match." : "Players who have confirmed their attendance for this game.";
+    const title = "Player Roster & Status";
+    const description = isPracticeMatch && isManager 
+        ? "Assign confirmed players to a team for this practice match." 
+        : "Overview of all invited players and their invitation status.";
 
     return (
         <Card>
@@ -506,7 +522,8 @@ function PlayerRoster({
                     <TableHeader>
                         <TableRow>
                             <TableHead>Player</TableHead>
-                            <TableHead>{isPracticeMatch && isManager ? "Assign Team" : "Team"}</TableHead>
+                            <TableHead>Status</TableHead>
+                            {isPracticeMatch && isManager && <TableHead>Assign Team</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -514,21 +531,29 @@ function PlayerRoster({
                             <TableRow key={player.id}>
                                 <TableCell className="font-medium">{player.name}</TableCell>
                                 <TableCell>
-                                    {isPracticeMatch && isManager ? (
-                                         <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                            <SelectTrigger className="w-[150px]">
-                                                <SelectValue placeholder="Unassigned" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                <SelectItem value="A">Vests A</SelectItem>
-                                                <SelectItem value="B">Vests B</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Badge variant={player.teamName === 'External Player' ? 'secondary' : 'default'}>{player.teamName}</Badge>
-                                    )}
+                                     <Badge variant="outline" className="gap-2">
+                                        {getStatusIcon(player.status)}
+                                        <span className="capitalize">{player.status}</span>
+                                    </Badge>
                                 </TableCell>
+                                {isPracticeMatch && isManager && (
+                                     <TableCell>
+                                        {player.status === 'confirmed' ? (
+                                            <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                                <SelectTrigger className="w-[150px]">
+                                                    <SelectValue placeholder="Unassigned" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    <SelectItem value="A">Vests A</SelectItem>
+                                                    <SelectItem value="B">Vests B</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span className="text-sm text-muted-foreground">-</span>
+                                        )}
+                                     </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>
@@ -646,97 +671,6 @@ function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match;
             </CardContent>
         </Card>
     )
-}
-
-interface EnrichedInvitation extends MatchInvitation {
-    playerName: string;
-}
-
-function InvitationStatus({ matchId }: { matchId: string }) {
-    const [invitations, setInvitations] = React.useState<EnrichedInvitation[]>([]);
-    const [loading, setLoading] = React.useState(true);
-    const { toast } = useToast();
-
-    React.useEffect(() => {
-        const fetchInvitations = async () => {
-            setLoading(true);
-            try {
-                const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", matchId));
-                const invSnapshot = await getDocs(invQuery);
-                const invs = invSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchInvitation));
-                
-                if (invs.length > 0) {
-                    const playerIds = [...new Set(invs.map(i => i.playerId))];
-                    const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
-                    const usersSnapshot = await getDocs(usersQuery);
-                    const usersMap = new Map(usersSnapshot.docs.map(d => [d.id, d.data() as User]));
-
-                    const enrichedInvs = invs.map(inv => ({
-                        ...inv,
-                        playerName: usersMap.get(inv.playerId)?.name || "Unknown Player"
-                    })).sort((a,b) => a.playerName.localeCompare(b.playerName));
-
-                    setInvitations(enrichedInvs);
-                } else {
-                    setInvitations([]);
-                }
-            } catch (error) {
-                console.error("Error fetching invitation statuses:", error);
-                toast({ variant: "destructive", title: "Error", description: "Could not load invitation statuses." });
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchInvitations();
-    }, [matchId, toast]);
-
-    if (loading) {
-        return <Card><CardContent><Skeleton className="h-24" /></CardContent></Card>;
-    }
-    
-    if (invitations.length === 0) return null;
-    
-    const getStatusIcon = (status: InvitationStatus) => {
-        switch (status) {
-            case 'accepted': return <UserCheck className="h-5 w-5 text-green-600" />;
-            case 'declined': return <UserX className="h-5 w-5 text-red-600" />;
-            case 'pending': return <MailQuestion className="h-5 w-5 text-amber-600" />;
-            default: return null;
-        }
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">Invitation Status</CardTitle>
-                <CardDescription>See who has responded to the game invitation.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Player</TableHead>
-                            <TableHead className="text-right">Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {invitations.map(inv => (
-                            <TableRow key={inv.id}>
-                                <TableCell className="font-medium">{inv.playerName}</TableCell>
-                                <TableCell className="text-right">
-                                    <Badge variant="outline" className="gap-2">
-                                        {getStatusIcon(inv.status)}
-                                        <span className="capitalize">{inv.status}</span>
-                                    </Badge>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-    );
 }
 
 const getPlayerCapacity = (sport: PitchSport): number => {
@@ -991,14 +925,10 @@ export default function GameDetailsPage() {
             
             <PlayerRoster 
                 match={match} 
-                teamA={teamA} 
-                teamB={teamB} 
                 isManager={isManager} 
                 isPracticeMatch={isPracticeMatch && match.status !== "InProgress" && match.status !== "Finished"}
                 onUpdate={handleMatchUpdate}
             />
-
-            {isManager && <InvitationStatus matchId={match.id} />}
             
             {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
 
@@ -1007,5 +937,7 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
 
     
