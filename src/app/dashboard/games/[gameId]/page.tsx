@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Notification, Pitch, OwnerProfile, User } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -189,15 +189,50 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
 
     const handleEndGame = async () => {
         const matchRef = doc(db, "matches", match.id);
+        const batch = writeBatch(db);
+
         try {
-            await updateDoc(matchRef, { 
+            // Update match status and score
+            batch.update(matchRef, { 
                 status: "Finished",
                 scoreA: scoreA,
                 scoreB: scoreB,
-             });
+            });
+
+            // Update team stats if it was a two-team match
+            if (match.teamARef && match.teamBRef) {
+                const teamARef = doc(db, "teams", match.teamARef);
+                const teamBRef = doc(db, "teams", match.teamBRef);
+                let teamAResult: "W" | "D" | "L";
+                let teamBResult: "W" | "D" | "L";
+
+                if (scoreA > scoreB) { // Team A wins
+                    teamAResult = "W";
+                    teamBResult = "L";
+                    batch.update(teamARef, { wins: increment(1) });
+                    batch.update(teamBRef, { losses: increment(1) });
+                } else if (scoreB > scoreA) { // Team B wins
+                    teamAResult = "L";
+                    teamBResult = "W";
+                    batch.update(teamARef, { losses: increment(1) });
+                    batch.update(teamBRef, { wins: increment(1) });
+                } else { // Draw
+                    teamAResult = "D";
+                    teamBResult = "D";
+                    batch.update(teamARef, { draws: increment(1) });
+                    batch.update(teamBRef, { draws: increment(1) });
+                }
+
+                // Update recent form for both teams
+                batch.update(teamARef, { recentForm: arrayUnion(teamAResult) });
+                batch.update(teamBRef, { recentForm: arrayUnion(teamBResult) });
+            }
+
+            await batch.commit();
             onMatchUpdate({ status: "Finished", scoreA, scoreB });
             toast({ title: "Game Finished", description: "The final score has been recorded." });
             setIsEndGameOpen(false);
+
         } catch (error) {
             console.error("Error ending game:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not end the game." });
