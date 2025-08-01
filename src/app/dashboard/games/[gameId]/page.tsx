@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -739,6 +739,20 @@ function InvitationStatus({ matchId }: { matchId: string }) {
     );
 }
 
+const getPlayerCapacity = (sport: PitchSport): number => {
+    switch (sport) {
+        case 'fut5': case 'futsal': return 10;
+        case 'fut7': return 14;
+        case 'fut11': return 22;
+        default: return 0;
+    }
+};
+
+interface InvitationCounts {
+    pending: number;
+    declined: number;
+}
+
 export default function GameDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -749,6 +763,7 @@ export default function GameDetailsPage() {
     const [teamB, setTeamB] = React.useState<Team | null>(null);
     const [pitch, setPitch] = React.useState<Pitch | null>(null);
     const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
+    const [invitationCounts, setInvitationCounts] = React.useState<InvitationCounts>({ pending: 0, declined: 0 });
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
 
@@ -801,6 +816,21 @@ export default function GameDetailsPage() {
                 });
                 promises.push(pitchPromise);
             }
+
+            // Invitation counts
+            const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", gameId));
+            const invPromise = getDocs(invQuery).then(snapshot => {
+                let pending = 0;
+                let declined = 0;
+                snapshot.forEach(doc => {
+                    const status = doc.data().status as InvitationStatus;
+                    if (status === 'pending') pending++;
+                    if (status === 'declined') declined++;
+                });
+                setInvitationCounts({ pending, declined });
+            });
+            promises.push(invPromise);
+
 
             await Promise.all(promises);
 
@@ -860,7 +890,8 @@ export default function GameDetailsPage() {
     };
 
     const confirmedPlayersCount = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-    const missingPlayers = (pitch?.capacity || 0) - confirmedPlayersCount;
+    const playerCapacity = pitch ? getPlayerCapacity(pitch.sport) : 0;
+    const missingPlayers = playerCapacity > 0 ? playerCapacity - confirmedPlayersCount : 0;
 
 
     const getStatusInfo = () => {
@@ -901,14 +932,22 @@ export default function GameDetailsPage() {
                         <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                       <div className="text-sm space-y-2">
+                       <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                             <div className="flex items-center gap-2">
                                 <statusInfo.icon className={cn("h-4 w-4", statusInfo.color)}/>
                                 <span>Status: <span className="font-semibold">{statusInfo.text}</span></span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground"/>
-                                <span>Confirmed Players: <span className="font-semibold">{confirmedPlayersCount}</span></span>
+                                <span>Confirmed: <span className="font-semibold">{confirmedPlayersCount}</span></span>
+                            </div>
+                             <div className="flex items-center gap-2">
+                                <MailQuestion className="h-4 w-4 text-muted-foreground"/>
+                                <span>Pending: <span className="font-semibold">{invitationCounts.pending}</span></span>
+                            </div>
+                              <div className="flex items-center gap-2">
+                                <UserMinus className="h-4 w-4 text-muted-foreground"/>
+                                <span>Declined: <span className="font-semibold">{invitationCounts.declined}</span></span>
                             </div>
                         </div>
                     </CardContent>
@@ -968,3 +1007,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
