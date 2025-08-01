@@ -82,7 +82,6 @@ export function PitchesMap({
       {pitches.map((pitch) => {
         if (!pitch.coords) return null;
         
-        const isNearest = pitch.id === nearestPitchId;
         const isHovered = pitch.id === hoveredPitchId;
 
         return (
@@ -92,9 +91,6 @@ export function PitchesMap({
             title={pitch.name}
             onClick={() => setSelectedPitch(pitch)}
             animation={isHovered ? (window.google.maps.Animation.BOUNCE) : undefined}
-            icon={isNearest ? {
-                url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
-            } : undefined}
           />
         );
       })}
