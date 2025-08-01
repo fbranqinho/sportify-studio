@@ -4,7 +4,7 @@
 import * as React from "react";
 import { collection, query, where, getDocs, Timestamp, limit, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile } from "@/types";
+import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile, Reservation } from "@/types";
 import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
 import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
@@ -140,13 +140,7 @@ export default function DashboardPage() {
                     const ownerProfileId = profileSnap.docs[0].id;
                     
                     const pitchesQuery = query(collection(db, "pitches"), where("ownerRef", "==", ownerProfileId));
-                    
-                    const todayStart = new Date();
-                    todayStart.setHours(0, 0, 0, 0);
-                    const todayEnd = new Date();
-                    todayEnd.setHours(23, 59, 59, 999);
-                    
-                    const bookingsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId), where("date", ">=", todayStart.toISOString()), where("date", "<=", todayEnd.toISOString()));
+                    const bookingsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
                     const promosQuery = query(collection(db, "promos"), where("ownerProfileId", "==", ownerProfileId), where("validTo", ">=", Timestamp.now().toDate().toISOString()));
 
                     const [pitchesSnap, bookingsSnap, promosSnap] = await Promise.all([
@@ -155,7 +149,19 @@ export default function DashboardPage() {
                         getDocs(promosQuery),
                     ]);
 
-                    setDashboardData({ pitches: pitchesSnap.docs.map(d => ({id: d.id, ...d.data()})), bookings: bookingsSnap.size, promos: promosSnap.size });
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    
+                    const todaysBookings = bookingsSnap.docs.filter(doc => {
+                        const reservation = doc.data() as Reservation;
+                        const reservationDate = new Date(reservation.date);
+                        return reservationDate >= todayStart && reservationDate <= todayEnd;
+                    }).length;
+
+
+                    setDashboardData({ pitches: pitchesSnap.docs.map(d => ({id: d.id, ...d.data()})), bookings: todaysBookings, promos: promosSnap.size });
                     break;
                 }
                 default:
