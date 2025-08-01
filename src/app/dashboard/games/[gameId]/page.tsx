@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -108,7 +108,7 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
         }
     };
     
-    const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent' && isPracticeMatch);
+    const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent');
 
     return (
         <Card>
@@ -502,7 +502,7 @@ function PlayerRoster({
             playerId: player.id,
             playerName: player.name,
             teamId: teamId,
-            timestamp: serverTimestamp()
+            timestamp: Timestamp.now()
         };
         
         const matchRef = doc(db, "matches", match.id);
@@ -895,3 +895,4 @@ export default function GameDetailsPage() {
     
 
     
+
