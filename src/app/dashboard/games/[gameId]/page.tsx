@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -144,18 +144,57 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match:
     };
 
     const handleEndGame = async () => {
-        const matchRef = doc(db, "matches", match.id);
         const batch = writeBatch(db);
+        const matchRef = doc(db, "matches", match.id);
 
+        // --- Step 1: Update match status and final score ---
+        batch.update(matchRef, {
+            status: "Finished",
+            scoreA: scoreA,
+            scoreB: scoreB,
+        });
+
+        // --- Step 2: Aggregate player stats from match events ---
+        const playerStats: { [playerId: string]: { goals: number, assists: number, yellowCards: number, redCards: number } } = {};
+        const allPlayerIds = new Set<string>();
+
+        if (match.events) {
+            for (const event of match.events) {
+                allPlayerIds.add(event.playerId);
+                if (!playerStats[event.playerId]) {
+                    playerStats[event.playerId] = { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
+                }
+                switch (event.type) {
+                    case 'Goal': playerStats[event.playerId].goals++; break;
+                    case 'Assist': playerStats[event.playerId].assists++; break;
+                    case 'YellowCard': playerStats[event.playerId].yellowCards++; break;
+                    case 'RedCard': playerStats[event.playerId].redCards++; break;
+                }
+            }
+        }
+        
         try {
-            // Update match status and score
-            batch.update(matchRef, { 
-                status: "Finished",
-                scoreA: scoreA,
-                scoreB: scoreB,
-            });
+            // --- Step 3: Fetch player profiles to update them ---
+            if (allPlayerIds.size > 0) {
+                 const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", Array.from(allPlayerIds)));
+                 const profilesSnapshot = await getDocs(profilesQuery);
 
-            // Update team stats if it was a two-team match
+                 profilesSnapshot.forEach(profileDoc => {
+                     const profile = { id: profileDoc.id, ...profileDoc.data() } as PlayerProfile;
+                     const stats = playerStats[profile.userRef];
+                     if (stats) {
+                         const profileRef = doc(db, "playerProfiles", profile.id);
+                         batch.update(profileRef, {
+                             goals: increment(stats.goals),
+                             assists: increment(stats.assists),
+                             yellowCards: increment(stats.yellowCards),
+                             redCards: increment(stats.redCards),
+                         });
+                     }
+                 });
+            }
+
+            // --- Step 4: Update team stats (wins, losses, draws) ---
             if (match.teamARef && match.teamBRef) {
                 const teamARef = doc(db, "teams", match.teamARef);
                 const teamBRef = doc(db, "teams", match.teamBRef);
@@ -163,35 +202,31 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match:
                 let teamBResult: "W" | "D" | "L";
 
                 if (scoreA > scoreB) { // Team A wins
-                    teamAResult = "W";
-                    teamBResult = "L";
+                    teamAResult = "W"; teamBResult = "L";
                     batch.update(teamARef, { wins: increment(1) });
                     batch.update(teamBRef, { losses: increment(1) });
                 } else if (scoreB > scoreA) { // Team B wins
-                    teamAResult = "L";
-                    teamBResult = "W";
+                    teamAResult = "L"; teamBResult = "W";
                     batch.update(teamARef, { losses: increment(1) });
                     batch.update(teamBRef, { wins: increment(1) });
                 } else { // Draw
-                    teamAResult = "D";
-                    teamBResult = "D";
+                    teamAResult = "D"; teamBResult = "D";
                     batch.update(teamARef, { draws: increment(1) });
                     batch.update(teamBRef, { draws: increment(1) });
                 }
-
-                // Update recent form for both teams
                 batch.update(teamARef, { recentForm: arrayUnion(teamAResult) });
                 batch.update(teamBRef, { recentForm: arrayUnion(teamBResult) });
             }
 
+            // --- Step 5: Commit all updates ---
             await batch.commit();
             onMatchUpdate({ status: "Finished", scoreA, scoreB });
-            toast({ title: "Game Finished", description: "The final score has been recorded." });
+            toast({ title: "Game Finished", description: "The final score and player stats have been recorded." });
             setIsEndGameOpen(false);
 
         } catch (error) {
             console.error("Error ending game:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not end the game." });
+            toast({ variant: "destructive", title: "Error", description: "Could not end the game and update stats." });
         }
     };
     
