@@ -68,7 +68,7 @@ export default function DashboardPage() {
                     const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", user.id), limit(1));
                     const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
                     
-                    const [profileSnap, teamsSnap] = await Promise.all([getDocs(playerProfileQuery), getDocs(teamsSnap)]);
+                    const [profileSnap, teamsSnap] = await Promise.all([getDocs(playerProfileQuery), getDocs(playerTeamsQuery)]);
                     
                     const profile = profileSnap.empty ? null : {id: profileSnap.docs[0].id, ...profileSnap.docs[0].data()} as PlayerProfile;
                     const teamIds = teamsSnap.docs.map(doc => doc.id);
@@ -100,12 +100,15 @@ export default function DashboardPage() {
                             collection(db, "matches"), 
                             where("teamARef", "in", teamIds), 
                             where("status", "in", ["Scheduled", "PendingOpponent"]), 
-                            where("date", ">=", Timestamp.now()),
-                            orderBy("date"),
-                            limit(3)
+                            where("date", ">=", Timestamp.now())
                         );
                         const matchesSnap = await getDocs(matchesQuery);
-                        upcomingMatches = matchesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
+                        const allMatches = matchesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
+                        
+                        // Sort client-side and take the first 3
+                        allMatches.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        upcomingMatches = allMatches.slice(0, 3);
+
 
                         // Fetch players for the primary team to check status
                         const primaryTeam = teams[0];
