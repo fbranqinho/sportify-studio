@@ -398,6 +398,12 @@ interface RosterPlayer extends User {
     team: 'A' | 'B' | null;
 }
 
+interface EventState {
+  player: User;
+  type: MatchEventType;
+  teamId: string;
+}
+
 function PlayerRoster({ 
     match, 
     isManager, 
@@ -412,9 +418,17 @@ function PlayerRoster({
     const [players, setPlayers] = React.useState<RosterPlayer[]>([]);
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
+    const [isEventDialogOpen, setIsEventDialogOpen] = React.useState(false);
+    const [currentEvent, setCurrentEvent] = React.useState<EventState | null>(null);
+    const [eventMinute, setEventMinute] = React.useState<number | "">("");
 
     const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
     const isLive = match.status === 'InProgress';
+    
+    const sentOffPlayers = React.useMemo(() => {
+        return match.events?.filter(e => e.type === 'RedCard').map(e => e.playerId) || [];
+    }, [match.events]);
+
 
     React.useEffect(() => {
         const fetchPlayersAndInvitations = async () => {
@@ -500,19 +514,31 @@ function PlayerRoster({
         }
     };
     
-    const handleAddEvent = async (player: User, type: MatchEventType, teamId: string | null) => {
+    const openEventDialog = (player: User, type: MatchEventType, teamId: string | null) => {
         if (!teamId) {
             toast({ variant: "destructive", title: "Error", description: "Cannot add event, player team is not identified."});
             return;
         }
+        setCurrentEvent({ player, type, teamId });
+        setIsEventDialogOpen(true);
+    };
 
+    const handleConfirmEvent = async () => {
+        if (!currentEvent || typeof eventMinute !== 'number' || eventMinute < 0) {
+            toast({ variant: "destructive", title: "Error", description: "Please enter a valid minute." });
+            return;
+        }
+
+        const { player, type, teamId } = currentEvent;
+        
         const newEvent: MatchEvent = {
             id: uuidv4(),
             type,
             playerId: player.id,
             playerName: player.name,
-            teamId: teamId,
-            timestamp: Timestamp.now()
+            teamId,
+            timestamp: Timestamp.now(),
+            minute: eventMinute,
         };
         
         const matchRef = doc(db, "matches", match.id);
@@ -522,21 +548,29 @@ function PlayerRoster({
                 events: arrayUnion(newEvent)
             });
             onEventAdded(newEvent);
-            toast({ title: "Event Added", description: `${type} added for ${player.name}.` });
+            toast({ title: "Event Added", description: `${type} at ${eventMinute}' added for ${player.name}.` });
         } catch (error) {
             console.error("Error adding event:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not add the event." });
+        } finally {
+            setIsEventDialogOpen(false);
+            setCurrentEvent(null);
+            setEventMinute("");
         }
     };
 
-    const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => (
-        <div className="flex gap-1">
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'Goal', teamId)}><Goal className="h-4 w-4 text-green-600"/></Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'Assist', teamId)}><CirclePlus className="h-4 w-4 text-blue-600"/></Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'YellowCard', teamId)}><Square className="h-4 w-4 text-yellow-500 fill-yellow-500"/></Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'RedCard', teamId)}><Square className="h-4 w-4 text-red-600 fill-red-600"/></Button>
-        </div>
-    );
+
+    const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => {
+        const isSentOff = sentOffPlayers.includes(player.id);
+        return (
+            <div className="flex gap-1">
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'Goal', teamId)}><Goal className="h-4 w-4 text-green-600"/></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'Assist', teamId)}><CirclePlus className="h-4 w-4 text-blue-600"/></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'YellowCard', teamId)}><Square className="h-4 w-4 text-yellow-500 fill-yellow-500"/></Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'RedCard', teamId)}><Square className="h-4 w-4 text-red-600 fill-red-600"/></Button>
+            </div>
+        );
+    }
 
     const getStatusIcon = (status: InvitationStatus | 'confirmed') => {
         switch (status) {
@@ -568,6 +602,7 @@ function PlayerRoster({
     const showLiveActions = isManager && isLive;
 
     return (
+        <>
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline">{title}</CardTitle>
@@ -580,12 +615,12 @@ function PlayerRoster({
                             <TableHead>Player</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Team</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            {showLiveActions && <TableHead className="text-right">Live Actions</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {players.map(player => (
-                            <TableRow key={player.id}>
+                            <TableRow key={player.id} className={sentOffPlayers.includes(player.id) ? 'opacity-50' : ''}>
                                 <TableCell className="font-medium">{player.name}</TableCell>
                                 <TableCell>
                                      <Badge variant="outline" className="gap-2">
@@ -610,16 +645,18 @@ function PlayerRoster({
                                             <span className="text-sm text-muted-foreground">-</span>
                                         )
                                     ) : (
-                                        isLive && player.team ? `Vests ${player.team}` : '-'
+                                        player.team ? `Vests ${player.team}` : '-'
                                     )}
                                 </TableCell>
-                                <TableCell className="text-right">
-                                    {showLiveActions && player.team ? (
-                                        <PlayerActions player={player} teamId={player.team} />
-                                    ) : (
-                                        <span className="text-sm text-muted-foreground">-</span>
-                                    )}
-                                </TableCell>
+                                {showLiveActions && (
+                                     <TableCell className="text-right">
+                                        {player.team && player.status === 'confirmed' ? (
+                                            <PlayerActions player={player} teamId={player.team} />
+                                        ) : (
+                                            <span className="text-sm text-muted-foreground">-</span>
+                                        )}
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>
@@ -632,6 +669,32 @@ function PlayerRoster({
                 </CardFooter>
             )}
         </Card>
+        
+         <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Record Event: {currentEvent?.type}</DialogTitle>
+                    <DialogDescription>
+                        Enter the game minute for the {currentEvent?.type.toLowerCase()} by {currentEvent?.player.name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                    <Label htmlFor="eventMinute">Game Minute</Label>
+                    <Input
+                        id="eventMinute"
+                        type="number"
+                        placeholder="e.g., 42"
+                        value={eventMinute}
+                        onChange={(e) => setEventMinute(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEventDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleConfirmEvent}>Save Event</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }
 
@@ -772,7 +835,6 @@ export default function GameDetailsPage() {
     }
     
     const isManager = user?.id === teamA?.managerId;
-    const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
 
     const getMatchTitle = () => {
         if (match.status === 'Finished') return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;

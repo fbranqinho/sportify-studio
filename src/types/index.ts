@@ -238,6 +238,7 @@ export interface MatchEvent {
   playerName: string;
   teamId: string;
   timestamp: FieldValue;
+  minute?: number;
 }
 
 
