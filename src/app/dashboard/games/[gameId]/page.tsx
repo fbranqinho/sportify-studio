@@ -107,6 +107,8 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
             toast({ variant: "destructive", title: "Error", description: "Could not end the game." });
         }
     };
+    
+    const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent' && isPracticeMatch);
 
     return (
         <Card>
@@ -115,7 +117,7 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                 <CardDescription>Manage the game flow from start to finish.</CardDescription>
             </CardHeader>
             <CardContent className="flex items-center justify-center gap-4">
-                {match.status === 'Scheduled' && (
+                {canStartGame && (
                     <Button onClick={handleStartGame} size="lg">
                         <Play className="mr-2" /> Start Game
                     </Button>
