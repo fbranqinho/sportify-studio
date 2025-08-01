@@ -94,7 +94,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const slotDateTime = new Date(day);
         slotDateTime.setHours(slotHours, 0, 0, 0);
 
-        if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice };
+        if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice || 0 };
 
         const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
 
@@ -104,12 +104,12 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                 if (totalPlayers < getPlayerCapacity(pitch.sport)) return { status: 'Open', match, price: 0 };
             }
-            return { status: 'Booked', match, price: pitch.basePrice };
+            return { status: 'Booked', match, price: pitch.basePrice || 0 };
         }
 
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         if (reservation) {
-            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: pitch.basePrice };
+            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: pitch.basePrice || 0 };
         }
         
         const dayOfWeek = getDay(day);
@@ -117,7 +117,8 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
             .sort((a, b) => b.discountPercent - a.discountPercent)[0];
 
-        const finalPrice = applicablePromo ? pitch.basePrice * (1 - applicablePromo.discountPercent / 100) : pitch.basePrice;
+        const basePrice = pitch.basePrice || 0;
+        const finalPrice = applicablePromo ? basePrice * (1 - applicablePromo.discountPercent / 100) : basePrice;
 
         return { status: 'Available', promotion: applicablePromo, price: finalPrice };
     };
@@ -204,7 +205,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                         >
                                                             {slotInfo.promotion && (
                                                                 <div className="flex items-center gap-2 text-xs font-bold text-destructive">
-                                                                     <span className="line-through">{pitch.basePrice.toFixed(2)}€</span>
+                                                                     <span className="line-through">{(pitch.basePrice || 0).toFixed(2)}€</span>
                                                                      <Badge variant="destructive" className="gap-1"><Tag className="h-3 w-3"/>{slotInfo.promotion.discountPercent}%</Badge>
                                                                 </div>
                                                             )}
@@ -270,5 +271,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
+    
 
     
