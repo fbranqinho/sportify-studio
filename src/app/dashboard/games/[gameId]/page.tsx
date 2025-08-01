@@ -579,9 +579,8 @@ function PlayerRoster({
                         <TableRow>
                             <TableHead>Player</TableHead>
                             <TableHead>Status</TableHead>
-                            {showTeamAssignment && <TableHead>Assign Team</TableHead>}
-                            {showLiveActions && <TableHead>Team</TableHead>}
-                            {showLiveActions && <TableHead className="text-right">Live Actions</TableHead>}
+                            <TableHead>Team</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -594,9 +593,9 @@ function PlayerRoster({
                                         <span className="capitalize">{player.status}</span>
                                     </Badge>
                                 </TableCell>
-                                {showTeamAssignment && (
-                                     <TableCell>
-                                        {player.status === 'confirmed' ? (
+                                <TableCell>
+                                    {showTeamAssignment ? (
+                                        player.status === 'confirmed' ? (
                                             <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
                                                 <SelectTrigger className="w-[150px]">
                                                     <SelectValue placeholder="Unassigned" />
@@ -609,21 +608,18 @@ function PlayerRoster({
                                             </Select>
                                         ) : (
                                             <span className="text-sm text-muted-foreground">-</span>
-                                        )}
-                                     </TableCell>
-                                )}
-                                {showLiveActions && (
-                                    <>
-                                        <TableCell>{player.team ? `Vests ${player.team}` : '-'}</TableCell>
-                                        <TableCell className="text-right">
-                                            {player.team ? (
-                                                <PlayerActions player={player} teamId={player.team} />
-                                            ) : (
-                                                <span className="text-sm text-muted-foreground">-</span>
-                                            )}
-                                        </TableCell>
-                                    </>
-                                )}
+                                        )
+                                    ) : (
+                                        isLive && player.team ? `Vests ${player.team}` : '-'
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    {showLiveActions && player.team ? (
+                                        <PlayerActions player={player} teamId={player.team} />
+                                    ) : (
+                                        <span className="text-sm text-muted-foreground">-</span>
+                                    )}
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -901,11 +897,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    
-
-    
-
-
-
-    
