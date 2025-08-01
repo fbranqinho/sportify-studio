@@ -108,6 +108,16 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
         }
     };
     
+    // Automatically calculate scores when opening the dialog
+    React.useEffect(() => {
+        if (isEndGameOpen && match.events) {
+            const goalsA = match.events.filter(e => e.type === 'Goal' && e.teamId === 'A').length;
+            const goalsB = match.events.filter(e => e.type === 'Goal' && e.teamId === 'B').length;
+            setScoreA(goalsA);
+            setScoreB(goalsB);
+        }
+    }, [isEndGameOpen, match.events]);
+
     const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent');
 
     return (
@@ -132,16 +142,16 @@ function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate
                         <DialogContent>
                             <DialogHeader>
                                 <DialogTitle>Set Final Score</DialogTitle>
-                                <DialogDescription>Enter the final score to finish the game.</DialogDescription>
+                                <DialogDescription>The score is calculated automatically based on recorded goals. Confirm to finish.</DialogDescription>
                             </DialogHeader>
                             <div className="grid grid-cols-2 gap-4 items-center">
                                 <div className="space-y-2 text-center">
                                     <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (match.teamBRef ? "Team A" : "Vests A")}</Label>
-                                    <Input id="scoreA" type="number" value={scoreA} onChange={(e) => setScoreA(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
+                                    <Input id="scoreA" type="number" value={scoreA} disabled className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                                 <div className="space-y-2 text-center">
                                      <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (match.teamBRef ? "Team B" : "Vests B")}</Label>
-                                    <Input id="scoreB" type="number" value={scoreB} onChange={(e) => setScoreB(parseInt(e.target.value))} className="text-center text-4xl h-20 font-bold"/>
+                                    <Input id="scoreB" type="number" value={scoreB} disabled className="text-center text-4xl h-20 font-bold"/>
                                 </div>
                             </div>
                             <DialogFooter>
@@ -896,3 +906,6 @@ export default function GameDetailsPage() {
 
     
 
+
+
+    
