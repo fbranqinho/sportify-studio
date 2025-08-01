@@ -75,10 +75,14 @@ export default function DashboardPage() {
                     
                     let upcomingGames = 0;
                     if (teamIds.length > 0) {
-                        const gamesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]), where("date", ">=", Timestamp.now()));
-                        const gamesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]), where("date", ">=", Timestamp.now()));
+                        const gamesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
+                        const gamesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
                         const [gamesASnap, gamesBSnap] = await Promise.all([getDocs(gamesAQuery), getDocs(gamesBQuery)]);
-                        upcomingGames = gamesASnap.size + gamesBSnap.size;
+                        
+                        const now = new Date();
+                        const upcomingGamesA = gamesASnap.docs.filter(doc => new Date(doc.data().date) >= now).length;
+                        const upcomingGamesB = gamesBSnap.docs.filter(doc => new Date(doc.data().date) >= now).length;
+                        upcomingGames = upcomingGamesA + upcomingGamesB;
                     }
                     
                     setDashboardData({ profile, upcomingGames });
@@ -99,15 +103,17 @@ export default function DashboardPage() {
                         const matchesQuery = query(
                             collection(db, "matches"), 
                             where("teamARef", "in", teamIds), 
-                            where("status", "in", ["Scheduled", "PendingOpponent"]), 
-                            where("date", ">=", Timestamp.now())
+                            where("status", "in", ["Scheduled", "PendingOpponent"])
                         );
                         const matchesSnap = await getDocs(matchesQuery);
                         const allMatches = matchesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
                         
+                        const now = new Date();
                         // Sort client-side and take the first 3
-                        allMatches.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                        upcomingMatches = allMatches.slice(0, 3);
+                        upcomingMatches = allMatches
+                            .filter(match => new Date(match.date) >= now)
+                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                            .slice(0, 3);
 
 
                         // Fetch players for the primary team to check status
