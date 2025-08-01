@@ -229,6 +229,18 @@ export interface Reservation {
 
 export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled" | "PendingOpponent";
 
+export type MatchEventType = "Goal" | "Assist" | "YellowCard" | "RedCard";
+
+export interface MatchEvent {
+  id: string; // Unique ID for the event
+  type: MatchEventType;
+  playerId: string;
+  playerName: string;
+  teamId: string;
+  timestamp: FieldValue;
+}
+
+
 export interface Match {
     id: string;
     date: string; // ISO 8601 string
@@ -247,6 +259,7 @@ export interface Match {
     managerRef: string | null;
     allowExternalPlayers?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
+    events?: MatchEvent[];
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

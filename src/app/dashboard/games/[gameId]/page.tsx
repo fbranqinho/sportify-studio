@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -33,142 +33,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { v4 as uuidv4 } from 'uuid';
 
-
-// Component to handle inviting an opponent
-function InviteOpponent({ match, onOpponentInvited }: { match: Match, onOpponentInvited: (teamId: string) => void }) {
-    const [searchQuery, setSearchQuery] = React.useState("");
-    const [searchResults, setSearchResults] = React.useState<Team[]>([]);
-    const [isSearching, setIsSearching] = React.useState(false);
-    const { toast } = useToast();
-    const { user } = useUser();
-
-    const handleSearch = async (queryText: string) => {
-        setSearchQuery(queryText);
-        const searchTerm = queryText.trim().toLowerCase();
-        if (!searchTerm) {
-            setSearchResults([]);
-            return;
-        }
-
-        setIsSearching(true);
-        try {
-            const teamsQuery = query(
-                collection(db, "teams"),
-                where("name_lowercase", ">=", searchTerm),
-                where("name_lowercase", "<=", searchTerm + '\uf8ff')
-            );
-            const querySnapshot = await getDocs(teamsQuery);
-            let teams = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Team))
-                .filter(team => team.id !== match.teamARef); 
-                
-            setSearchResults(teams);
-        } catch (error) {
-             console.error("Error searching teams: ", error);
-             toast({ variant: "destructive", title: "Search Error", description: "Failed to search for teams. A required index might be building." });
-        } finally {
-            setIsSearching(false);
-        }
-    };
-    
-    const handleInvite = async (opponentTeam: Team) => {
-        if (!user || !match.teamARef) return;
-
-        const matchRef = doc(db, "matches", match.id);
-        const homeTeamDoc = await getDoc(doc(db, "teams", match.teamARef));
-        if (!homeTeamDoc.exists()) {
-             toast({ variant: "destructive", title: "Error", description: "Your team could not be found." });
-             return;
-        }
-        const homeTeamName = homeTeamDoc.data().name;
-
-        try {
-            // Update the match with the invitation details
-            await updateDoc(matchRef, {
-                invitedTeamId: opponentTeam.id,
-                status: "PendingOpponent"
-            });
-
-            // Create a notification for the opponent's manager
-             if (opponentTeam.managerId) {
-                const notification: Omit<Notification, 'id'> = {
-                    userId: opponentTeam.managerId,
-                    message: `${homeTeamName} has invited your team, ${opponentTeam.name}, to a match!`,
-                    link: `/dashboard/my-games`, // Link to their games page
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                };
-                await addDoc(collection(db, "notifications"), notification);
-            }
-            
-            toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${opponentTeam.name}.` });
-            onOpponentInvited(opponentTeam.id);
-        } catch (error) {
-            console.error("Error inviting opponent: ", error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to send invitation." });
-        }
-    };
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">Find an Opponent</CardTitle>
-                <CardDescription>Search for a team to invite to this match.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="relative">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input 
-                        placeholder="Search by team name..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
-                        className="pl-10"
-                    />
-                     {searchQuery && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6"
-                            onClick={() => {
-                                setSearchQuery("");
-                                setSearchResults([]);
-                            }}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    )}
-                </div>
-                 {isSearching ? (
-                    <div className="mt-2 text-sm text-muted-foreground">Searching...</div>
-                ) : searchResults.length > 0 ? (
-                    <div className="mt-2 border rounded-md max-h-60 overflow-y-auto">
-                        <Table>
-                            <TableBody>
-                                {searchResults.map(team => (
-                                    <TableRow key={team.id}>
-                                        <TableCell>
-                                            <div className="font-medium">{team.name}</div>
-                                            <div className="text-xs text-muted-foreground">{team.city}</div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                             <Button size="sm" onClick={() => handleInvite(team)}>
-                                                <UserPlus className="mr-2 h-4 w-4"/>
-                                                Invite
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                 ) : searchQuery && !isSearching ? (
-                    <div className="mt-2 text-sm text-muted-foreground text-center py-4">No teams found.</div>
-                ) : null}
-            </CardContent>
-        </Card>
-    );
-}
 
 function GameFlowManager({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
     const { toast } = useToast();
@@ -678,6 +544,110 @@ function PlayerRoster({
     );
 }
 
+function GameStatsTracker({ match, teamA, teamB, onEventAdded }: { match: Match; teamA: Team | null; teamB: Team | null; onEventAdded: (event: MatchEvent) => void; }) {
+    const { toast } = useToast();
+    const [teamAPlayers, setTeamAPlayers] = React.useState<User[]>([]);
+    const [teamBPlayers, setTeamBPlayers] = React.useState<User[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    
+    React.useEffect(() => {
+        const fetchPlayers = async () => {
+            setLoading(true);
+            const teamAPlayerIds = match.teamAPlayers || [];
+            const teamBPlayerIds = match.teamBPlayers || [];
+            
+            const fetchUsers = async (ids: string[]) => {
+                if (ids.length === 0) return [];
+                const usersQuery = query(collection(db, "users"), where(documentId(), "in", ids));
+                const snapshot = await getDocs(usersQuery);
+                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            };
+
+            const [playersA, playersB] = await Promise.all([
+                fetchUsers(teamAPlayerIds),
+                fetchUsers(teamBPlayerIds)
+            ]);
+            
+            setTeamAPlayers(playersA);
+            setTeamBPlayers(playersB);
+            setLoading(false);
+        };
+
+        fetchPlayers();
+    }, [match.teamAPlayers, match.teamBPlayers]);
+
+    const handleAddEvent = async (player: User, type: MatchEventType, teamId: string | null) => {
+        if (!teamId) {
+            toast({ variant: "destructive", title: "Error", description: "Cannot add event, player team is not identified."});
+            return;
+        }
+
+        const newEvent: MatchEvent = {
+            id: uuidv4(),
+            type,
+            playerId: player.id,
+            playerName: player.name,
+            teamId: teamId,
+            timestamp: serverTimestamp()
+        };
+        
+        const matchRef = doc(db, "matches", match.id);
+
+        try {
+            await updateDoc(matchRef, {
+                events: arrayUnion(newEvent)
+            });
+            onEventAdded(newEvent);
+            toast({ title: "Event Added", description: `${type} added for ${player.name}.` });
+        } catch (error) {
+            console.error("Error adding event:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not add the event." });
+        }
+    };
+    
+    if (loading) {
+        return <Card><CardContent><Skeleton className="h-64" /></CardContent></Card>;
+    }
+
+    const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => (
+        <div className="flex gap-1">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'Goal', teamId)}><Goal className="h-4 w-4 text-green-600"/></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'Assist', teamId)}><CirclePlus className="h-4 w-4 text-blue-600"/></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'YellowCard', teamId)}><Square className="h-4 w-4 text-yellow-500 fill-yellow-500"/></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleAddEvent(player, 'RedCard', teamId)}><Square className="h-4 w-4 text-red-600 fill-red-600"/></Button>
+        </div>
+    );
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Live Stats Tracker</CardTitle>
+                <CardDescription>Record in-game events as they happen.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-6">
+                 <div>
+                    <h3 className="font-bold mb-2">{teamA?.name || "Vests A"}</h3>
+                     <Table>
+                        <TableHeader><TableRow><TableHead>Player</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {teamAPlayers.map(p => <TableRow key={p.id}><TableCell>{p.name}</TableCell><TableCell className="text-right"><PlayerActions player={p} teamId={teamA?.id || null} /></TableCell></TableRow>)}
+                        </TableBody>
+                    </Table>
+                 </div>
+                  <div>
+                    <h3 className="font-bold mb-2">{teamB?.name || "Vests B"}</h3>
+                     <Table>
+                        <TableHeader><TableRow><TableHead>Player</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                           {teamBPlayers.map(p => <TableRow key={p.id}><TableCell>{p.name}</TableCell><TableCell className="text-right"><PlayerActions player={p} teamId={teamB?.id || null} /></TableCell></TableRow>)}
+                        </TableBody>
+                    </Table>
+                 </div>
+            </CardContent>
+        </Card>
+    )
+}
+
 export default function GameDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -759,9 +729,17 @@ export default function GameDetailsPage() {
 
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
-        if (data.teamAPlayers || data.teamBPlayers) {
+        if (data.teamAPlayers || data.teamBPlayers || data.events) {
             fetchGameDetails(); // Re-fetch to get correct player states
         }
+    }
+    
+    const handleEventAdded = (event: MatchEvent) => {
+        setMatch(prev => {
+            if (!prev) return null;
+            const newEvents = [...(prev.events || []), event];
+            return { ...prev, events: newEvents };
+        });
     }
 
     if (loading) {
@@ -878,6 +856,8 @@ export default function GameDetailsPage() {
             </div>
             
             {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} />}
+
+            {isManager && match.status === 'InProgress' && <GameStatsTracker match={match} teamA={teamA} teamB={teamB} onEventAdded={handleEventAdded} />}
             
             <PlayerRoster 
                 match={match} 
@@ -892,12 +872,6 @@ export default function GameDetailsPage() {
 
             {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
             
-            {/* Invite Opponent section, shown only if there's no opponent and no invitation sent */}
-            {isManager && match.teamARef && !match.teamBRef && !match.invitedTeamId && (
-                <InviteOpponent match={match} onOpponentInvited={() => fetchGameDetails()} />
-            )}
         </div>
     );
 }
-
-    
