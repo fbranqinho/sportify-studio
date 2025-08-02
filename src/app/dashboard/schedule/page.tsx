@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team, Notification, MatchInvitation, Payment, PaymentStatus } from "@/types";
+import type { Reservation, Team, Notification, Match, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -103,15 +103,36 @@ export default function SchedulePage() {
             throw new Error("Reservation is missing a manager or player reference.");
         }
         
-        // --- Update Reservation with Payment Status ---
+        // --- 1. Update Reservation with Payment Status ---
         batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
 
-         // --- Create Notification for Payment ---
+        // --- 2. Create the associated Match ---
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: "PendingOpponent",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
+            reservationRef: reservation.id,
+        };
+        batch.set(newMatchRef, matchData);
+
+
+         // --- 3. Create Notification for Payment ---
         const paymentNotificationRef = doc(collection(db, 'notifications'));
         batch.set(paymentNotificationRef, {
             userId: actorId,
-            message: `Payment of ${reservation.totalAmount.toFixed(2)}€ is required for your booking at ${reservation.pitchName}.`,
-            link: '/dashboard/payments',
+            message: `Your booking for ${reservation.pitchName} is confirmed! Payment of ${reservation.totalAmount.toFixed(2)}€ is required.`,
+            link: '/dashboard/my-games',
             read: false,
             createdAt: serverTimestamp() as any,
         });
@@ -120,7 +141,7 @@ export default function SchedulePage() {
         
         toast({
         title: "Reservation Confirmed!",
-        description: `A payment request has been sent to ${reservation.actorName}.`,
+        description: `A match has been created and a payment request sent to ${reservation.actorName}.`,
         });
 
       } catch (error) {
