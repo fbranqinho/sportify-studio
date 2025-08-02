@@ -26,8 +26,8 @@ export default function SchedulePage() {
   // Effect to get Owner Profile ID if user is an OWNER
   React.useEffect(() => {
     if (user?.role === 'OWNER' && user.id) {
-      const profilesQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
-      getDocs(profilesQuery).then(profileSnapshot => {
+      const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+      getDocs(q).then(profileSnapshot => {
         if (!profileSnapshot.empty) {
           const ownerId = profileSnapshot.docs[0].id;
           setOwnerProfileId(ownerId);
@@ -46,7 +46,7 @@ export default function SchedulePage() {
   // Effect to fetch reservations based on user role
   React.useEffect(() => {
     if (!user || user.role !== 'OWNER' || !ownerProfileId) {
-        setLoading(false);
+        if (user?.role !== 'OWNER') setLoading(false);
         return;
     }
     
@@ -92,104 +92,41 @@ export default function SchedulePage() {
     if (status === "Confirmed") {
        const batch = writeBatch(db);
        let actorId: string | undefined;
-       let actorName: string | undefined;
        let actorRole: "MANAGER" | "PLAYER" | undefined;
 
       try {
         if (reservation.managerRef && reservation.teamRef) {
-            // --- MANAGER BOOKING ---
-            const teamDocRef = doc(db, "teams", reservation.teamRef);
-            const teamDoc = await getDoc(teamDocRef);
-
-            if (!teamDoc.exists()) throw new Error("Team associated with reservation not found.");
-
-            const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
-            const playerIds = teamData.playerIds || [];
-            
-            actorId = teamData.managerId;
-            actorName = teamData.name;
+            actorId = reservation.managerRef;
             actorRole = "MANAGER";
-
-            const matchDocRef = doc(collection(db, "matches"));
-            batch.set(matchDocRef, {
-                date: reservation.date, pitchRef: reservation.pitchId, reservationRef: reservation.id,
-                status: "PendingOpponent", teamARef: reservation.teamRef, teamBRef: null,
-                teamAPlayers: [], teamBPlayers: [], playerApplications: [], allowExternalPlayers: true,
-                scoreA: 0, scoreB: 0, refereeId: null, attendance: 0,
-                managerRef: teamData.managerId || reservation.managerRef || null,
-            });
-            
-            // Notification for the Manager
-            const managerNotificationRef = doc(collection(db, "notifications"));
-            batch.set(managerNotificationRef, {
-                userId: teamData.managerId,
-                message: `Your booking for ${reservation.pitchName} was confirmed. A practice match has been created.`,
-                link: `/dashboard/games/${matchDocRef.id}`,
-                read: false, createdAt: serverTimestamp() as any,
-            });
-
-            // Create invitations for each Player on the team
-            playerIds.forEach(playerId => {
-                const playerInvitationRef = doc(collection(db, 'matchInvitations'));
-                batch.set(playerInvitationRef, {
-                    matchId: matchDocRef.id, teamId: teamData.id, playerId: playerId,
-                    managerId: teamData.managerId, status: "pending", invitedAt: serverTimestamp() as any,
-                });
-                const playerNotificationRef = doc(collection(db, 'notifications'));
-                batch.set(playerNotificationRef, {
-                    userId: playerId, message: `You've been invited to a new game for your team, ${teamData.name}!`,
-                    link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any,
-                });
-            });
-
         } else if (reservation.playerRef) {
-            // --- PLAYER BOOKING (Pick-up Game) ---
             actorId = reservation.playerRef;
-            actorName = reservation.actorName;
             actorRole = "PLAYER";
-
-            const matchDocRef = doc(collection(db, "matches"));
-            batch.set(matchDocRef, {
-                date: reservation.date, pitchRef: reservation.pitchId, reservationRef: reservation.id,
-                status: "PendingOpponent", teamARef: null, teamBRef: null, teamAPlayers: [reservation.playerRef],
-                teamBPlayers: [], playerApplications: [], allowExternalPlayers: true,
-                scoreA: 0, scoreB: 0, refereeId: null, attendance: 0, managerRef: null,
-            });
-
-            // Notification for the player
-            const newNotificationRef = doc(collection(db, 'notifications'));
-            batch.set(newNotificationRef, {
-                userId: reservation.playerRef,
-                message: `Your booking for ${reservation.pitchName} was confirmed. Your pick-up game is ready!`,
-                link: `/dashboard/games/${matchDocRef.id}`,
-                read: false, createdAt: serverTimestamp() as any,
-            });
         } else {
             throw new Error("Reservation is missing a manager or player reference.");
         }
         
         // --- Shared Logic: Create Payment & Update Reservation ---
-        if (actorId) {
-            const paymentDocRef = doc(collection(db, "payments"));
-            const paymentData: Omit<Payment, 'id'> = {
-                type: "booking",
-                amount: reservation.totalAmount,
-                status: "Pending",
-                date: new Date().toISOString(),
-                reservationRef: reservation.id,
-                [actorRole === 'MANAGER' ? 'managerRef' : 'playerRef']: actorId,
-            };
-            batch.set(paymentDocRef, paymentData);
+        const paymentDocRef = doc(collection(db, "payments"));
+        const paymentData: Omit<Payment, 'id'> = {
+            type: "booking",
+            amount: reservation.totalAmount,
+            status: "Pending",
+            date: new Date().toISOString(),
+            reservationRef: reservation.id,
+            ...(actorRole === 'MANAGER' ? { managerRef: actorId } : { playerRef: actorId }),
+        };
+        batch.set(paymentDocRef, paymentData);
 
-             // Notification for payment
-            const paymentNotificationRef = doc(collection(db, 'notifications'));
-            batch.set(paymentNotificationRef, {
-                userId: actorId,
-                message: `Payment of ${reservation.totalAmount.toFixed(2)}€ is required for your booking at ${reservation.pitchName}.`,
-                link: '/dashboard/payments', // Direct user to payment page
-                read: false, createdAt: serverTimestamp() as any,
-            });
-        }
+         // Notification for payment
+        const paymentNotificationRef = doc(collection(db, 'notifications'));
+        batch.set(paymentNotificationRef, {
+            userId: actorId,
+            message: `Payment of ${reservation.totalAmount.toFixed(2)}€ is required for your booking at ${reservation.pitchName}.`,
+            link: '/dashboard/payments', // Direct user to payment page
+            read: false,
+            createdAt: serverTimestamp() as any,
+        });
+        
 
         batch.update(reservationRef, { status: "Confirmed" });
 
@@ -197,7 +134,7 @@ export default function SchedulePage() {
         
         toast({
         title: "Reservation Confirmed!",
-        description: `A match has been scheduled and a payment request has been sent.`,
+        description: `A payment request has been sent to ${reservation.actorName}.`,
         });
 
       } catch (error) {
@@ -208,9 +145,9 @@ export default function SchedulePage() {
   };
 
   const now = new Date();
-  const pendingReservations = reservations.filter(r => r.status === "Pending");
-  const upcomingReservations = reservations.filter(r => (r.status === "Confirmed" || r.status === "Scheduled") && new Date(r.date) >= now);
-  const pastReservations = reservations.filter(r => new Date(r.date) < now || r.status === "Canceled");
+  const pendingReservations = reservations.filter(r => r.status === "Pending").sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingReservations = reservations.filter(r => (r.status === "Confirmed" || r.status === "Scheduled") && new Date(r.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const pastReservations = reservations.filter(r => new Date(r.date) < now || r.status === "Canceled").sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   const getStatusIcon = (status: Reservation["status"]) => {
     switch(status) {
@@ -365,5 +302,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
