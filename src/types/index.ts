@@ -203,14 +203,14 @@ export interface Pitch {
 }
 
 export type ReservationStatus = "Pending" | "Confirmed" | "Scheduled" | "Canceled";
-export type PaymentStatus = "Pending" | "Paid" | "Cancelled" | "Split";
+export type ReservationPaymentStatus = "Pending" | "Paid" | "Cancelled" | "Split";
 
 
 export interface Reservation {
   id: string;
   date: string; // ISO 8601 string
   status: ReservationStatus;
-  paymentStatus?: PaymentStatus;
+  paymentStatus: ReservationPaymentStatus;
   pitchId: string; 
   pitchName: string; 
   ownerProfileId: string; // OwnerProfile ID
@@ -280,6 +280,8 @@ export interface Competition {
 }
 
 export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee" | "booking_split";
+export type PaymentStatus = "Pending" | "Paid" | "Cancelled";
+
 
 export interface Payment {
   id:string;
@@ -297,6 +299,8 @@ export interface Payment {
   status: PaymentStatus;
   notes?: string;
   reminder?: boolean;
+  pitchName?: string;
+  teamName?: string;
 }
 
 export interface Promo {

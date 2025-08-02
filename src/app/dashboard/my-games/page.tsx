@@ -6,15 +6,134 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc, documentId, addDoc, serverTimestamp } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team, MatchInvitation, Pitch, OwnerProfile, Notification } from "@/types";
+import type { Match, Team, MatchInvitation, Pitch, OwnerProfile, Notification, Reservation, Payment } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy } from "lucide-react";
+import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy, DollarSign, CreditCard } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
+const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
+    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const { toast } = useToast();
+
+    const handlePayFull = async () => {
+        const batch = writeBatch(db);
+        const reservationRef = doc(db, "reservations", reservation.id);
+        
+        try {
+            // Update reservation status
+            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+
+            // Notify owner
+            const ownerNotificationRef = doc(collection(db, "notifications"));
+            const notification: Omit<Notification, 'id'> = {
+                ownerProfileId: reservation.ownerProfileId,
+                message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
+                link: `/dashboard/schedule`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            batch.set(ownerNotificationRef, notification);
+
+            await batch.commit();
+            setIsDialogOpen(false);
+            onPaymentProcessed();
+            toast({ title: "Payment Successful!", description: "The reservation is now confirmed." });
+        } catch (error: any) {
+             console.error("Error processing full payment:", error);
+             toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
+        }
+    }
+
+    const handleSplitPayment = async () => {
+        if (!reservation.teamRef) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
+            return;
+        }
+
+        const batch = writeBatch(db);
+        try {
+            // 1. Get Team and Players
+            const teamRef = doc(db, "teams", reservation.teamRef);
+            const teamDoc = await getDoc(teamRef);
+            if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
+            const team = teamDoc.data() as Team;
+            const playerIds = team.playerIds;
+            if (!playerIds || playerIds.length === 0) throw new Error("Team has no players to split payment with.");
+
+            // 2. Calculate amount per player
+            const amountPerPlayer = reservation.totalAmount / playerIds.length;
+
+            // 3. Create a new payment doc for each player and notify them
+            for (const playerId of playerIds) {
+                const playerPaymentRef = doc(collection(db, "payments"));
+                batch.set(playerPaymentRef, {
+                    type: "booking_split",
+                    amount: amountPerPlayer,
+                    status: "Pending",
+                    date: new Date().toISOString(),
+                    reservationRef: reservation.id,
+                    teamRef: reservation.teamRef,
+                    playerRef: playerId,
+                    pitchName: reservation.pitchName,
+                    teamName: team.name,
+                });
+
+                const notificationRef = doc(collection(db, 'notifications'));
+                batch.set(notificationRef, {
+                    userId: playerId,
+                    message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game with ${team.name} is now due.`,
+                    link: '/dashboard/payments',
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                });
+            }
+
+            // 4. Update the original reservation to 'Split'
+            const originalReservationRef = doc(db, "reservations", reservation.id);
+            batch.update(originalReservationRef, { paymentStatus: "Split" });
+
+            // 5. Commit batch
+            await batch.commit();
+            setIsDialogOpen(false);
+            onPaymentProcessed();
+            toast({ title: "Payment Split!", description: `Each of the ${playerIds.length} players has been assigned their share.` });
+
+        } catch (error: any) {
+            console.error("Error splitting payment:", error);
+            toast({ variant: "destructive", title: "Error", description: `Could not split payment: ${error.message}` });
+        }
+    }
+
+    return (
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+                <Button className="w-full"><CreditCard className="mr-2"/> Process Payment</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>How do you want to pay?</DialogTitle>
+                    <DialogDescription>
+                        You can pay the full amount now, or split the cost equally among all players on your team.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 pt-4">
+                    <Button size="lg" onClick={handlePayFull}>
+                        <DollarSign className="mr-2"/> Pay full amount ({reservation.totalAmount.toFixed(2)}€)
+                    </Button>
+                     <Button size="lg" variant="outline" onClick={handleSplitPayment}>
+                        <Users className="mr-2"/> Split between players
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
 
 
 export default function MyGamesPage() {
@@ -26,6 +145,7 @@ export default function MyGamesPage() {
   const [teams, setTeams] = React.useState<Map<string, Team>>(new Map());
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
+  const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Effect to fetch teams and matches based on user role
@@ -39,7 +159,7 @@ export default function MyGamesPage() {
     const unsubscribes: (() => void)[] = [];
     let userTeamIds: string[] = [];
 
-    const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles', ids: string[]): Promise<Map<string, any>> => {
+    const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles' | 'reservations', ids: string[]): Promise<Map<string, any>> => {
         const newMap = new Map<string, any>();
         if (ids.length === 0) return newMap;
         
@@ -122,33 +242,43 @@ export default function MyGamesPage() {
 
                     const teamIdsToFetch = new Set<string>();
                     const pitchIdsToFetch = new Set<string>();
+                    const reservationIdsToFetch = new Set<string>();
                     
                     allMatches.forEach((match: Match) => {
                         if (match.teamARef) teamIdsToFetch.add(match.teamARef);
                         if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
                         if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
+                        if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
                     });
                      
                     if (teamIdsToFetch.size > 0) {
                         const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
+
+                    if (reservationIdsToFetch.size > 0) {
+                        const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
+                        setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
+                    }
+
                      if (pitchIdsToFetch.size > 0) {
                         const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
                         setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
-                        const ownerRefsToFetch = new Set<string>();
+                        const ownerUserRefsToFetch = new Set<string>();
                         pitchesMap.forEach(pitch => {
-                            if (pitch.ownerRef) ownerRefsToFetch.add(pitch.ownerRef);
+                            // The ownerRef on a pitch is the ID of the ownerProfile document.
+                            if (pitch.ownerRef) ownerUserRefsToFetch.add(pitch.ownerRef);
                         })
 
-                        if(ownerRefsToFetch.size > 0){
-                            const q = query(collection(db, "ownerProfiles"), where("userRef", "in", Array.from(ownerRefsToFetch)));
+                        if(ownerUserRefsToFetch.size > 0){
+                            // This query is slightly different as ownerRef on pitch is ownerProfileID not userID
+                             const q = query(collection(db, "ownerProfiles"), where(documentId(), "in", Array.from(ownerUserRefsToFetch)));
                             const ownerSnapshot = await getDocs(q);
                             const ownersMap = new Map<string, OwnerProfile>();
                             ownerSnapshot.forEach(doc => {
                                 const ownerData = { id: doc.id, ...doc.data() } as OwnerProfile;
-                                ownersMap.set(ownerData.userRef, ownerData);
+                                ownersMap.set(ownerData.id, ownerData);
                             });
                              setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
                         }
@@ -186,6 +316,15 @@ export default function MyGamesPage() {
     };
 
   }, [user, toast]);
+  
+  const refreshData = async () => {
+    // This function can be called after a payment to refresh the reservation status
+    const reservationIds = Array.from(reservations.keys());
+    if(reservationIds.length > 0) {
+        const reservationsMap = await fetchDetails('reservations', reservationIds);
+        setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
+    }
+  }
 
   const handlePlayerInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
      if (!user) return;
@@ -216,18 +355,20 @@ export default function MyGamesPage() {
                         gameFullBatch.update(matchRef, { status: "Scheduled" });
 
                         // Notify owner that the game is now full
-                        const ownerProfile = owners.get(pitch.ownerRef);
-                        if (ownerProfile) {
+                         const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", pitch.ownerRef));
+                         const ownerProfileSnapshot = await getDocs(ownerProfileQuery);
+                         if(!ownerProfileSnapshot.empty) {
+                             const ownerProfileId = ownerProfileSnapshot.docs[0].id;
                              const newNotificationRef = doc(collection(db, "notifications"));
                              const notification: Omit<Notification, 'id'> = {
-                                ownerProfileId: ownerProfile.id,
+                                ownerProfileId: ownerProfileId,
                                 message: `The game scheduled for ${format(new Date(match.date), 'PPp')} on '${pitch.name}' is now full.`,
                                 link: `/dashboard/schedule`,
                                 read: false,
                                 createdAt: serverTimestamp() as any,
                             };
                             gameFullBatch.set(newNotificationRef, notification);
-                        }
+                         }
                         
                         await gameFullBatch.commit();
                     }
@@ -291,6 +432,7 @@ export default function MyGamesPage() {
     const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
     const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
     const owner = pitch ? owners.get(pitch.ownerRef) : null;
+    const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
 
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
@@ -342,6 +484,15 @@ export default function MyGamesPage() {
                     <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
                         <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
+                    </div>
+                 )}
+                 {isManager && reservation && reservation.paymentStatus === 'Pending' && (
+                    <div className="border-t pt-3 mt-3 space-y-2">
+                         <div className="flex justify-between items-center text-base">
+                            <span className="font-semibold text-destructive">Payment Due</span>
+                            <span className="font-bold text-destructive">{reservation.totalAmount.toFixed(2)}€</span>
+                        </div>
+                        <ManagerPaymentDialog reservation={reservation} onPaymentProcessed={refreshData} />
                     </div>
                  )}
             </CardContent>
