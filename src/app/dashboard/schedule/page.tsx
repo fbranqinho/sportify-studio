@@ -113,6 +113,7 @@ export default function SchedulePage() {
             status: "Pending",
             date: new Date().toISOString(),
             reservationRef: reservation.id,
+            teamRef: reservation.teamRef, // Associate payment with the team
             ...(actorRole === 'MANAGER' ? { managerRef: actorId } : { playerRef: actorId }),
         };
         batch.set(paymentDocRef, paymentData);

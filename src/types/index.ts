@@ -277,7 +277,7 @@ export interface Competition {
 }
 
 export type PaymentStatus = "Paid" | "Pending" | "Overdue" | "Cancelled";
-export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee";
+export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee" | "booking_split";
 
 export interface Payment {
   id:string;
@@ -293,6 +293,7 @@ export interface Payment {
   date?: string; // ISO 8601 string
   expirationDate?: string; // ISO 8601 string
   status: PaymentStatus;
+  notes?: string;
   reminder?: boolean;
 }
 
