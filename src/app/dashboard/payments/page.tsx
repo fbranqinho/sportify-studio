@@ -1,9 +1,10 @@
 
+
 "use client";
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDoc, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDoc, addDoc, getDocs } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Reservation, Notification, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
