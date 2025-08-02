@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Users, Shield } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Users, Shield, User } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
@@ -32,7 +32,6 @@ export default function PaymentsPage() {
     let paymentsQuery;
 
     // This query will fetch all payments where the user is either the manager or a player involved.
-    // Firestore does not support logical OR in queries on different fields, so we need two listeners.
     if (user.role === 'PLAYER') {
         paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
     } else if (user.role === 'MANAGER') {
@@ -71,11 +70,23 @@ export default function PaymentsPage() {
   const PaymentCard = ({ payment }: { payment: Payment }) => {
     const statusInfo = getStatusInfo(payment.status);
 
+    const getTitle = () => {
+        if(payment.type === 'booking_split') return `Game fee: ${payment.teamName}`;
+        if(payment.type === 'reimbursement') return `Reimbursement to Manager`;
+        return 'Payment';
+    }
+    
+     const getContext = () => {
+        if(payment.type === 'reimbursement') return `For game: ${payment.pitchName}`;
+        if(payment.pitchName) return `Pitch: ${payment.pitchName}`;
+        return '';
+    }
+
     return (
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex justify-between items-center">
-            <span>{payment.type === 'booking_split' ? `Game fee: ${payment.teamName}`: 'Payment'}</span>
+            <span>{getTitle()}</span>
             <Badge variant={payment.status === 'Pending' ? 'destructive' : payment.status === 'Paid' ? 'default' : 'outline'}>{payment.status}</Badge>
           </CardTitle>
            <CardDescription>
@@ -90,7 +101,7 @@ export default function PaymentsPage() {
             <statusInfo.icon className={`h-4 w-4 ${statusInfo.color}`} />
             <span className={`font-semibold ${statusInfo.color}`}>{statusInfo.text}</span>
           </div>
-          {payment.pitchName && <p className="text-xs text-center text-muted-foreground">For: {payment.pitchName}</p>}
+          {getContext() && <p className="text-xs text-center text-muted-foreground">{getContext()}</p>}
         </CardContent>
         {payment.status === 'Pending' && user?.role === 'PLAYER' && (
           <CardFooter>

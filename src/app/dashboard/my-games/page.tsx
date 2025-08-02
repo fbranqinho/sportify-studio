@@ -22,28 +22,70 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     const { toast } = useToast();
 
     const handlePayFull = async () => {
+        if (!reservation.teamRef) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
+            return;
+        }
+
         const batch = writeBatch(db);
         const reservationRef = doc(db, "reservations", reservation.id);
         
         try {
-            // Update reservation status
+            // Update reservation status to Paid
             batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
 
             // Notify owner
             const ownerNotificationRef = doc(collection(db, "notifications"));
-            const notification: Omit<Notification, 'id'> = {
+            const ownerNotification: Omit<Notification, 'id'> = {
                 ownerProfileId: reservation.ownerProfileId,
                 message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
                 link: `/dashboard/schedule`,
                 read: false,
                 createdAt: serverTimestamp() as any,
             };
-            batch.set(ownerNotificationRef, notification);
+            batch.set(ownerNotificationRef, ownerNotification);
+            
+            // Get Team and Players to create reimbursement payments
+            const teamRef = doc(db, "teams", reservation.teamRef);
+            const teamDoc = await getDoc(teamRef);
+            if (!teamDoc.exists()) throw new Error("Team not found to create reimbursements.");
+            const team = teamDoc.data() as Team;
+            const playerIds = team.playerIds.filter(id => id !== reservation.managerRef); // Exclude manager from reimbursement
+            
+            if (playerIds.length > 0) {
+                 const amountPerPlayer = reservation.totalAmount / (playerIds.length + 1); // +1 for the manager
+                
+                 for (const playerId of playerIds) {
+                    const playerPaymentRef = doc(collection(db, "payments"));
+                    batch.set(playerPaymentRef, {
+                        type: "reimbursement",
+                        amount: amountPerPlayer,
+                        status: "Pending",
+                        date: new Date().toISOString(),
+                        reservationRef: reservation.id,
+                        teamRef: reservation.teamRef,
+                        playerRef: playerId,
+                        managerRef: reservation.managerRef,
+                        pitchName: reservation.pitchName,
+                        teamName: team.name,
+                    });
+
+                    const playerNotificationRef = doc(collection(db, 'notifications'));
+                    batch.set(playerNotificationRef, {
+                        userId: playerId,
+                        message: `The manager paid for the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
+                        link: '/dashboard/payments',
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    });
+                }
+            }
+
 
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is now confirmed." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed and players have been notified to reimburse you." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -212,6 +254,7 @@ export default function MyGamesPage() {
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
   const [payments, setPayments] = React.useState<Map<string, Payment>>(new Map());
+  const [splitPaymentCounts, setSplitPaymentCounts] = React.useState<Map<string, {paid: number, total: number}>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Helper to fetch details for a list of IDs from a given collection
@@ -342,6 +385,22 @@ export default function MyGamesPage() {
                     if (reservationIdsToFetch.size > 0) {
                         const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
                         setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
+                        
+                        const splitReservationIds = Array.from(reservationsMap.values())
+                            .filter(r => r.paymentStatus === 'Split')
+                            .map(r => r.id);
+
+                        if(splitReservationIds.length > 0) {
+                           const paymentCounts = new Map<string, { paid: number, total: number }>();
+                           for (const resId of splitReservationIds) {
+                               const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId));
+                               const paymentsSnap = await getDocs(paymentsQuery);
+                               const total = paymentsSnap.size;
+                               const paid = paymentsSnap.docs.filter(d => d.data().status === 'Paid').length;
+                               paymentCounts.set(resId, { paid, total });
+                           }
+                           setSplitPaymentCounts(paymentCounts);
+                        }
                     }
 
                      if (pitchIdsToFetch.size > 0) {
@@ -487,6 +546,7 @@ export default function MyGamesPage() {
     const owner = pitch ? owners.get(pitch.ownerRef) : null;
     const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
     const payment = match.reservationRef ? payments.get(match.reservationRef) : null;
+    const paymentCount = match.reservationRef ? splitPaymentCounts.get(match.reservationRef) : null;
 
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
@@ -539,6 +599,12 @@ export default function MyGamesPage() {
                     <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
                         <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
+                    </div>
+                 )}
+                 {paymentCount && (
+                    <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-primary" />
+                        <span>Payments: <span className="font-semibold">{paymentCount.paid} / {paymentCount.total}</span></span>
                     </div>
                  )}
                  {isManager && reservation?.paymentStatus === 'Pending' && (
