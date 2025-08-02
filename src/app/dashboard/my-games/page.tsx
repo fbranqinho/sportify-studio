@@ -80,6 +80,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                     reservationRef: reservation.id,
                     teamRef: reservation.teamRef,
                     playerRef: playerId,
+                    managerRef: reservation.managerRef,
                     pitchName: reservation.pitchName,
                     teamName: team.name,
                 });
@@ -88,7 +89,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 batch.set(notificationRef, {
                     userId: playerId,
                     message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game with ${team.name} is now due.`,
-                    link: '/dashboard/payments',
+                    link: '/dashboard/my-games', // Direct players to my-games to pay
                     read: false,
                     createdAt: serverTimestamp() as any,
                 });
@@ -135,6 +136,70 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     )
 }
 
+const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
+    const { toast } = useToast();
+
+    const handlePayNow = async () => {
+        if (!payment.reservationRef) {
+            toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
+            return;
+        }
+
+        const batch = writeBatch(db);
+        const paymentRef = doc(db, "payments", payment.id);
+        
+        batch.update(paymentRef, { status: "Paid" });
+        
+        try {
+            await batch.commit();
+
+            // Check if all player payments for this reservation are now paid
+            const reservationRef = doc(db, "reservations", payment.reservationRef);
+            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef), where("status", "==", "Pending"));
+            const pendingPaymentsSnap = await getDocs(paymentsQuery);
+
+            if (pendingPaymentsSnap.empty) {
+                // All payments are done, confirm reservation and notify owner
+                const reservationDoc = await getDoc(reservationRef);
+                if (reservationDoc.exists()) {
+                    const reservation = reservationDoc.data() as Reservation;
+                    const finalBatch = writeBatch(db);
+                    finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+
+                    const ownerNotificationRef = doc(collection(db, "notifications"));
+                    const notification: Omit<Notification, 'id'> = {
+                        ownerProfileId: reservation.ownerProfileId,
+                        message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
+                        link: `/dashboard/schedule`,
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    };
+                    finalBatch.set(ownerNotificationRef, notification);
+                    await finalBatch.commit();
+                
+                    toast({
+                        title: "Final Payment Received!",
+                        description: "The reservation is now confirmed and scheduled.",
+                    });
+                }
+            } else {
+                toast({
+                    title: "Payment Successful!",
+                    description: `Your payment has been registered. Waiting for ${pendingPaymentsSnap.size} other players.`,
+                });
+            }
+            onPaymentProcessed();
+        } catch (error: any) {
+            console.error("Error processing payment:", error);
+            toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
+        }
+    }
+
+    return (
+        <Button className="w-full" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+    )
+}
+
 
 export default function MyGamesPage() {
   const { user } = useUser();
@@ -146,6 +211,7 @@ export default function MyGamesPage() {
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
+  const [payments, setPayments] = React.useState<Map<string, Payment>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Helper to fetch details for a list of IDs from a given collection
@@ -186,7 +252,6 @@ export default function MyGamesPage() {
     setLoading(true);
     const unsubscribes: (() => void)[] = [];
     let userTeamIds: string[] = [];
-    let listenersSet = false;
 
     const setupListeners = async () => {
         try {
@@ -203,8 +268,10 @@ export default function MyGamesPage() {
                  const teamsMap = await fetchDetails('teams', userTeamIds);
                  setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
-
+            
+            // Player-specific listeners
             if (user.role === 'PLAYER') {
+                // Individual match invitations for players
                 const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
                 const unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
                     const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
@@ -216,8 +283,23 @@ export default function MyGamesPage() {
                     }
                 }, (error) => console.error("Error fetching invitations:", error));
                 unsubscribes.push(unsubscribeInvitations);
+
+                // Split payments for players
+                const playerPaymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
+                const unsubPayments = onSnapshot(playerPaymentsQuery, (snap) => {
+                    const playerPayments = new Map<string, Payment>();
+                    snap.forEach(doc => {
+                        const payment = { id: doc.id, ...doc.data() } as Payment;
+                        if(payment.reservationRef) {
+                            playerPayments.set(payment.reservationRef, payment);
+                        }
+                    });
+                    setPayments(playerPayments);
+                });
+                unsubscribes.push(unsubPayments);
             }
 
+            // Manager-specific listeners
             if (user.role === 'MANAGER' && userTeamIds.length > 0) {
                 const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
                 const unsubscribeTeamInvites = onSnapshot(teamInvQuery, async (snapshot) => {
@@ -231,7 +313,8 @@ export default function MyGamesPage() {
                 }, (error) => console.error("Error fetching team match invitations:", error));
                 unsubscribes.push(unsubscribeTeamInvites);
             }
-
+            
+            // Common match listeners
             if (userTeamIds.length > 0) {
                  const combinedMatches = new Map<string, Match>();
                  
@@ -291,7 +374,6 @@ export default function MyGamesPage() {
                  const unsub2 = onSnapshot(q2, (snap) => processMatchesSnapshot(snap, initialLoadDone));
                  
                  unsubscribes.push(unsub1, unsub2);
-                 listenersSet = true;
             } else {
                  setLoading(false);
             }
@@ -312,7 +394,21 @@ export default function MyGamesPage() {
   }, [user, toast]);
   
   const refreshData = async () => {
-    const reservationIds = Array.from(reservations.keys());
+    // This function can be simplified or expanded based on what needs refreshing
+    // For now, it re-fetches reservations and payments
+    if (user?.role === 'PLAYER') {
+        const playerPaymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
+        const snap = await getDocs(playerPaymentsQuery);
+        const playerPayments = new Map<string, Payment>();
+        snap.forEach(doc => {
+            const payment = { id: doc.id, ...doc.data() } as Payment;
+            if(payment.reservationRef) {
+                playerPayments.set(payment.reservationRef, payment);
+            }
+        });
+        setPayments(playerPayments);
+    }
+     const reservationIds = Array.from(reservations.keys());
     if(reservationIds.length > 0) {
         const reservationsMap = await fetchDetails('reservations', reservationIds);
         setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
@@ -390,9 +486,11 @@ export default function MyGamesPage() {
     const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
     const owner = pitch ? owners.get(pitch.ownerRef) : null;
     const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
+    const payment = match.reservationRef ? payments.get(match.reservationRef) : null;
 
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
+    const isPlayer = user?.role === 'PLAYER';
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     
@@ -443,7 +541,7 @@ export default function MyGamesPage() {
                         <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
                     </div>
                  )}
-                 {isManager && reservation && reservation.paymentStatus === 'Pending' && (
+                 {isManager && reservation?.paymentStatus === 'Pending' && (
                     <div className="border-t pt-3 mt-3 space-y-2">
                          <div className="flex justify-between items-center text-base">
                             <span className="font-semibold text-destructive">Payment Due</span>
@@ -452,11 +550,20 @@ export default function MyGamesPage() {
                         <ManagerPaymentDialog reservation={reservation} onPaymentProcessed={refreshData} />
                     </div>
                  )}
+                  {isPlayer && payment && (
+                    <div className="border-t pt-3 mt-3 space-y-2">
+                         <div className="flex justify-between items-center text-base">
+                            <span className="font-semibold text-destructive">Your Share Due</span>
+                            <span className="font-bold text-destructive">{payment.amount.toFixed(2)}€</span>
+                        </div>
+                        <PlayerPaymentButton payment={payment} onPaymentProcessed={refreshData} />
+                    </div>
+                 )}
             </CardContent>
              <CardFooter className="gap-2">
                 <Button variant="outline" className="w-full" asChild>
                     <Link href={`/dashboard/games/${match.id}`}>
-                        {isManager && !isFinished ? "Manage Game" : "View Details"}
+                        {(isManager || isPlayer) && !isFinished ? "Manage Game" : "View Details"}
                     </Link>
                 </Button>
                 {isFinished && (
@@ -478,7 +585,7 @@ export default function MyGamesPage() {
           <CardHeader>
             <CardTitle className="font-headline">Game Invitation: {team.name}</CardTitle>
             <CardDescription>
-              Invited {invitation.invitedAt ? formatDistanceToNow(new Date(invitation.invitedAt.seconds * 1000), { addSuffix: true }) : 'recently'}
+              Invited {invitation.invitedAt ? formatDistanceToNow(new Date((invitation.invitedAt as Timestamp).seconds * 1000), { addSuffix: true }) : 'recently'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -618,4 +725,3 @@ export default function MyGamesPage() {
     </div>
   );
 }
-

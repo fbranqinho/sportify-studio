@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, orderBy } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Reservation, Notification, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -31,10 +31,12 @@ export default function PaymentsPage() {
     let unsubscribe = () => {};
     let paymentsQuery;
 
+    // This query will fetch all payments where the user is either the manager or a player involved.
+    // Firestore does not support logical OR in queries on different fields, so we need two listeners.
     if (user.role === 'PLAYER') {
-      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+        paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), orderBy("date", "desc"));
     } else if (user.role === 'MANAGER') {
-       paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id), orderBy("date", "desc"));
     } else {
         setPayments([]);
         setLoading(false);
@@ -55,66 +57,6 @@ export default function PaymentsPage() {
   }, [user, toast]);
   
 
-  const handlePayNow = async (payment: Payment) => {
-    if (!payment.reservationRef) {
-        toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
-        return;
-    }
-
-    const batch = writeBatch(db);
-    const paymentRef = doc(db, "payments", payment.id);
-    
-    batch.update(paymentRef, { status: "Paid" });
-    
-    try {
-        await batch.commit();
-
-        // Check if all player payments for this reservation are now paid
-        const reservationRef = doc(db, "reservations", payment.reservationRef);
-        const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef), where("status", "==", "Pending"));
-        const pendingPaymentsSnap = await getDocs(paymentsQuery);
-
-        if (pendingPaymentsSnap.empty) {
-            // All payments are done, confirm reservation and notify owner
-            const reservationDoc = await getDoc(reservationRef);
-            if (reservationDoc.exists()) {
-                const reservation = reservationDoc.data() as Reservation;
-                const finalBatch = writeBatch(db);
-                finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-
-                 const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", reservation.ownerProfileId));
-                 const ownerProfileSnapshot = await getDocs(ownerProfileQuery);
-                 if(!ownerProfileSnapshot.empty) {
-                     const ownerProfileId = ownerProfileSnapshot.docs[0].id;
-                     const ownerNotificationRef = doc(collection(db, "notifications"));
-                     const notification: Omit<Notification, 'id'> = {
-                         ownerProfileId: ownerProfileId,
-                         message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
-                         link: `/dashboard/schedule`,
-                         read: false,
-                         createdAt: serverTimestamp() as any,
-                     };
-                     finalBatch.set(ownerNotificationRef, notification);
-                     await finalBatch.commit();
-                 }
-                
-                 toast({
-                    title: "Final Payment Received!",
-                    description: "The reservation is now confirmed and scheduled.",
-                });
-            }
-        } else {
-             toast({
-                title: "Payment Successful!",
-                description: `Your payment has been registered. Waiting for ${pendingPaymentsSnap.size} other players.`,
-            });
-        }
-    } catch (error: any) {
-        console.error("Error processing payment:", error);
-        toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
-    }
-  }
-
   const getStatusInfo = (status: Payment["status"]) => {
     switch(status) {
       case "Paid": return { text: "Paid", icon: CheckCircle, color: "text-green-600" };
@@ -132,7 +74,7 @@ export default function PaymentsPage() {
         <CardHeader>
           <CardTitle className="font-headline flex justify-between items-center">
             <span>{payment.type === 'booking_split' ? `Game fee: ${payment.teamName}`: 'Payment'}</span>
-            <Badge variant={payment.status === 'Pending' ? 'destructive' : 'outline'}>{payment.status}</Badge>
+            <Badge variant={payment.status === 'Pending' ? 'destructive' : payment.status === 'Paid' ? 'default' : 'outline'}>{payment.status}</Badge>
           </CardTitle>
            <CardDescription>
                 {payment.date ? format(new Date(payment.date), "PPP") : 'Date not available'}
@@ -150,7 +92,7 @@ export default function PaymentsPage() {
         </CardContent>
         {payment.status === 'Pending' && user?.role === 'PLAYER' && (
           <CardFooter>
-             <Button className="w-full" onClick={() => handlePayNow(payment)}><CreditCard className="mr-2"/> Pay Now</Button>
+             <p className="text-xs text-muted-foreground text-center w-full">Please go to &quot;My Games&quot; to pay for your share.</p>
           </CardFooter>
         )}
       </Card>
@@ -181,7 +123,7 @@ export default function PaymentsPage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">My Payments</h1>
         <p className="text-muted-foreground">
-          View your payment history and pay for pending game fees.
+          View your payment history and pending game fees.
         </p>
       </div>
 
