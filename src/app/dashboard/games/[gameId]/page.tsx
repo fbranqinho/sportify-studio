@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -6,14 +7,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Payment } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -122,7 +123,7 @@ function EventTimeline({ events, teamAName, teamBName, duration }: { events: Mat
     );
 }
 
-function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, payment }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null, payment: Payment | null }) {
+function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservation }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null, reservation: Reservation | null }) {
     const { toast } = useToast();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
@@ -238,9 +239,18 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, payment }:
             setScoreB(goalsB);
         }
     }, [isEndGameOpen, match.events]);
+    
+    const isPaid = reservation?.paymentStatus === 'Paid';
+    const hasPlayers = (match.teamAPlayers?.length || 0) > 0 || (match.teamBPlayers?.length || 0) > 0;
+    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && isPaid && hasPlayers;
+    
+    let disabledTooltipContent = "";
+    if (!isPaid) {
+        disabledTooltipContent = "The game must be paid for before it can be started.";
+    } else if (!hasPlayers) {
+        disabledTooltipContent = "The game cannot start until at least one player has confirmed their attendance.";
+    }
 
-    const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent');
-    const isPaid = payment?.status === 'Paid';
 
     return (
         <Card>
@@ -250,20 +260,20 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, payment }:
             </CardHeader>
             <CardContent className="space-y-4">
                  <div className="flex items-center justify-center gap-4">
-                    {canStartGame && (
+                    {(match.status === 'Scheduled' || match.status === 'PendingOpponent') && (
                          <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     {/* The div wrapper is necessary for the tooltip to work on a disabled button */}
                                     <div>
-                                        <Button onClick={handleStartGame} size="lg" disabled={!isPaid}>
+                                        <Button onClick={handleStartGame} size="lg" disabled={!canStartGame}>
                                             <Play className="mr-2" /> Start Game
                                         </Button>
                                     </div>
                                 </TooltipTrigger>
-                                {!isPaid && (
+                                {!canStartGame && (
                                 <TooltipContent>
-                                    <p className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> The game must be paid for before it can be started.</p>
+                                    <p className="flex items-center gap-2"><Lock className="h-4 w-4" /> {disabledTooltipContent}</p>
                                 </TooltipContent>
                                 )}
                             </Tooltip>
@@ -757,9 +767,9 @@ function PlayerRoster({
                     <TableHeader>
                         <TableRow>
                             <TableHead>Player</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Team</TableHead>
-                            {showLiveActions && <TableHead className="text-right">Live Actions</TableHead>}
+                            <TableHead className="w-[150px]">Status</TableHead>
+                            <TableHead className="w-[180px]">Team</TableHead>
+                            {(showTeamAssignment || showLiveActions) && <TableHead className="text-right w-[150px]">Actions</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -773,32 +783,34 @@ function PlayerRoster({
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
-                                    {showTeamAssignment ? (
-                                        player.status === 'confirmed' ? (
-                                            <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                                <SelectTrigger className="w-[150px]">
-                                                    <SelectValue placeholder="Unassigned" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                    <SelectItem value="A">Vests A</SelectItem>
-                                                    <SelectItem value="B">Vests B</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground">-</span>
-                                        )
-                                    ) : (
-                                        player.team ? `Vests ${player.team}` : '-'
-                                    )}
+                                    { (player.team && !showTeamAssignment) ? `Vests ${player.team}` :
+                                      !showTeamAssignment ? '-' :
+                                      player.status !== 'confirmed' ? <span className="text-sm text-muted-foreground">-</span> :
+                                     (
+                                        <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Unassigned" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                <SelectItem value="A">Vests A</SelectItem>
+                                                <SelectItem value="B">Vests B</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                     )
+                                    }
                                 </TableCell>
-                                {showLiveActions && (
+                                {(showTeamAssignment || showLiveActions) && (
                                      <TableCell className="text-right">
-                                        {player.team && player.status === 'confirmed' ? (
-                                            <PlayerActions player={player} teamId={player.team} />
-                                        ) : (
+                                        {showLiveActions ? (
+                                            player.team && player.status === 'confirmed' ? (
+                                                <PlayerActions player={player} teamId={player.team} />
+                                            ) : (
+                                                <span className="text-sm text-muted-foreground">-</span>
+                                            )
+                                        ) : showTeamAssignment ? (
                                             <span className="text-sm text-muted-foreground">-</span>
-                                        )}
+                                        ): null}
                                     </TableCell>
                                 )}
                             </TableRow>
@@ -866,13 +878,12 @@ export default function GameDetailsPage() {
     const [teamB, setTeamB] = React.useState<Team | null>(null);
     const [pitch, setPitch] = React.useState<Pitch | null>(null);
     const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
-    const [payment, setPayment] = React.useState<Payment | null>(null);
+    const [reservation, setReservation] = React.useState<Reservation | null>(null);
     const [invitationCounts, setInvitationCounts] = React.useState<InvitationCounts>({ pending: 0, declined: 0 });
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
 
     const fetchGameDetails = React.useCallback(async () => {
-        // setLoading(true); // Don't set loading on re-fetch to avoid flicker
         try {
             const matchRef = doc(db, "matches", gameId);
             const matchSnap = await getDoc(matchRef);
@@ -886,21 +897,17 @@ export default function GameDetailsPage() {
             const matchData = { id: matchSnap.id, ...matchSnap.data() } as Match;
             setMatch(matchData);
 
-            // Fetch related data in parallel
             const promises = [];
 
-            // Team A
             if (matchData.teamARef) {
                 promises.push(getDoc(doc(db, "teams", matchData.teamARef)).then(d => d.exists() ? setTeamA({id: d.id, ...d.data()} as Team) : null));
             }
 
-            // Team B (or Invited Team)
             const teamBId = matchData.teamBRef || matchData.invitedTeamId;
             if (teamBId) {
                 promises.push(getDoc(doc(db, "teams", teamBId)).then(d => d.exists() ? setTeamB({id: d.id, ...d.data()} as Team) : null));
             }
             
-            // Pitch and Owner
             if (matchData.pitchRef) {
                 const pitchRef = doc(db, "pitches", matchData.pitchRef);
                 const pitchPromise = getDoc(pitchRef).then(async (pitchDoc) => {
@@ -908,7 +915,6 @@ export default function GameDetailsPage() {
                         const pitchData = { id: pitchDoc.id, ...pitchDoc.data() } as Pitch;
                         setPitch(pitchData);
                         if (pitchData.ownerRef) {
-                            // Assuming ownerRef points to the user ID of the owner
                             const ownerQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", pitchData.ownerRef));
                             const ownerSnapshot = await getDocs(ownerQuery);
                             if (!ownerSnapshot.empty) {
@@ -921,18 +927,15 @@ export default function GameDetailsPage() {
                 promises.push(pitchPromise);
             }
 
-            // Payment information
             if (matchData.reservationRef) {
-                const paymentQuery = query(collection(db, "payments"), where("reservationRef", "==", matchData.reservationRef), where("status", "==", "Paid"));
-                const paymentPromise = getDocs(paymentQuery).then(paymentSnapshot => {
-                    if (!paymentSnapshot.empty) {
-                        setPayment({id: paymentSnapshot.docs[0].id, ...paymentSnapshot.docs[0].data()} as Payment);
+                const reservationPromise = getDoc(doc(db, "reservations", matchData.reservationRef)).then(resSnap => {
+                     if (resSnap.exists()) {
+                        setReservation({id: resSnap.id, ...resSnap.data()} as Reservation);
                     }
                 });
-                promises.push(paymentPromise);
+                promises.push(reservationPromise);
             }
 
-            // Invitation counts
             const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", gameId));
             const invPromise = getDocs(invQuery).then(snapshot => {
                 let pending = 0;
@@ -997,7 +1000,7 @@ export default function GameDetailsPage() {
         if (teamA && !teamB && !match.invitedTeamId && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         if (teamA && match.invitedTeamId && !teamB) {
-             const invitedTeam = teamB; // This is a bit of a hack, teamB state holds the invited team
+             const invitedTeam = teamB; 
              return `${teamA.name} vs ${invitedTeam?.name || 'Invited Team'} (Pending)`;
         }
         return 'Match Details';
@@ -1099,7 +1102,7 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} payment={payment} />}
+            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
             
             <PlayerRoster 
                 match={match} 
@@ -1119,4 +1122,5 @@ export default function GameDetailsPage() {
     
 
     
+
 

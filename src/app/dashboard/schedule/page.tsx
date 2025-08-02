@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team, Notification, MatchInvitation, Payment } from "@/types";
+import type { Reservation, Team, Notification, MatchInvitation, Payment, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,11 +72,13 @@ export default function SchedulePage() {
 
   const handleUpdateStatus = async (reservation: Reservation, status: "Confirmed" | "Canceled") => {
     const reservationRef = doc(db, "reservations", reservation.id);
+    const batch = writeBatch(db);
     
     if (status === "Canceled") {
       try {
-        await updateDoc(reservationRef, { status: "Canceled" });
+        batch.update(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
         // TODO: Notify the user who made the reservation
+        await batch.commit();
         toast({
           title: "Reservation Canceled",
           description: `The reservation has been canceled.`,
@@ -90,47 +92,30 @@ export default function SchedulePage() {
 
     // Handle Confirmed status
     if (status === "Confirmed") {
-       const batch = writeBatch(db);
        let actorId: string | undefined;
-       let actorRole: "MANAGER" | "PLAYER" | undefined;
 
       try {
-        if (reservation.managerRef && reservation.teamRef) {
+        if (reservation.managerRef) {
             actorId = reservation.managerRef;
-            actorRole = "MANAGER";
         } else if (reservation.playerRef) {
             actorId = reservation.playerRef;
-            actorRole = "PLAYER";
         } else {
             throw new Error("Reservation is missing a manager or player reference.");
         }
         
-        // --- Shared Logic: Create Payment & Update Reservation ---
-        const paymentDocRef = doc(collection(db, "payments"));
-        const paymentData: Omit<Payment, 'id'> = {
-            type: "booking",
-            amount: reservation.totalAmount,
-            status: "Pending",
-            date: new Date().toISOString(),
-            reservationRef: reservation.id,
-            teamRef: reservation.teamRef, // Associate payment with the team
-            ...(actorRole === 'MANAGER' ? { managerRef: actorId } : { playerRef: actorId }),
-        };
-        batch.set(paymentDocRef, paymentData);
+        // --- Update Reservation with Payment Status ---
+        batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
 
-         // Notification for payment
+         // --- Create Notification for Payment ---
         const paymentNotificationRef = doc(collection(db, 'notifications'));
         batch.set(paymentNotificationRef, {
             userId: actorId,
             message: `Payment of ${reservation.totalAmount.toFixed(2)}€ is required for your booking at ${reservation.pitchName}.`,
-            link: '/dashboard/payments', // Direct user to payment page
+            link: '/dashboard/payments',
             read: false,
             createdAt: serverTimestamp() as any,
         });
         
-
-        batch.update(reservationRef, { status: "Confirmed" });
-
         await batch.commit(); 
         
         toast({
@@ -139,7 +124,7 @@ export default function SchedulePage() {
         });
 
       } catch (error) {
-        console.error("Error confirming reservation and creating entities: ", error);
+        console.error("Error confirming reservation: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not confirm reservation." });
       }
     }

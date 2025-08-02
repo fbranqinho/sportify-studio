@@ -268,7 +268,7 @@ export default function MyGamesPage() {
 
   const now = new Date();
   const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const pastMatches = matches.filter(m => m.status === 'Finished' || new Date(m.date) < now).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   
   const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
