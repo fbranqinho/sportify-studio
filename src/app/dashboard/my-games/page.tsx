@@ -148,6 +148,34 @@ export default function MyGamesPage() {
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
+  // Helper to fetch details for a list of IDs from a given collection
+  const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles' | 'reservations', ids: string[]): Promise<Map<string, any>> => {
+      const newMap = new Map<string, any>();
+      const uniqueIds = [...new Set(ids)].filter(id => id);
+      if (uniqueIds.length === 0) return newMap;
+      
+      const chunks = [];
+      for (let i = 0; i < uniqueIds.length; i += 30) {
+          chunks.push(uniqueIds.slice(i, i + 30));
+      }
+
+      for (const chunk of chunks) {
+          if (chunk.length === 0) continue;
+          let docsQuery;
+          // The owner ref on a pitch is the owner *profile* ID, not user ID.
+          if (collectionName === 'ownerProfiles') {
+              docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
+          } else {
+              docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
+          }
+          const snapshot = await getDocs(docsQuery);
+          snapshot.forEach(doc => newMap.set(doc.id, { id: doc.id, ...doc.data() }));
+      }
+      
+      return newMap;
+  };
+
+
   // Effect to fetch teams and matches based on user role
   React.useEffect(() => {
     if (!user) {
@@ -158,35 +186,10 @@ export default function MyGamesPage() {
     setLoading(true);
     const unsubscribes: (() => void)[] = [];
     let userTeamIds: string[] = [];
-
-    const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles' | 'reservations', ids: string[]): Promise<Map<string, any>> => {
-        const newMap = new Map<string, any>();
-        if (ids.length === 0) return newMap;
-        
-        const uniqueIds = [...new Set(ids)].filter(id => id); // Filter out any falsy ids
-        if (uniqueIds.length === 0) return newMap;
-        
-        const chunks = [];
-        for (let i = 0; i < uniqueIds.length; i += 30) {
-            chunks.push(uniqueIds.slice(i, i + 30));
-        }
-
-        for (const chunk of chunks) {
-            if(chunk.length === 0) continue;
-            const docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
-            const snapshot = await getDocs(docsQuery);
-            snapshot.forEach(doc => {
-                newMap.set(doc.id, { id: doc.id, ...doc.data() });
-            });
-        }
-        
-        return newMap;
-    };
-
+    let listenersSet = false;
 
     const setupListeners = async () => {
         try {
-            // --- Step 1: Get all teams the user is part of (as Player or Manager) ---
             if (user.role === 'PLAYER') {
                 const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
                 const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
@@ -201,7 +204,6 @@ export default function MyGamesPage() {
                  setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
 
-            // --- Listener for Personal Match Invitations (for players) ---
             if (user.role === 'PLAYER') {
                 const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
                 const unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
@@ -216,7 +218,6 @@ export default function MyGamesPage() {
                 unsubscribes.push(unsubscribeInvitations);
             }
 
-            // --- Listener for Team Match Invitations (for managers) ---
             if (user.role === 'MANAGER' && userTeamIds.length > 0) {
                 const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
                 const unsubscribeTeamInvites = onSnapshot(teamInvQuery, async (snapshot) => {
@@ -231,11 +232,10 @@ export default function MyGamesPage() {
                 unsubscribes.push(unsubscribeTeamInvites);
             }
 
-            // --- Listener for Confirmed Matches ---
             if (userTeamIds.length > 0) {
                  const combinedMatches = new Map<string, Match>();
                  
-                 const processMatchesSnapshot = async (snapshot: DocumentData) => {
+                 const processMatchesSnapshot = async (snapshot: DocumentData, initialLoadDone: () => void) => {
                     snapshot.docs.forEach((doc: DocumentData) => combinedMatches.set(doc.id, { id: doc.id, ...doc.data()} as Match));
                     const allMatches = Array.from(combinedMatches.values());
                     setMatches(allMatches);
@@ -265,33 +265,33 @@ export default function MyGamesPage() {
                         const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
                         setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
-                        const ownerUserRefsToFetch = new Set<string>();
+                        const ownerProfileIdsToFetch = new Set<string>();
                         pitchesMap.forEach(pitch => {
-                            // The ownerRef on a pitch is the ID of the ownerProfile document.
-                            if (pitch.ownerRef) ownerUserRefsToFetch.add(pitch.ownerRef);
+                            if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef);
                         })
 
-                        if(ownerUserRefsToFetch.size > 0){
-                            // This query is slightly different as ownerRef on pitch is ownerProfileID not userID
-                             const q = query(collection(db, "ownerProfiles"), where(documentId(), "in", Array.from(ownerUserRefsToFetch)));
-                            const ownerSnapshot = await getDocs(q);
-                            const ownersMap = new Map<string, OwnerProfile>();
-                            ownerSnapshot.forEach(doc => {
-                                const ownerData = { id: doc.id, ...doc.data() } as OwnerProfile;
-                                ownersMap.set(ownerData.id, ownerData);
-                            });
+                        if(ownerProfileIdsToFetch.size > 0){
+                             const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
                              setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
                         }
                     }
+                    initialLoadDone();
                  };
                  
                  const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
                  const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
+                 
+                 let initLoads = 2;
+                 const initialLoadDone = () => {
+                     initLoads--;
+                     if(initLoads === 0) setLoading(false);
+                 }
 
-                 const unsub1 = onSnapshot(q1, processMatchesSnapshot);
-                 const unsub2 = onSnapshot(q2, processMatchesSnapshot);
+                 const unsub1 = onSnapshot(q1, (snap) => processMatchesSnapshot(snap, initialLoadDone));
+                 const unsub2 = onSnapshot(q2, (snap) => processMatchesSnapshot(snap, initialLoadDone));
                  
                  unsubscribes.push(unsub1, unsub2);
+                 listenersSet = true;
             } else {
                  setLoading(false);
             }
@@ -299,17 +299,11 @@ export default function MyGamesPage() {
         } catch (error) {
             console.error("Error setting up listeners: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
-        } finally {
-            if (unsubscribes.length === 0) setLoading(false);
+            setLoading(false);
         }
     };
     
-    const initialLoad = async () => {
-        await setupListeners();
-        setLoading(false);
-    }
-
-    initialLoad();
+    setupListeners();
     
     return () => {
         unsubscribes.forEach(unsub => unsub());
@@ -318,7 +312,6 @@ export default function MyGamesPage() {
   }, [user, toast]);
   
   const refreshData = async () => {
-    // This function can be called after a payment to refresh the reservation status
     const reservationIds = Array.from(reservations.keys());
     if(reservationIds.length > 0) {
         const reservationsMap = await fetchDetails('reservations', reservationIds);
@@ -340,42 +333,6 @@ export default function MyGamesPage() {
         }
         
         await batch.commit();
-
-        // Separate read/write after initial commit
-        if (accepted) {
-            const matchDoc = await getDoc(matchRef);
-            if (matchDoc.exists()) {
-                const match = {id: matchDoc.id, ...matchDoc.data()} as Match;
-                const pitch = pitches.get(match.pitchRef);
-                if(pitch) {
-                    const confirmedPlayers = (match.teamAPlayers?.length || 0); // Player was added in batch, so count is up to date
-                    const playerCapacity = getPlayerCapacity(pitch.sport);
-                    if (playerCapacity > 0 && confirmedPlayers >= playerCapacity) {
-                        const gameFullBatch = writeBatch(db);
-                        gameFullBatch.update(matchRef, { status: "Scheduled" });
-
-                        // Notify owner that the game is now full
-                         const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", pitch.ownerRef));
-                         const ownerProfileSnapshot = await getDocs(ownerProfileQuery);
-                         if(!ownerProfileSnapshot.empty) {
-                             const ownerProfileId = ownerProfileSnapshot.docs[0].id;
-                             const newNotificationRef = doc(collection(db, "notifications"));
-                             const notification: Omit<Notification, 'id'> = {
-                                ownerProfileId: ownerProfileId,
-                                message: `The game scheduled for ${format(new Date(match.date), 'PPp')} on '${pitch.name}' is now full.`,
-                                link: `/dashboard/schedule`,
-                                read: false,
-                                createdAt: serverTimestamp() as any,
-                            };
-                            gameFullBatch.set(newNotificationRef, notification);
-                         }
-                        
-                        await gameFullBatch.commit();
-                    }
-                }
-            }
-        }
-
         toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
      } catch (error) {
         console.error("Error responding to invitation:", error);
@@ -661,3 +618,4 @@ export default function MyGamesPage() {
     </div>
   );
 }
+
