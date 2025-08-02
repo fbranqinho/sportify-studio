@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Payment } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -122,14 +122,13 @@ function EventTimeline({ events, teamAName, teamBName, duration }: { events: Mat
     );
 }
 
-function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null }) {
+function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, payment }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null, payment: Payment | null }) {
     const { toast } = useToast();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
     const [scoreB, setScoreB] = React.useState(match.scoreB);
     const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
     const gameDuration = pitch ? getGameDuration(pitch.sport) : 90;
-
 
     const handleStartGame = async () => {
         const matchRef = doc(db, "matches", match.id);
@@ -241,6 +240,7 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match:
     }, [isEndGameOpen, match.events]);
 
     const canStartGame = match.status === 'Scheduled' || (match.status === 'PendingOpponent');
+    const isPaid = payment?.status === 'Paid';
 
     return (
         <Card>
@@ -251,9 +251,23 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch }: { match:
             <CardContent className="space-y-4">
                  <div className="flex items-center justify-center gap-4">
                     {canStartGame && (
-                        <Button onClick={handleStartGame} size="lg">
-                            <Play className="mr-2" /> Start Game
-                        </Button>
+                         <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    {/* The div wrapper is necessary for the tooltip to work on a disabled button */}
+                                    <div>
+                                        <Button onClick={handleStartGame} size="lg" disabled={!isPaid}>
+                                            <Play className="mr-2" /> Start Game
+                                        </Button>
+                                    </div>
+                                </TooltipTrigger>
+                                {!isPaid && (
+                                <TooltipContent>
+                                    <p className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> The game must be paid for before it can be started.</p>
+                                </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                     )}
                     {match.status === 'InProgress' && (
                          <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
@@ -852,6 +866,7 @@ export default function GameDetailsPage() {
     const [teamB, setTeamB] = React.useState<Team | null>(null);
     const [pitch, setPitch] = React.useState<Pitch | null>(null);
     const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
+    const [payment, setPayment] = React.useState<Payment | null>(null);
     const [invitationCounts, setInvitationCounts] = React.useState<InvitationCounts>({ pending: 0, declined: 0 });
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
@@ -904,6 +919,17 @@ export default function GameDetailsPage() {
                     }
                 });
                 promises.push(pitchPromise);
+            }
+
+            // Payment information
+            if (matchData.reservationRef) {
+                const paymentQuery = query(collection(db, "payments"), where("reservationRef", "==", matchData.reservationRef), where("status", "==", "Paid"));
+                const paymentPromise = getDocs(paymentQuery).then(paymentSnapshot => {
+                    if (!paymentSnapshot.empty) {
+                        setPayment({id: paymentSnapshot.docs[0].id, ...paymentSnapshot.docs[0].data()} as Payment);
+                    }
+                });
+                promises.push(paymentPromise);
             }
 
             // Invitation counts
@@ -1073,7 +1099,7 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} />}
+            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} payment={payment} />}
             
             <PlayerRoster 
                 match={match} 
@@ -1093,3 +1119,4 @@ export default function GameDetailsPage() {
     
 
     
+

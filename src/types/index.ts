@@ -287,6 +287,7 @@ export interface Payment {
   matchRef?: string; // Match ID
   competitionRef?: string; // Competition ID
   teamRef?: string; // Team ID
+  reservationRef?: string; // Reservation ID
   type: PaymentType;
   amount: number;
   date?: string; // ISO 8601 string
