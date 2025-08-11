@@ -15,36 +15,115 @@ import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Users, Shield
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
+const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
+    const { toast } = useToast();
+
+    const createMatchForReservation = (batch: any, reservation: Reservation) => {
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: "PendingOpponent",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
+            reservationRef: reservation.id,
+        };
+        batch.set(newMatchRef, matchData);
+    };
+
+    const handlePayNow = async () => {
+        if (!payment.reservationRef) {
+            toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
+            return;
+        }
+
+        const batch = writeBatch(db);
+        const paymentRef = doc(db, "payments", payment.id);
+        
+        batch.update(paymentRef, { status: "Paid" });
+        
+        try {
+            await batch.commit();
+
+            const reservationRef = doc(db, "reservations", payment.reservationRef);
+            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef), where("status", "==", "Pending"));
+            const pendingPaymentsSnap = await getDocs(paymentsQuery);
+
+            if (pendingPaymentsSnap.empty) {
+                const reservationDoc = await getDoc(reservationRef);
+                if (reservationDoc.exists()) {
+                    const reservation = reservationDoc.data() as Reservation;
+                    const finalBatch = writeBatch(db);
+                    finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+                    createMatchForReservation(finalBatch, reservation);
+
+                    const ownerNotificationRef = doc(collection(db, "notifications"));
+                    const notification: Omit<Notification, 'id'> = {
+                        ownerProfileId: reservation.ownerProfileId,
+                        message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
+                        link: `/dashboard/schedule`,
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    };
+                    finalBatch.set(ownerNotificationRef, notification);
+                    await finalBatch.commit();
+                
+                    toast({
+                        title: "Final Payment Received!",
+                        description: "The reservation is now confirmed and scheduled.",
+                    });
+                }
+            } else {
+                toast({
+                    title: "Payment Successful!",
+                    description: `Your payment has been registered. Waiting for ${pendingPaymentsSnap.size} other players.`,
+                });
+            }
+            onPaymentProcessed();
+        } catch (error: any) {
+            console.error("Error processing payment:", error);
+            toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
+        }
+    }
+
+    return (
+        <Button className="w-full mt-4" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+    )
+}
+
 export default function PaymentsPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const [payments, setPayments] = React.useState<Payment[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
+  const fetchPayments = React.useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
     }
-
     setLoading(true);
-    let unsubscribe = () => {};
     let paymentsQuery;
-
-    // This query will fetch all payments where the user is either the manager or a player involved.
     if (user.role === 'PLAYER') {
-        paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
     } else if (user.role === 'MANAGER') {
-        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else {
-        setPayments([]);
-        setLoading(false);
-        return;
+      setPayments([]);
+      setLoading(false);
+      return;
     }
 
-    unsubscribe = onSnapshot(paymentsQuery, (querySnapshot) => {
+    const unsubscribe = onSnapshot(paymentsQuery, (querySnapshot) => {
       const paymentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-      // Sort payments by date descending client-side
       paymentsData.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
       setPayments(paymentsData);
       setLoading(false);
@@ -54,8 +133,15 @@ export default function PaymentsPage() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, [user, toast]);
+
+  React.useEffect(() => {
+    const unsubscribe = fetchPayments();
+    return () => {
+      unsubscribe.then(unsub => unsub && unsub());
+    }
+  }, [fetchPayments]);
   
 
   const getStatusInfo = (status: Payment["status"]) => {
@@ -105,7 +191,7 @@ export default function PaymentsPage() {
         </CardContent>
         {payment.status === 'Pending' && user?.role === 'PLAYER' && (
           <CardFooter>
-             <p className="text-xs text-muted-foreground text-center w-full">Please go to &quot;My Games&quot; to pay for your share.</p>
+            <PlayerPaymentButton payment={payment} onPaymentProcessed={fetchPayments} />
           </CardFooter>
         )}
       </Card>
