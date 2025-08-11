@@ -2,7 +2,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Calendar, ShieldCheck, DollarSign } from "lucide-react";
+import { AlertCircle, Calendar, ShieldCheck, DollarSign, Goal, Foot } from "lucide-react";
 import type { PlayerProfile } from "@/types";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
@@ -21,7 +21,7 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
   const { profile, upcomingGames, pendingPayments } = data;
   
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Upcoming Games</CardTitle>
@@ -35,17 +35,21 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
           </Button>
         </CardContent>
       </Card>
-      <Card>
+      
+       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Discipline</CardTitle>
-          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium">Offensive Performance</CardTitle>
+          <Goal className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-           <div className="text-2xl font-bold">{profile?.yellowCards ?? 0} <span className="text-sm font-normal">Yellows</span></div>
-           <p className="text-xs text-muted-foreground">{profile?.redCards ?? 0} Red Cards</p>
-           <p className="text-xs text-muted-foreground mt-2 text-green-600 font-semibold">Clean record this month</p>
+           <div className="text-2xl font-bold">{profile?.goals ?? 0} <span className="text-sm font-normal">Goals</span></div>
+           <p className="text-xs text-muted-foreground">{profile?.assists ?? 0} Assists</p>
+           <Button size="sm" className="mt-2" variant="outline" asChild>
+             <Link href="/dashboard/stats">View All Stats</Link>
+            </Button>
         </CardContent>
       </Card>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Recent Form</CardTitle>
@@ -68,7 +72,8 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
            <p className="text-xs text-muted-foreground mt-2">Last 5 matches</p>
         </CardContent>
       </Card>
-      <Card>
+      
+      <Card className="lg:col-span-3">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
