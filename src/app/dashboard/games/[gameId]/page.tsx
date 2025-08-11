@@ -251,11 +251,11 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
     
     const isPaid = reservation?.paymentStatus === 'Paid';
     const hasPlayers = (match.teamAPlayers?.length || 0) > 0 || (match.teamBPlayers?.length || 0) > 0;
-    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && isPaid && hasPlayers;
+    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && (isPaid || !!match.allowPostGamePayments) && hasPlayers;
     
     let disabledTooltipContent = "";
-    if (!isPaid) {
-        disabledTooltipContent = "The game must be paid for before it can be started.";
+    if (!isPaid && !match.allowPostGamePayments) {
+        disabledTooltipContent = "The game must be paid for (or allow post-game payments) before it can start.";
     } else if (!hasPlayers) {
         disabledTooltipContent = "The game cannot start until at least one player has confirmed their attendance.";
     }
@@ -350,6 +350,18 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
             toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
         }
     }
+
+    const handleTogglePostGamePayments = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowPostGamePayments: checked });
+            onMatchUpdate({ allowPostGamePayments: checked });
+            toast({ title: "Settings updated", description: `Post-game payments are now ${checked ? 'allowed' : 'disallowed'}.`});
+        } catch (error) {
+            console.error("Error updating match settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
+        }
+    }
     
     const handleDeleteGame = async () => {
         const batch = writeBatch(db);
@@ -393,9 +405,24 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                         onCheckedChange={handleToggleExternalPlayers}
                     />
                 </div>
+                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-post-game-payments" className="text-base font-semibold">
+                            Allow Post-Game Payments
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Permit the game to start before all players have paid. Debts will be tracked.
+                        </p>
+                    </div>
+                    <Switch
+                        id="allow-post-game-payments"
+                        checked={!!match.allowPostGamePayments}
+                        onCheckedChange={handleTogglePostGamePayments}
+                    />
+                </div>
                  <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
                     <div className="space-y-0.5">
-                        <Label htmlFor="allow-external" className="text-base font-semibold text-destructive">
+                        <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
                             Delete Game
                         </Label>
                         <p className="text-sm text-muted-foreground">

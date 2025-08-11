@@ -2,6 +2,7 @@
 
 
 
+
 import type { LucideIcon } from "lucide-react";
 import type { FieldValue, Timestamp } from "firebase/firestore";
 
@@ -264,6 +265,7 @@ export interface Match {
     refereeId: string | null;
     managerRef: string | null;
     allowExternalPlayers?: boolean;
+    allowPostGamePayments?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
 }
