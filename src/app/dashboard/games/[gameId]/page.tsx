@@ -156,11 +156,9 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
 
         // --- Step 2: Aggregate player stats from match events ---
         const playerStats: { [playerId: string]: { goals: number, assists: number, yellowCards: number, redCards: number } } = {};
-        const allEventPlayerIds = new Set<string>();
-
+        
         if (match.events) {
             for (const event of match.events) {
-                allEventPlayerIds.add(event.playerId);
                 if (!playerStats[event.playerId]) {
                     playerStats[event.playerId] = { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
                 }
@@ -196,13 +194,21 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
                      let gameResult: "W" | "D" | "L" | undefined = undefined;
                      if(match.teamAPlayers?.includes(profile.userRef)) gameResult = teamAResult;
                      if(match.teamBPlayers?.includes(profile.userRef)) gameResult = teamBResult;
+                     
+                     const newRecentForm = [...(profile.recentForm || [])];
+                     if(gameResult) {
+                         newRecentForm.push(gameResult);
+                         if (newRecentForm.length > 5) {
+                             newRecentForm.shift(); // Keep only last 5
+                         }
+                     }
 
                      batch.update(profileRef, {
                          goals: increment(stats.goals),
                          assists: increment(stats.assists),
                          yellowCards: increment(stats.yellowCards),
                          redCards: increment(stats.redCards),
-                         recentForm: gameResult ? arrayUnion(gameResult) : undefined,
+                         recentForm: newRecentForm,
                          victories: gameResult === 'W' ? increment(1) : undefined,
                          defeats: gameResult === 'L' ? increment(1) : undefined,
                          draws: gameResult === 'D' ? increment(1) : undefined,
@@ -916,12 +922,11 @@ export default function GameDetailsPage() {
                         const pitchData = { id: pitchDoc.id, ...pitchDoc.data() } as Pitch;
                         setPitch(pitchData);
                         if (pitchData.ownerRef) {
-                            const ownerQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", pitchData.ownerRef));
-                            const ownerSnapshot = await getDocs(ownerQuery);
-                            if (!ownerSnapshot.empty) {
-                                const ownerDoc = ownerSnapshot.docs[0];
-                                setOwner({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
-                            }
+                             const ownerDocRef = doc(db, "ownerProfiles", pitchData.ownerRef);
+                             const ownerDoc = await getDoc(ownerDocRef);
+                             if (ownerDoc.exists()) {
+                                 setOwner({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
+                             }
                         }
                     }
                 });
@@ -1123,6 +1128,7 @@ export default function GameDetailsPage() {
     
 
     
+
 
 
 
