@@ -90,7 +90,10 @@ export default function DashboardPage() {
                         upcomingGames = upcomingGamesA + upcomingGamesB;
                     }
                     
-                    setDashboardData({ profile, upcomingGames });
+                    const paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
+                    const paymentsSnap = await getDocs(paymentsQuery);
+
+                    setDashboardData({ profile, upcomingGames, pendingPayments: paymentsSnap.size });
                     break;
                 }
                 case "MANAGER": {
@@ -102,12 +105,20 @@ export default function DashboardPage() {
                     let upcomingMatches: EnrichedMatch[] = [];
                     let teamPlayers: PlayerProfile[] = [];
                     let unavailablePlayers = 0;
+                    let pendingPayments = 0;
                     
                     if (teamIds.length > 0) {
                         const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
                         const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
+                        const reservationsQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id), where("paymentStatus", "==", "Pending"));
                         
-                        const [matchesASnap, matchesBSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery)]);
+                        const [matchesASnap, matchesBSnap, reservationsSnap] = await Promise.all([
+                            getDocs(matchesAQuery),
+                            getDocs(matchesBQuery),
+                            getDocs(reservationsQuery),
+                        ]);
+
+                        pendingPayments = reservationsSnap.size;
 
                         const allMatchesMap = new Map<string, Match>();
                         matchesASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
@@ -118,7 +129,6 @@ export default function DashboardPage() {
                         
                         const futureMatches = allMatches.filter(match => new Date(match.date) >= now);
 
-                        // Enrich matches with team names
                         const allTeamIds = new Set<string>();
                         futureMatches.forEach(m => {
                             if (m.teamARef) allTeamIds.add(m.teamARef);
@@ -126,7 +136,6 @@ export default function DashboardPage() {
                         });
 
                         const teamsData = new Map<string, Team>();
-                        // Add already fetched manager teams to map
                         teams.forEach(t => teamsData.set(t.id, t));
 
                         const missingTeamIds = Array.from(allTeamIds).filter(id => !teamsData.has(id));
@@ -147,7 +156,6 @@ export default function DashboardPage() {
                             }));
 
 
-                        // Fetch players for the primary team to check status
                         const primaryTeam = teams[0];
                         if (primaryTeam && primaryTeam.playerIds.length > 0) {
                             const playersQuery = query(collection(db, "playerProfiles"), where("userRef", "in", primaryTeam.playerIds));
@@ -157,7 +165,7 @@ export default function DashboardPage() {
                         }
                     }
 
-                    setDashboardData({ teams, upcomingMatches, unavailablePlayers, pendingPayments: 3 }); // Static pending payments for now
+                    setDashboardData({ teams, upcomingMatches, unavailablePlayers, pendingPayments });
                     break;
                 }
                  case "OWNER": {

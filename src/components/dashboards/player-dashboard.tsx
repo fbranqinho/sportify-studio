@@ -11,13 +11,14 @@ interface PlayerDashboardProps {
   data: {
     profile: PlayerProfile | null;
     upcomingGames: number;
+    pendingPayments: number;
   }
 }
 
 export function PlayerDashboard({ data }: PlayerDashboardProps) {
   if (!data) return <Skeleton className="h-32 w-full col-span-4"/>;
 
-  const { profile, upcomingGames } = data;
+  const { profile, upcomingGames, pendingPayments } = data;
   
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -65,13 +66,17 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+          <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-           <div className="text-2xl font-bold text-destructive">$15.00</div>
-           <p className="text-xs text-muted-foreground">Team fee for May</p>
-           <Button size="sm" variant="destructive" className="mt-2">Pay Now</Button>
+           <div className="text-2xl font-bold">{pendingPayments}</div>
+           <p className="text-xs text-muted-foreground">{pendingPayments === 1 ? 'payment required' : 'payments required'}</p>
+           <Button size="sm" variant={pendingPayments > 0 ? "destructive" : "secondary"} className="mt-2" asChild>
+            <Link href="/dashboard/payments">
+              {pendingPayments > 0 ? 'Pay Now' : 'View History'}
+            </Link>
+           </Button>
         </CardContent>
       </Card>
     </div>

@@ -90,9 +90,9 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
         </CardHeader>
         <CardContent>
            <div className="text-2xl font-bold">{pendingPayments}</div>
-           <p className="text-xs text-muted-foreground">players with outstanding fees</p>
+           <p className="text-xs text-muted-foreground">{pendingPayments === 1 ? 'payment to confirm' : 'payments to confirm'}</p>
            <Button size="sm" className="mt-2" variant="secondary" asChild>
-             <Link href="/dashboard/payments">Send Reminders</Link>
+             <Link href="/dashboard/my-games">View Games</Link>
             </Button>
         </CardContent>
       </Card>
