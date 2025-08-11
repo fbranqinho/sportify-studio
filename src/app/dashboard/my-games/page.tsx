@@ -116,6 +116,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 throw new Error("Associated match not found for this reservation.");
             }
             const matchId = matchSnap.docs[0].id;
+            const teamRef = teamSnap.docs[0].data() as Team;
     
             // Get Team and Players
             const teamRefDoc = doc(db, "teams", reservation.teamRef);
@@ -677,8 +678,10 @@ export default function MyGamesPage() {
                     </Link>
                 </Button>
                 {isFinished && (
-                     <Button variant="secondary" disabled>
-                        <Trophy className="mr-2" /> Match Report
+                     <Button variant="secondary" asChild className="w-full">
+                        <Link href={`/dashboard/games/${match.id}/report`}>
+                            <Trophy className="mr-2" /> Match Report
+                        </Link>
                     </Button>
                 )}
             </CardFooter>
@@ -836,3 +839,6 @@ export default function MyGamesPage() {
   );
 }
 
+
+
+    

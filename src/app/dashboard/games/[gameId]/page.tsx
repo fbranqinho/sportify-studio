@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -45,7 +46,7 @@ const getGameDuration = (sport: PitchSport): number => {
     }
 };
 
-function EventTimeline({ events, teamAName, teamBName, duration }: { events: MatchEvent[], teamAName?: string, teamBName?: string, duration: number }) {
+export function EventTimeline({ events, teamAName, teamBName, duration }: { events: MatchEvent[], teamAName?: string, teamBName?: string, duration: number }) {
     if (!events || events.length === 0) {
         return (
             <div className="text-center text-sm text-muted-foreground py-4">
@@ -1153,5 +1154,8 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
+
 
     
