@@ -106,7 +106,27 @@ export default function SchedulePage() {
         // --- 1. Update Reservation to require payment ---
         batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
 
-        // --- 2. Create Notification for Payment ---
+        // --- 2. Create the Match document ---
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: "PendingOpponent",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
+            reservationRef: reservation.id,
+        };
+        batch.set(newMatchRef, matchData);
+
+        // --- 3. Create Notification for Payment ---
         const paymentNotificationRef = doc(collection(db, 'notifications'));
         batch.set(paymentNotificationRef, {
             userId: actorId,
@@ -120,7 +140,7 @@ export default function SchedulePage() {
         
         toast({
         title: "Reservation Confirmed!",
-        description: `A payment request sent to ${reservation.actorName}. The game will be created upon payment.`,
+        description: `A game has been created and a payment request sent to ${reservation.actorName}.`,
         });
 
       } catch (error) {

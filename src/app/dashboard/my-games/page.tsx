@@ -21,28 +21,6 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const { toast } = useToast();
 
-    const createMatchForReservation = (batch: any, reservation: Reservation): string => {
-        const newMatchRef = doc(collection(db, "matches"));
-        const matchData: Omit<Match, 'id'> = {
-            date: reservation.date,
-            teamARef: reservation.teamRef || null,
-            teamBRef: null,
-            teamAPlayers: [],
-            teamBPlayers: [],
-            scoreA: 0,
-            scoreB: 0,
-            pitchRef: reservation.pitchId,
-            status: "PendingOpponent",
-            attendance: 0,
-            refereeId: null,
-            managerRef: reservation.managerRef || null,
-            allowExternalPlayers: true,
-            reservationRef: reservation.id,
-        };
-        batch.set(newMatchRef, matchData);
-        return newMatchRef.id;
-    };
-
     const handlePayFull = async () => {
         if (!reservation.teamRef) {
             toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
@@ -53,11 +31,17 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
         const reservationRef = doc(db, "reservations", reservation.id);
         
         try {
-            // Update reservation status to Paid
-            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+            // Find the associated Match
+            const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+            const matchSnap = await getDocs(matchQuery);
+            if(matchSnap.empty) {
+                throw new Error("Associated match not found for this reservation.");
+            }
+            const matchRef = matchSnap.docs[0].ref;
 
-            // Create the Match now that it's paid
-            createMatchForReservation(batch, reservation);
+            // Update reservation and match status
+            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+            batch.update(matchRef, { status: "Scheduled" });
 
             // Notify owner
             const ownerNotificationRef = doc(collection(db, "notifications"));
@@ -110,7 +94,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is created, and players have been notified to reimburse you." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been notified to reimburse you." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -125,10 +109,15 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     
         const batch = writeBatch(db);
         try {
-            // Step 1: Create the Match first to get an ID
-            const newMatchId = createMatchForReservation(batch, reservation);
+            // Find the associated Match
+            const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+            const matchSnap = await getDocs(matchQuery);
+            if(matchSnap.empty) {
+                throw new Error("Associated match not found for this reservation.");
+            }
+            const matchId = matchSnap.docs[0].id;
     
-            // Step 2: Get Team and Players
+            // Get Team and Players
             const teamRef = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRef);
             if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
@@ -136,10 +125,10 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const playerIds = team.playerIds;
             if (!playerIds || playerIds.length === 0) throw new Error("Team has no players to split payment with.");
     
-            // Step 3: Calculate amount per player
+            // Calculate amount per player
             const amountPerPlayer = reservation.totalAmount / playerIds.length;
     
-            // Step 4: Create a payment doc and match invitation for each player
+            // Create a payment doc and match invitation for each player
             for (const playerId of playerIds) {
                 // Create Payment
                 const playerPaymentRef = doc(collection(db, "payments"));
@@ -159,7 +148,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 // Create Match Invitation
                 const invitationRef = doc(collection(db, "matchInvitations"));
                 batch.set(invitationRef, {
-                    matchId: newMatchId,
+                    matchId: matchId,
                     teamId: team.id,
                     playerId: playerId,
                     managerId: reservation.managerRef,
@@ -178,11 +167,11 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                  });
             }
     
-            // Step 5: Update the original reservation to 'Split'
+            // Update the original reservation to 'Split'
             const originalReservationRef = doc(db, "reservations", reservation.id);
             batch.update(originalReservationRef, { paymentStatus: "Split" });
     
-            // Step 6: Commit batch
+            // Commit batch
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
