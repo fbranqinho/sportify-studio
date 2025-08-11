@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -187,32 +186,35 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
                  const profilesSnapshot = await getDocs(profilesQuery);
 
                  profilesSnapshot.forEach(profileDoc => {
-                     const profile = { id: profileDoc.id, ...profileDoc.data() } as PlayerProfile;
-                     const stats = playerStats[profile.userRef] || { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
-                     const profileRef = doc(db, "playerProfiles", profile.id);
-                     
-                     let gameResult: "W" | "D" | "L" | undefined = undefined;
-                     if(match.teamAPlayers?.includes(profile.userRef)) gameResult = teamAResult;
-                     if(match.teamBPlayers?.includes(profile.userRef)) gameResult = teamBResult;
-                     
-                     const newRecentForm = [...(profile.recentForm || [])];
-                     if(gameResult) {
-                         newRecentForm.push(gameResult);
-                         if (newRecentForm.length > 5) {
-                             newRecentForm.shift(); // Keep only last 5
-                         }
-                     }
+                    const profile = { id: profileDoc.id, ...profileDoc.data() } as PlayerProfile;
+                    const stats = playerStats[profile.userRef] || { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
+                    const profileRef = doc(db, "playerProfiles", profile.id);
 
-                     batch.update(profileRef, {
-                         goals: increment(stats.goals),
-                         assists: increment(stats.assists),
-                         yellowCards: increment(stats.yellowCards),
-                         redCards: increment(stats.redCards),
-                         recentForm: newRecentForm,
-                         victories: gameResult === 'W' ? increment(1) : undefined,
-                         defeats: gameResult === 'L' ? increment(1) : undefined,
-                         draws: gameResult === 'D' ? increment(1) : undefined,
-                     });
+                    let gameResult: "W" | "D" | "L" | undefined = undefined;
+                    if(match.teamAPlayers?.includes(profile.userRef)) gameResult = teamAResult;
+                    if(match.teamBPlayers?.includes(profile.userRef)) gameResult = teamBResult;
+                    
+                    const newRecentForm = [...(profile.recentForm || [])];
+                    if(gameResult) {
+                        newRecentForm.push(gameResult);
+                        if (newRecentForm.length > 5) {
+                            newRecentForm.shift();
+                        }
+                    }
+
+                    const updateData: any = {
+                        goals: increment(stats.goals),
+                        assists: increment(stats.assists),
+                        yellowCards: increment(stats.yellowCards),
+                        redCards: increment(stats.redCards),
+                        recentForm: newRecentForm,
+                    };
+                    
+                    if (gameResult === 'W') updateData.victories = increment(1);
+                    if (gameResult === 'L') updateData.defeats = increment(1);
+                    if (gameResult === 'D') updateData.draws = increment(1);
+                    
+                    batch.update(profileRef, updateData);
                  });
             }
 
@@ -1126,9 +1128,3 @@ export default function GameDetailsPage() {
 }
 
     
-
-    
-
-
-
-
