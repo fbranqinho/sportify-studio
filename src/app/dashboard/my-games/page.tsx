@@ -599,6 +599,7 @@ export default function MyGamesPage() {
     const isFinished = match.status === "Finished";
     const isManager = user?.id === teamA?.managerId;
     const isPlayer = user?.role === 'PLAYER';
+    const playerIsConfirmed = isPlayer && user ? match.teamAPlayers?.includes(user.id) : false;
 
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     
@@ -664,7 +665,7 @@ export default function MyGamesPage() {
                         <ManagerPaymentDialog reservation={reservation} onPaymentProcessed={refreshData} />
                     </div>
                  )}
-                  {isPlayer && payment && (
+                  {isPlayer && playerIsConfirmed && payment && (
                     <div className="border-t pt-3 mt-3 space-y-2">
                          <div className="flex justify-between items-center text-base">
                             <span className="font-semibold text-destructive">Your Share Due</span>
