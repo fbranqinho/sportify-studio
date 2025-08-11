@@ -21,6 +21,27 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const { toast } = useToast();
 
+    const createMatchForReservation = (batch: any, reservation: Reservation) => {
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: "PendingOpponent",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
+            reservationRef: reservation.id,
+        };
+        batch.set(newMatchRef, matchData);
+    };
+
     const handlePayFull = async () => {
         if (!reservation.teamRef) {
             toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
@@ -33,6 +54,9 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
         try {
             // Update reservation status to Paid
             batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+
+            // Create the Match now that it's paid
+            createMatchForReservation(batch, reservation);
 
             // Notify owner
             const ownerNotificationRef = doc(collection(db, "notifications"));
@@ -85,7 +109,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed and players have been notified to reimburse you." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is created, and players have been notified to reimburse you." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -181,6 +205,27 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
 const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
 
+    const createMatchForReservation = (batch: any, reservation: Reservation) => {
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: "PendingOpponent",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
+            reservationRef: reservation.id,
+        };
+        batch.set(newMatchRef, matchData);
+    };
+
     const handlePayNow = async () => {
         if (!payment.reservationRef) {
             toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
@@ -207,6 +252,9 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
                     const reservation = reservationDoc.data() as Reservation;
                     const finalBatch = writeBatch(db);
                     finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+
+                    // Create the Match now that it's paid
+                    createMatchForReservation(finalBatch, reservation);
 
                     const ownerNotificationRef = doc(collection(db, "notifications"));
                     const notification: Omit<Notification, 'id'> = {

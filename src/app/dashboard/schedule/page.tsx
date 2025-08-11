@@ -103,31 +103,10 @@ export default function SchedulePage() {
             throw new Error("Reservation is missing a manager or player reference.");
         }
         
-        // --- 1. Update Reservation with Payment Status ---
+        // --- 1. Update Reservation to require payment ---
         batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
 
-        // --- 2. Create the associated Match ---
-        const newMatchRef = doc(collection(db, "matches"));
-        const matchData: Omit<Match, 'id'> = {
-            date: reservation.date,
-            teamARef: reservation.teamRef || null,
-            teamBRef: null,
-            teamAPlayers: [],
-            teamBPlayers: [],
-            scoreA: 0,
-            scoreB: 0,
-            pitchRef: reservation.pitchId,
-            status: "PendingOpponent",
-            attendance: 0,
-            refereeId: null,
-            managerRef: reservation.managerRef || null,
-            allowExternalPlayers: true,
-            reservationRef: reservation.id,
-        };
-        batch.set(newMatchRef, matchData);
-
-
-         // --- 3. Create Notification for Payment ---
+        // --- 2. Create Notification for Payment ---
         const paymentNotificationRef = doc(collection(db, 'notifications'));
         batch.set(paymentNotificationRef, {
             userId: actorId,
@@ -141,7 +120,7 @@ export default function SchedulePage() {
         
         toast({
         title: "Reservation Confirmed!",
-        description: `A match has been created and a payment request sent to ${reservation.actorName}.`,
+        description: `A payment request sent to ${reservation.actorName}. The game will be created upon payment.`,
         });
 
       } catch (error) {
