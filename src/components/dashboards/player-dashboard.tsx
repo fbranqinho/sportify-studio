@@ -53,13 +53,17 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-1">
-             {(profile?.recentForm?.length > 0 ? profile.recentForm : ['N','A','N','A','N']).slice(0,5).map((form, i) => (
-               <Badge key={i} className={
-                form === 'W' ? 'bg-green-500 hover:bg-green-500' :
-                form === 'L' ? 'bg-red-500 hover:bg-red-500' :
-                'bg-gray-400 hover:bg-gray-400'
-               }>{form}</Badge>
-             ))}
+             {(profile?.recentForm && profile.recentForm.length > 0) ? (
+                profile.recentForm.slice(-5).map((form, i) => (
+                    <Badge key={i} className={
+                        form === 'W' ? 'bg-green-500 hover:bg-green-500 text-white' :
+                        form === 'L' ? 'bg-red-500 hover:bg-red-500 text-white' :
+                        'bg-gray-400 hover:bg-gray-400 text-white'
+                    }>{form}</Badge>
+                ))
+             ) : (
+                <p className="text-xs text-muted-foreground">No games played yet</p>
+             )}
           </div>
            <p className="text-xs text-muted-foreground mt-2">Last 5 matches</p>
         </CardContent>

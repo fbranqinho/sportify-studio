@@ -156,11 +156,11 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
 
         // --- Step 2: Aggregate player stats from match events ---
         const playerStats: { [playerId: string]: { goals: number, assists: number, yellowCards: number, redCards: number } } = {};
-        const allPlayerIds = new Set<string>();
+        const allEventPlayerIds = new Set<string>();
 
         if (match.events) {
             for (const event of match.events) {
-                allPlayerIds.add(event.playerId);
+                allEventPlayerIds.add(event.playerId);
                 if (!playerStats[event.playerId]) {
                     playerStats[event.playerId] = { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
                 }
@@ -175,22 +175,38 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
         
         try {
             // --- Step 3: Fetch player profiles to update them ---
-            if (allPlayerIds.size > 0) {
-                 const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", Array.from(allPlayerIds)));
+            let teamAResult: "W" | "D" | "L";
+            let teamBResult: "W" | "D" | "L";
+
+            if (scoreA > scoreB) { teamAResult = "W"; teamBResult = "L"; } 
+            else if (scoreB > scoreA) { teamAResult = "L"; teamBResult = "W"; } 
+            else { teamAResult = "D"; teamBResult = "D"; }
+
+            const allGamePlayerIds = new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])]);
+
+            if (allGamePlayerIds.size > 0) {
+                 const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", Array.from(allGamePlayerIds)));
                  const profilesSnapshot = await getDocs(profilesQuery);
 
                  profilesSnapshot.forEach(profileDoc => {
                      const profile = { id: profileDoc.id, ...profileDoc.data() } as PlayerProfile;
-                     const stats = playerStats[profile.userRef];
-                     if (stats) {
-                         const profileRef = doc(db, "playerProfiles", profile.id);
-                         batch.update(profileRef, {
-                             goals: increment(stats.goals),
-                             assists: increment(stats.assists),
-                             yellowCards: increment(stats.yellowCards),
-                             redCards: increment(stats.redCards),
-                         });
-                     }
+                     const stats = playerStats[profile.userRef] || { goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
+                     const profileRef = doc(db, "playerProfiles", profile.id);
+                     
+                     let gameResult: "W" | "D" | "L" | undefined = undefined;
+                     if(match.teamAPlayers?.includes(profile.userRef)) gameResult = teamAResult;
+                     if(match.teamBPlayers?.includes(profile.userRef)) gameResult = teamBResult;
+
+                     batch.update(profileRef, {
+                         goals: increment(stats.goals),
+                         assists: increment(stats.assists),
+                         yellowCards: increment(stats.yellowCards),
+                         redCards: increment(stats.redCards),
+                         recentForm: gameResult ? arrayUnion(gameResult) : undefined,
+                         victories: gameResult === 'W' ? increment(1) : undefined,
+                         defeats: gameResult === 'L' ? increment(1) : undefined,
+                         draws: gameResult === 'D' ? increment(1) : undefined,
+                     });
                  });
             }
 
@@ -198,30 +214,15 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
             if (match.teamARef && match.teamBRef) {
                 const teamARef = doc(db, "teams", match.teamARef);
                 const teamBRef = doc(db, "teams", match.teamBRef);
-                let teamAResult: "W" | "D" | "L";
-                let teamBResult: "W" | "D" | "L";
 
-                if (scoreA > scoreB) { // Team A wins
-                    teamAResult = "W"; teamBResult = "L";
-                    batch.update(teamARef, { wins: increment(1) });
-                    batch.update(teamBRef, { losses: increment(1) });
-                } else if (scoreB > scoreA) { // Team B wins
-                    teamAResult = "L"; teamBResult = "W";
-                    batch.update(teamARef, { losses: increment(1) });
-                    batch.update(teamBRef, { wins: increment(1) });
-                } else { // Draw
-                    teamAResult = "D"; teamBResult = "D";
-                    batch.update(teamARef, { draws: increment(1) });
-                    batch.update(teamBRef, { draws: increment(1) });
-                }
-                batch.update(teamARef, { recentForm: arrayUnion(teamAResult) });
-                batch.update(teamBRef, { recentForm: arrayUnion(teamBResult) });
+                batch.update(teamARef, { wins: increment(teamAResult === 'W' ? 1 : 0), losses: increment(teamAResult === 'L' ? 1 : 0), draws: increment(teamAResult === 'D' ? 1 : 0), recentForm: arrayUnion(teamAResult) });
+                batch.update(teamBRef, { wins: increment(teamBResult === 'W' ? 1 : 0), losses: increment(teamBResult === 'L' ? 1 : 0), draws: increment(teamBResult === 'D' ? 1 : 0), recentForm: arrayUnion(teamBResult) });
             }
 
             // --- Step 5: Commit all updates ---
             await batch.commit();
             onMatchUpdate({ status: "Finished", scoreA, scoreB });
-            toast({ title: "Game Finished", description: "The final score and player stats have been recorded." });
+            toast({ title: "Game Finished", description: "The final score and all stats have been recorded." });
             setIsEndGameOpen(false);
 
         } catch (error) {
@@ -1122,5 +1123,6 @@ export default function GameDetailsPage() {
     
 
     
+
 
 
