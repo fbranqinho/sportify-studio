@@ -118,10 +118,10 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const matchId = matchSnap.docs[0].id;
     
             // Get Team and Players
-            const teamRef = doc(db, "teams", reservation.teamRef);
-            const teamDoc = await getDoc(teamRef);
+            const teamRefDoc = doc(db, "teams", reservation.teamRef);
+            const teamDoc = await getDoc(teamRefDoc);
             if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
-            const team = teamDoc.data() as Team;
+            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
             const playerIds = team.playerIds;
             if (!playerIds || playerIds.length === 0) throw new Error("Team has no players to split payment with.");
     
@@ -835,3 +835,4 @@ export default function MyGamesPage() {
     </div>
   );
 }
+
