@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, orderBy } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Reservation, Notification, Team } from "@/types";
+import type { Payment, Reservation, Notification, Team, Match } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,27 +17,6 @@ import { Badge } from "@/components/ui/badge";
 
 const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
-
-    const createMatchForReservation = (batch: any, reservation: Reservation) => {
-        const newMatchRef = doc(collection(db, "matches"));
-        const matchData: Omit<Match, 'id'> = {
-            date: reservation.date,
-            teamARef: reservation.teamRef || null,
-            teamBRef: null,
-            teamAPlayers: [],
-            teamBPlayers: [],
-            scoreA: 0,
-            scoreB: 0,
-            pitchRef: reservation.pitchId,
-            status: "PendingOpponent",
-            attendance: 0,
-            refereeId: null,
-            managerRef: reservation.managerRef || null,
-            allowExternalPlayers: true,
-            reservationRef: reservation.id,
-        };
-        batch.set(newMatchRef, matchData);
-    };
 
     const handlePayNow = async () => {
         if (!payment.reservationRef) {
@@ -54,7 +33,12 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             await batch.commit();
 
             const reservationRef = doc(db, "reservations", payment.reservationRef);
-            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef), where("status", "==", "Pending"));
+            const paymentsQuery = query(
+                collection(db, "payments"), 
+                where("reservationRef", "==", payment.reservationRef), 
+                where("status", "==", "Pending")
+            );
+            
             const pendingPaymentsSnap = await getDocs(paymentsQuery);
 
             if (pendingPaymentsSnap.empty) {
@@ -63,7 +47,13 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
                     const reservation = reservationDoc.data() as Reservation;
                     const finalBatch = writeBatch(db);
                     finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-                    createMatchForReservation(finalBatch, reservation);
+                    
+                    const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+                    const matchSnap = await getDocs(matchQuery);
+                    if(!matchSnap.empty) {
+                        const matchRef = matchSnap.docs[0].ref;
+                        finalBatch.update(matchRef, { status: 'Scheduled' });
+                    }
 
                     const ownerNotificationRef = doc(collection(db, "notifications"));
                     const notification: Omit<Notification, 'id'> = {
@@ -191,7 +181,7 @@ export default function PaymentsPage() {
         </CardContent>
         {payment.status === 'Pending' && user?.role === 'PLAYER' && (
           <CardFooter>
-            <PlayerPaymentButton payment={payment} onPaymentProcessed={fetchPayments} />
+            <PlayerPaymentButton payment={payment} onPaymentProcessed={() => fetchPayments()} />
           </CardFooter>
         )}
       </Card>
