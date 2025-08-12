@@ -32,19 +32,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, getGameDuration } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { v4 as uuidv4 } from 'uuid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const getGameDuration = (sport: PitchSport): number => {
-    switch (sport) {
-        case 'fut11': return 90;
-        case 'fut7': return 50;
-        case 'fut5': case 'futsal': return 40;
-        default: return 90;
-    }
-};
 
 export function EventTimeline({ events, teamAName, teamBName, duration }: { events: MatchEvent[], teamAName?: string, teamBName?: string, duration: number }) {
     if (!events || events.length === 0) {

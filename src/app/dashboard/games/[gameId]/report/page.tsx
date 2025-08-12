@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EventTimeline } from "../page";
+import { getGameDuration } from "@/lib/utils";
 
 // Helper type for enriched player stats in a match
 interface MatchPlayerStats {
@@ -137,12 +138,13 @@ export default function MatchReportPage() {
         )
     }
 
-    if (!match) {
-        return <div>Match not found.</div>;
+    if (!match || !pitch) {
+        return <div>Match data could not be loaded.</div>;
     }
     
     const teamAName = teamA?.name || "Vests A";
     const teamBName = teamB?.name || (teamA ? "Vests B" : "Team B");
+    const gameDuration = getGameDuration(pitch.sport);
 
     return (
         <div className="space-y-6">
@@ -193,7 +195,7 @@ export default function MatchReportPage() {
                         <CardTitle className="font-headline">Event Timeline</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <EventTimeline events={match.events} teamAName={teamAName} teamBName={teamBName} duration={90}/>
+                        <EventTimeline events={match.events} teamAName={teamAName} teamBName={teamBName} duration={gameDuration}/>
                     </CardContent>
                 </Card>
             )}

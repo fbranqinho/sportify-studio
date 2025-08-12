@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { PitchSport } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -22,3 +23,12 @@ export function haversineDistance(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in km
 }
+
+export const getGameDuration = (sport: PitchSport): number => {
+    switch (sport) {
+        case 'fut11': return 90;
+        case 'fut7': return 50;
+        case 'fut5': case 'futsal': return 40;
+        default: return 90;
+    }
+};
