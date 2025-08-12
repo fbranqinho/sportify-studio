@@ -64,14 +64,20 @@ export default function MatchReportPage() {
             // Fetch related data in parallel
             const promises = [];
             if (matchData.teamARef) promises.push(getDoc(doc(db, "teams", matchData.teamARef)));
+            else promises.push(Promise.resolve(null));
+
             if (matchData.teamBRef) promises.push(getDoc(doc(db, "teams", matchData.teamBRef)));
+            else promises.push(Promise.resolve(null));
+
             if (matchData.pitchRef) promises.push(getDoc(doc(db, "pitches", matchData.pitchRef)));
+            else promises.push(Promise.resolve(null));
 
             const [teamASnap, teamBSnap, pitchSnap] = await Promise.all(promises);
 
             if (teamASnap?.exists()) setTeamA({ id: teamASnap.id, ...teamASnap.data() } as Team);
             if (teamBSnap?.exists()) setTeamB({ id: teamBSnap.id, ...teamBSnap.data() } as Team);
             if (pitchSnap?.exists()) setPitch({ id: pitchSnap.id, ...pitchSnap.data() } as Pitch);
+
 
             // Process player stats from events
             const stats: { [key: string]: MatchPlayerStats } = {};
@@ -240,3 +246,4 @@ export default function MatchReportPage() {
         </div>
     )
 }
+
