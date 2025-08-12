@@ -80,7 +80,7 @@ export default function MatchReportPage() {
                 stats[id] = {
                     playerId: id,
                     playerName: "Unknown", // Placeholder name
-                    teamId: matchData.teamAPlayers.includes(id) ? "A" : "B",
+                    teamId: (matchData.teamAPlayers || []).includes(id) ? "A" : "B",
                     goals: 0, assists: 0, yellowCards: 0, redCards: 0, mvpScore: 0
                 };
             });
@@ -142,7 +142,7 @@ export default function MatchReportPage() {
     }
     
     const teamAName = teamA?.name || "Vests A";
-    const teamBName = teamB?.name || "Vests B";
+    const teamBName = teamB?.name || (teamA ? "Vests B" : "Team B");
 
     return (
         <div className="space-y-6">
@@ -238,5 +238,3 @@ export default function MatchReportPage() {
         </div>
     )
 }
-
-    
