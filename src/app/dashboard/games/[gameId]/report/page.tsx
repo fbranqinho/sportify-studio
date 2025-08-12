@@ -62,21 +62,22 @@ export default function MatchReportPage() {
             setMatch(matchData);
 
             // Fetch related data in parallel
-            const promises = [];
+            const promises: Promise<any>[] = [];
             if (matchData.teamARef) promises.push(getDoc(doc(db, "teams", matchData.teamARef)));
-            else promises.push(Promise.resolve(null));
-
             if (matchData.teamBRef) promises.push(getDoc(doc(db, "teams", matchData.teamBRef)));
-            else promises.push(Promise.resolve(null));
-
             if (matchData.pitchRef) promises.push(getDoc(doc(db, "pitches", matchData.pitchRef)));
-            else promises.push(Promise.resolve(null));
 
-            const [teamASnap, teamBSnap, pitchSnap] = await Promise.all(promises);
-
-            if (teamASnap?.exists()) setTeamA({ id: teamASnap.id, ...teamASnap.data() } as Team);
-            if (teamBSnap?.exists()) setTeamB({ id: teamBSnap.id, ...teamBSnap.data() } as Team);
-            if (pitchSnap?.exists()) setPitch({ id: pitchSnap.id, ...pitchSnap.data() } as Pitch);
+            const [teamASnap, teamBSnap, pitchSnap] = await Promise.allSettled(promises);
+            
+            if (teamASnap.status === 'fulfilled' && teamASnap.value.exists()) {
+                setTeamA({ id: teamASnap.value.id, ...teamASnap.value.data() } as Team);
+            }
+             if (teamBSnap.status === 'fulfilled' && teamBSnap.value.exists()) {
+                setTeamB({ id: teamBSnap.value.id, ...teamBSnap.value.data() } as Team);
+            }
+             if (pitchSnap.status === 'fulfilled' && pitchSnap.value.exists()) {
+                setPitch({ id: pitchSnap.value.id, ...pitchSnap.value.data() } as Pitch);
+            }
 
 
             // Process player stats from events
@@ -148,8 +149,9 @@ export default function MatchReportPage() {
         return <div>Match data could not be loaded.</div>;
     }
     
-    const teamAName = teamA?.name || "Vests A";
-    const teamBName = teamB?.name || (teamA ? "Vests B" : "Team B");
+    const isPracticeMatch = !!teamA && !teamB;
+    const teamAName = isPracticeMatch ? `${teamA?.name} A` : teamA?.name || "Team A";
+    const teamBName = isPracticeMatch ? `${teamA?.name} B` : teamB?.name || "Team B";
     const gameDuration = getGameDuration(pitch.sport);
 
     return (
@@ -246,4 +248,3 @@ export default function MatchReportPage() {
         </div>
     )
 }
-
