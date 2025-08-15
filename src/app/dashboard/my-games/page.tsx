@@ -123,26 +123,8 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const playerIds = team.playerIds;
             if (!playerIds || playerIds.length === 0) throw new Error("Team has no players to split payment with.");
     
-            // Calculate amount per player
-            const amountPerPlayer = reservation.totalAmount / playerIds.length;
-    
-            // Create a payment doc and match invitation for each player
+            // Create a match invitation for each player
             for (const playerId of playerIds) {
-                // Create Payment
-                const playerPaymentRef = doc(collection(db, "payments"));
-                batch.set(playerPaymentRef, {
-                    type: "booking_split",
-                    amount: amountPerPlayer,
-                    status: "Pending",
-                    date: new Date().toISOString(),
-                    reservationRef: reservation.id,
-                    teamRef: reservation.teamRef,
-                    playerRef: playerId,
-                    managerRef: reservation.managerRef,
-                    pitchName: reservation.pitchName,
-                    teamName: team.name,
-                });
-    
                 // Create Match Invitation
                 const invitationRef = doc(collection(db, "matchInvitations"));
                 batch.set(invitationRef, {
@@ -173,9 +155,10 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Split!", description: `Each of the ${playerIds.length} players has been invited and assigned their share.` });
+            toast({ title: "Payment Split!", description: `Each of the ${playerIds.length} players has been invited. Payments will be created as they accept.` });
     
-        } catch (error: any) {
+        } catch (error: any)
+{
             console.error("Error splitting payment:", error);
             toast({ variant: "destructive", title: "Error", description: `Could not split payment: ${error.message}` });
         }
@@ -549,7 +532,7 @@ export default function MyGamesPage() {
                     const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
                     if (teamDoc.exists()) {
                         const team = teamDoc.data() as Team;
-                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && reservation.paymentStatus === 'Paid') {
+                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && (reservation.paymentStatus === 'Paid' || reservation.paymentStatus === 'Split')) {
                             const amountPerPlayer = reservation.totalAmount / team.playerIds.length;
                             
                             const playerPaymentRef = doc(collection(db, "payments"));
