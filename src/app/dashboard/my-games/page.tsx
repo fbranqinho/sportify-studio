@@ -327,7 +327,7 @@ export default function MyGamesPage() {
   const [loading, setLoading] = React.useState(true);
 
   // Helper to fetch details for a list of IDs from a given collection
-  const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles' | 'reservations', ids: string[]): Promise<Map<string, any>> => {
+  const fetchDetails = async (collectionName: 'teams' | 'pitches' | 'ownerProfiles' | 'reservations' | 'matches', ids: string[]): Promise<Map<string, any>> => {
       const newMap = new Map<string, any>();
       const uniqueIds = [...new Set(ids)].filter(id => id);
       if (uniqueIds.length === 0) return newMap;
@@ -388,10 +388,20 @@ export default function MyGamesPage() {
                 const unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
                     const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
                     setInvitations(invs);
+
                     if (invs.length > 0) {
                         const teamIds = invs.map(inv => inv.teamId);
                         const teamsMap = await fetchDetails('teams', teamIds);
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                        
+                        const matchIds = invs.map(inv => inv.matchId);
+                        const matchesMap = await fetchDetails('matches', matchIds);
+                        setMatches(prev => {
+                             const combined = new Map(prev.map(m => [m.id, m]));
+                             matchesMap.forEach((match, id) => combined.set(id, match));
+                             return Array.from(combined.values());
+                        });
+
                     }
                 }, (error) => console.error("Error fetching invitations:", error));
                 unsubscribes.push(unsubscribeInvitations);
@@ -696,7 +706,9 @@ export default function MyGamesPage() {
 
   const PlayerInvitationCard = ({ invitation }: { invitation: MatchInvitation }) => {
       const team = teams.get(invitation.teamId);
-      if (!team) return null; // Don't render if team data isn't loaded yet
+      const match = matches.find(m => m.id === invitation.matchId);
+
+      if (!team || !match) return null; // Don't render if data isn't loaded yet
 
       return (
         <Card>
@@ -707,7 +719,11 @@ export default function MyGamesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">You have been invited to play in an upcoming game.</p>
+             <p className="text-sm">You have been invited to play in an upcoming game.</p>
+             <div className="text-sm font-semibold flex items-center gap-2 mt-2">
+                <Calendar className="h-4 w-4"/>
+                {format(new Date(match.date), "PPP 'at' HH:mm")}
+             </div>
           </CardContent>
            <CardFooter className="gap-2">
               <Button size="sm" onClick={() => handlePlayerInvitationResponse(invitation, true)}>
