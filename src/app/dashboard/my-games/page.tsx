@@ -544,7 +544,7 @@ export default function MyGamesPage() {
             if (matchData.reservationRef) {
                 const reservationDoc = await getDoc(doc(db, 'reservations', matchData.reservationRef));
                 if (reservationDoc.exists()) {
-                    const reservation = reservationDoc.data() as Reservation;
+                    const reservation = {id: reservationDoc.id, ...reservationDoc.data()} as Reservation;
                     const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
                     if (teamDoc.exists()) {
                         const team = teamDoc.data() as Team;
@@ -876,4 +876,3 @@ export default function MyGamesPage() {
 
 
     
-
