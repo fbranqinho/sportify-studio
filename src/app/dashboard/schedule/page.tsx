@@ -179,7 +179,7 @@ export default function SchedulePage() {
         if (reservation.teamRef && reservation.managerRef) {
             const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
             if (teamDoc.exists()) {
-                const team = teamDoc.data() as Team;
+                const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
                 if (team.playerIds && team.playerIds.length > 0) {
                     for (const playerId of team.playerIds) {
                         // Create Match Invitation
@@ -379,5 +379,6 @@ export default function SchedulePage() {
     </div>
   );
 }
+
 
 
