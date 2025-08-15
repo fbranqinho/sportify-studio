@@ -39,7 +39,6 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 throw new Error("Associated match not found for this reservation.");
             }
             const matchRef = matchSnap.docs[0].ref;
-            const matchId = matchSnap.docs[0].id;
 
             // Update reservation and match status
             batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
@@ -56,43 +55,13 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             };
             batch.set(ownerNotificationRef, ownerNotification);
             
-            // Get Team and Players to create invitations
-            const teamRef = doc(db, "teams", reservation.teamRef);
-            const teamDoc = await getDoc(teamRef);
-            if (!teamDoc.exists()) throw new Error("Team not found to create invitations.");
-            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
-            const playerIds = team.playerIds;
-            
-            if (playerIds && playerIds.length > 0) {
-                 for (const playerId of playerIds) {
-                    // Create Match Invitation for all players (including manager)
-                    const invitationRef = doc(collection(db, "matchInvitations"));
-                    batch.set(invitationRef, {
-                        matchId: matchId,
-                        teamId: team.id,
-                        playerId: playerId,
-                        managerId: reservation.managerRef,
-                        status: "pending",
-                        invitedAt: serverTimestamp(),
-                    });
-
-                    // Create Notification for the invitation
-                    const inviteNotificationRef = doc(collection(db, 'notifications'));
-                    batch.set(inviteNotificationRef, {
-                        userId: playerId,
-                        message: `You've been invited to a game with ${team.name}.`,
-                        link: '/dashboard/my-games',
-                        read: false,
-                        createdAt: serverTimestamp() as any,
-                    });
-                }
-            }
-
+            // This is the correct place for payment processing logic, but invitation logic was removed
+            // as it is now handled when the owner confirms the reservation.
 
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been invited." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed and the game is scheduled." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -107,55 +76,22 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     
         const batch = writeBatch(db);
         try {
-            // Find the associated Match
-            const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-            const matchSnap = await getDocs(matchQuery);
-            if(matchSnap.empty) {
-                throw new Error("Associated match not found for this reservation.");
-            }
-            const matchId = matchSnap.docs[0].id;
-    
-            // Get Team and Players
             const teamRefDoc = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRefDoc);
             if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
             const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
-            const playerIds = team.playerIds;
-            if (!playerIds || playerIds.length === 0) throw new Error("Team has no players to split payment with.");
-    
-            // Create a match invitation for each player
-            for (const playerId of playerIds) {
-                // Create Match Invitation
-                const invitationRef = doc(collection(db, "matchInvitations"));
-                batch.set(invitationRef, {
-                    matchId: matchId,
-                    teamId: team.id,
-                    playerId: playerId,
-                    managerId: reservation.managerRef,
-                    status: "pending",
-                    invitedAt: serverTimestamp(),
-                });
 
-                // Create Notification for the invitation
-                 const notificationRef = doc(collection(db, 'notifications'));
-                 batch.set(notificationRef, {
-                     userId: playerId,
-                     message: `You've been invited to a game with ${team.name}.`,
-                     link: '/dashboard/my-games',
-                     read: false,
-                     createdAt: serverTimestamp() as any,
-                 });
-            }
-    
             // Update the original reservation to 'Split'
             const originalReservationRef = doc(db, "reservations", reservation.id);
             batch.update(originalReservationRef, { paymentStatus: "Split" });
     
-            // Commit batch
+            // Invitation logic has been removed from here to prevent duplicates.
+            // It is now handled when the owner confirms the reservation.
+    
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Split!", description: `Each of the ${playerIds.length} players has been invited. Payments will be created as they accept.` });
+            toast({ title: "Payment Split!", description: `Each player will be asked to pay their share as they accept the game invitation.` });
     
         } catch (error: any)
 {
@@ -880,3 +816,6 @@ export default function MyGamesPage() {
     
 
 
+
+
+    
