@@ -130,47 +130,55 @@ const ManagerRemindButton = ({ payment }: { payment: Payment }) => {
 export default function PaymentsPage() {
   const { user } = useUser();
   const { toast } = useToast();
-  const [payments, setPayments] = React.useState<Payment[]>([]);
+  const [pendingPayments, setPendingPayments] = React.useState<Payment[]>([]);
+  const [historyPayments, setHistoryPayments] = React.useState<Payment[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  const fetchPayments = React.useCallback(async () => {
+  React.useEffect(() => {
     if (!user) {
-      setLoading(false);
-      return;
+        setLoading(false);
+        return;
     }
     setLoading(true);
-    let paymentsQuery;
+
+    let baseQuery;
     if (user.role === 'PLAYER') {
-      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+        baseQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
     } else if (user.role === 'MANAGER') {
-      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+        baseQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else {
-      setPayments([]);
-      setLoading(false);
-      return;
+        setLoading(false);
+        return;
     }
 
-    const unsubscribe = onSnapshot(paymentsQuery, (querySnapshot) => {
-      const paymentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-      // Sort payments client-side
-      paymentsData.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-      setPayments(paymentsData);
-      setLoading(false);
+    // Listener for pending payments
+    const pendingQuery = query(baseQuery, where("status", "==", "Pending"));
+    const unsubPending = onSnapshot(pendingQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+        data.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        setPendingPayments(data);
+        if (loading) setLoading(false);
     }, (error) => {
-      console.error("Error fetching payments:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not fetch payment information." });
-      setLoading(false);
+        console.error("Error fetching pending payments:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch pending payments." });
     });
 
-    return unsubscribe;
-  }, [user, toast]);
+    // Listener for non-pending (history) payments
+    const historyQuery = query(baseQuery, where("status", "!=", "Pending"));
+    const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+        data.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        setHistoryPayments(data);
+    }, (error) => {
+        console.error("Error fetching payment history:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch payment history." });
+    });
 
-  React.useEffect(() => {
-    const unsubscribePromise = fetchPayments();
     return () => {
-      unsubscribePromise.then(unsub => unsub && unsub());
-    }
-  }, [fetchPayments]);
+      unsubPending();
+      unsubHistory();
+    };
+  }, [user, toast]);
   
 
   const getStatusBadge = (status: PaymentStatus) => {
@@ -213,7 +221,7 @@ export default function PaymentsPage() {
                              {showActions && (
                                  <TableCell className="text-right">
                                     {p.status === 'Pending' && user?.role === 'PLAYER' && (
-                                        <PlayerPaymentButton payment={p} onPaymentProcessed={() => fetchPayments()} />
+                                        <PlayerPaymentButton payment={p} onPaymentProcessed={() => {}} />
                                     )}
                                     {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'reimbursement' && (
                                         <ManagerRemindButton payment={p} />
@@ -243,8 +251,6 @@ export default function PaymentsPage() {
     </Card>
   )
   
-  const pendingPayments = payments.filter(r => r.status === 'Pending');
-  const historyPayments = payments.filter(r => r.status !== 'Pending');
 
   return (
     <div className="space-y-8">

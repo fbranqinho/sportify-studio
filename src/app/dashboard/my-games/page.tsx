@@ -581,9 +581,9 @@ export default function MyGamesPage() {
         
         await batch.commit();
         toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
-     } catch (error) {
+     } catch (error: any) {
         console.error("Error responding to invitation:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not save your response." });
+        toast({ variant: "destructive", title: "Error", description: `Could not save your response: ${error.message}` });
      }
   }
 
