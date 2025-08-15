@@ -141,43 +141,31 @@ export default function PaymentsPage() {
     }
     setLoading(true);
 
-    let baseQuery;
-    if (user.role === 'PLAYER') {
-        baseQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
-    } else if (user.role === 'MANAGER') {
-        baseQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
-    } else {
-        setLoading(false);
-        return;
-    }
+    const roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
+    const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
-    // Listener for pending payments
-    const pendingQuery = query(baseQuery, where("status", "==", "Pending"));
-    const unsubPending = onSnapshot(pendingQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-        data.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-        setPendingPayments(data);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+
+        const pending = allPayments
+            .filter(p => p.status === 'Pending')
+            .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        
+        const history = allPayments
+            .filter(p => p.status !== 'Pending')
+            .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+        setPendingPayments(pending);
+        setHistoryPayments(history);
+
         if (loading) setLoading(false);
     }, (error) => {
-        console.error("Error fetching pending payments:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch pending payments." });
+        console.error("Error fetching payments:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch payments." });
+        setLoading(false);
     });
 
-    // Listener for non-pending (history) payments
-    const historyQuery = query(baseQuery, where("status", "!=", "Pending"));
-    const unsubHistory = onSnapshot(historyQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-        data.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-        setHistoryPayments(data);
-    }, (error) => {
-        console.error("Error fetching payment history:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch payment history." });
-    });
-
-    return () => {
-      unsubPending();
-      unsubHistory();
-    };
+    return () => unsubscribe();
   }, [user, toast]);
   
 
