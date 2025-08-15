@@ -138,16 +138,9 @@ export default function SchedulePage() {
 
     // Handle Confirmed status
     if (status === "Confirmed") {
-       let actorId: string | undefined;
-
       try {
-        if (reservation.managerRef) {
-            actorId = reservation.managerRef;
-        } else if (reservation.playerRef) {
-            actorId = reservation.playerRef;
-        } else {
-            throw new Error("Reservation is missing a manager or player reference.");
-        }
+        const actorId = reservation.managerRef || reservation.playerRef;
+        if (!actorId) throw new Error("Reservation is missing a manager or player reference.");
         
         // --- 1. Update Reservation to require payment ---
         batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
@@ -172,7 +165,7 @@ export default function SchedulePage() {
         };
         batch.set(newMatchRef, matchData);
 
-        // --- 3. Create Notification for Payment ---
+        // --- 3. Create Notification for Payment to Manager/Player ---
         const paymentNotificationRef = doc(collection(db, 'notifications'));
         batch.set(paymentNotificationRef, {
             userId: actorId,
@@ -181,12 +174,44 @@ export default function SchedulePage() {
             read: false,
             createdAt: serverTimestamp() as any,
         });
+
+        // --- 4. If it's a team booking, create invitations for all players ---
+        if (reservation.teamRef && reservation.managerRef) {
+            const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
+            if (teamDoc.exists()) {
+                const team = teamDoc.data() as Team;
+                if (team.playerIds && team.playerIds.length > 0) {
+                    for (const playerId of team.playerIds) {
+                        // Create Match Invitation
+                        const invitationRef = doc(collection(db, "matchInvitations"));
+                        batch.set(invitationRef, {
+                            matchId: newMatchRef.id,
+                            teamId: team.id,
+                            playerId: playerId,
+                            managerId: reservation.managerRef,
+                            status: "pending",
+                            invitedAt: serverTimestamp(),
+                        });
+
+                        // Create Notification for the invitation
+                        const inviteNotificationRef = doc(collection(db, 'notifications'));
+                        batch.set(inviteNotificationRef, {
+                            userId: playerId,
+                            message: `You've been invited to a game with ${team.name}.`,
+                            link: '/dashboard/my-games',
+                            read: false,
+                            createdAt: serverTimestamp() as any,
+                        });
+                    }
+                }
+            }
+        }
         
         await batch.commit(); 
         
         toast({
         title: "Reservation Confirmed!",
-        description: `A game has been created and a payment request sent to ${reservation.actorName}.`,
+        description: `A game has been created and a payment request sent to ${reservation.actorName}. Players have been invited.`,
         });
 
       } catch (error) {
@@ -354,4 +379,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
 
