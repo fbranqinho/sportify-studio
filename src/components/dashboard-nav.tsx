@@ -26,8 +26,8 @@ import {
 } from "lucide-react";
 
 const navItems: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "Find Pitch", href: "/dashboard/games", roles: ["PLAYER", "MANAGER", "REFEREE"] },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
+  { title: "Find Pitch", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
@@ -86,7 +86,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
           const isGameDetailsPage = /^\/dashboard\/games\/[a-zA-Z0-9]+$/.test(pathname);
           const isActive = 
             isGameDetailsPage && item.href === '/dashboard/my-games' ? true :
-            !isGameDetailsPage && pathname === item.href;
+            pathname.startsWith(item.href) && (item.href === '/dashboard' ? pathname === '/dashboard' : true);
           
           return (
             <SidebarMenuItem key={item.href}>
