@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation, Payment } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -361,20 +361,58 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
     const handleDeleteGame = async () => {
         const batch = writeBatch(db);
         const matchRef = doc(db, "matches", match.id);
-        batch.delete(matchRef);
-
-        // If there's an associated reservation, delete it as well.
-        if (match.reservationRef) {
-            const reservationRef = doc(db, "reservations", match.reservationRef);
-            batch.delete(reservationRef);
-        }
-
+        
         try {
+            // If there's an associated reservation, handle payment refunds/cancellations
+            if (match.reservationRef) {
+                const reservationRef = doc(db, "reservations", match.reservationRef);
+                const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", match.reservationRef));
+                const paymentsSnap = await getDocs(paymentsQuery);
+
+                let playerIdsToNotify: string[] = [];
+
+                if (!paymentsSnap.empty) {
+                    paymentsSnap.forEach(paymentDoc => {
+                        const payment = paymentDoc.data() as Payment;
+                        const playerRef = payment.playerRef || (payment.managerRef && payment.type === 'booking_split' ? payment.managerRef : undefined);
+                        
+                        if (playerRef) playerIdsToNotify.push(playerRef);
+
+                        if (payment.status === 'Paid') {
+                            batch.update(paymentDoc.ref, { status: 'Refunded' });
+                        } else if (payment.status === 'Pending') {
+                            batch.update(paymentDoc.ref, { status: 'Cancelled' });
+                        }
+                    });
+                }
+                
+                // Add manager to notification list if not already there
+                if (match.managerRef && !playerIdsToNotify.includes(match.managerRef)) {
+                    playerIdsToNotify.push(match.managerRef);
+                }
+
+                // Create notifications
+                playerIdsToNotify.forEach(userId => {
+                    const notificationRef = doc(collection(db, 'notifications'));
+                    batch.set(notificationRef, {
+                        userId: userId,
+                        message: `The game on ${format(new Date(match.date), 'MMM d')} has been cancelled. Payments have been refunded/cancelled.`,
+                        link: '/dashboard/payments',
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    });
+                });
+
+                batch.delete(reservationRef);
+            }
+
+            batch.delete(matchRef);
+
             await batch.commit();
-            toast({ title: "Game Deleted", description: "The game and its reservation have been removed."});
+            toast({ title: "Game Deleted", description: "The game, reservation, and associated payments have been removed or updated."});
             router.push('/dashboard/my-games');
         } catch (error) {
-            console.error("Error deleting game and reservation:", error);
+            console.error("Error deleting game:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not delete the game." });
         }
     }
@@ -435,7 +473,7 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
                                 This action cannot be undone. This will permanently delete the game
-                                and its associated reservation from the schedule.
+                                and its associated reservation, and refund/cancel any related payments.
                             </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -1271,6 +1309,7 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
 
 
 

@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team, Notification, Match, PaymentStatus } from "@/types";
+import type { Reservation, Team, Notification, Match, Payment, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,13 +76,59 @@ export default function SchedulePage() {
     
     if (status === "Canceled") {
       try {
+        // --- 1. Update reservation and associated match to 'Canceled' ---
         batch.update(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
-        // TODO: Notify the user who made the reservation
+        
+        const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+        const matchSnap = await getDocs(matchQuery);
+        if (!matchSnap.empty) {
+            const matchRef = matchSnap.docs[0].ref;
+            batch.update(matchRef, { status: 'Cancelled' });
+        }
+
+        // --- 2. Refund or cancel associated payments ---
+        const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", reservation.id));
+        const paymentsSnap = await getDocs(paymentsQuery);
+
+        let playerIdsToNotify: string[] = [];
+        if (!paymentsSnap.empty) {
+            paymentsSnap.forEach(paymentDoc => {
+                const payment = paymentDoc.data() as Payment;
+                const playerRef = payment.playerRef || (payment.managerRef && payment.type === 'booking_split' ? payment.managerRef : undefined);
+
+                if (playerRef) playerIdsToNotify.push(playerRef);
+
+                if (payment.status === 'Paid') {
+                    batch.update(paymentDoc.ref, { status: 'Refunded' });
+                } else if (payment.status === 'Pending') {
+                    batch.update(paymentDoc.ref, { status: 'Cancelled' });
+                }
+            });
+        }
+        
+        // --- 3. Notify all involved players/manager ---
+        const uniquePlayerIds = [...new Set(playerIdsToNotify)];
+        if(reservation.actorId && !uniquePlayerIds.includes(reservation.actorId)) {
+            uniquePlayerIds.push(reservation.actorId);
+        }
+
+        uniquePlayerIds.forEach(userId => {
+            const notificationRef = doc(collection(db, 'notifications'));
+            batch.set(notificationRef, {
+                userId: userId,
+                message: `The booking for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')} has been cancelled by the owner.`,
+                link: '/dashboard/my-games',
+                read: false,
+                createdAt: serverTimestamp() as any,
+            });
+        });
+
         await batch.commit();
         toast({
           title: "Reservation Canceled",
-          description: `The reservation has been canceled.`,
+          description: `The reservation and related payments have been canceled/refunded.`,
         });
+
       } catch (error) {
         console.error("Error canceling reservation: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not cancel reservation." });
@@ -308,3 +354,4 @@ export default function SchedulePage() {
     </div>
   );
 }
+

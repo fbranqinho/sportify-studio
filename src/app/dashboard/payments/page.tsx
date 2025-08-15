@@ -6,12 +6,12 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc, addDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Reservation, Notification, Team, Match } from "@/types";
+import type { Payment, Reservation, Notification, Team, Match, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send, CircleSlash } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -173,11 +173,12 @@ export default function PaymentsPage() {
   }, [fetchPayments]);
   
 
-  const getStatusBadge = (status: Payment["status"]) => {
+  const getStatusBadge = (status: PaymentStatus) => {
     switch(status) {
-      case "Paid": return <Badge variant="default" className="bg-green-600">Paid</Badge>;
-      case "Pending": return <Badge variant="destructive">Pending</Badge>;
-      case "Cancelled": return <Badge variant="outline">Cancelled</Badge>;
+      case "Paid": return <Badge variant="default" className="bg-green-600 gap-1.5"><CheckCircle className="h-3 w-3"/>Paid</Badge>;
+      case "Pending": return <Badge variant="destructive" className="gap-1.5"><Clock className="h-3 w-3"/>Pending</Badge>;
+      case "Cancelled": return <Badge variant="outline" className="gap-1.5"><Ban className="h-3 w-3"/>Cancelled</Badge>;
+      case "Refunded": return <Badge variant="secondary" className="bg-blue-500 text-white gap-1.5"><CircleSlash className="h-3 w-3"/>Refunded</Badge>;
       default: return <Badge>{status}</Badge>;
     }
   }
