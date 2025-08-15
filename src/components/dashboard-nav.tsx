@@ -26,8 +26,8 @@ import {
 } from "lucide-react";
 
 const navItems: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "Find Pitch", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
+  { title: "Dashboard", href: "/dashboard", roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
+  { title: "Find Pitch", href: "/dashboard/games", roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
@@ -82,20 +82,27 @@ export function DashboardNav({ role }: DashboardNavProps) {
   return (
     <nav className="p-2">
       <SidebarMenu>
-        {filteredNavItems.map((item) => (
-          <SidebarMenuItem key={item.href}>
-            <Link href={item.href}>
-              <SidebarMenuButton
-                isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
-                className="font-semibold"
-                tooltip={item.title}
-              >
-                <item.icon />
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </Link>
-          </SidebarMenuItem>
-        ))}
+        {filteredNavItems.map((item) => {
+          const isGameDetailsPage = /^\/dashboard\/games\/[a-zA-Z0-9]+$/.test(pathname);
+          const isActive = 
+            isGameDetailsPage && item.href === '/dashboard/my-games' ? true :
+            !isGameDetailsPage && pathname === item.href;
+          
+          return (
+            <SidebarMenuItem key={item.href}>
+              <Link href={item.href}>
+                <SidebarMenuButton
+                  isActive={isActive}
+                  className="font-semibold"
+                  tooltip={item.title}
+                >
+                  <item.icon />
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+          )
+        })}
       </SidebarMenu>
     </nav>
   );
