@@ -144,6 +144,7 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
             status: "Finished",
             scoreA: scoreA,
             scoreB: scoreB,
+            finishTime: serverTimestamp(),
         });
 
         // --- Step 2: Aggregate player stats from match events ---
@@ -222,7 +223,7 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
 
             // --- Step 5: Commit all updates ---
             await batch.commit();
-            onMatchUpdate({ status: "Finished", scoreA, scoreB });
+            onMatchUpdate({ status: "Finished", scoreA, scoreB, finishTime: Timestamp.now() });
             toast({ title: "Game Finished", description: "The final score and all stats have been recorded." });
             setIsEndGameOpen(false);
 
@@ -1151,3 +1152,4 @@ export default function GameDetailsPage() {
 
 
     
+

@@ -3,6 +3,7 @@
 
 
 
+
 import type { LucideIcon } from "lucide-react";
 import type { FieldValue, Timestamp } from "firebase/firestore";
 
@@ -268,6 +269,15 @@ export interface Match {
     allowPostGamePayments?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
+    finishTime?: Timestamp | null;
+    mvpPlayerId?: string | null;
+}
+
+export interface MvpVote {
+  id: string;
+  voterId: string;
+  votedForId: string;
+  timestamp: FieldValue;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

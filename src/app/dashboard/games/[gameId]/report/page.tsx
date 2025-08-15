@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { EventTimeline } from "../page";
 import { getGameDuration } from "@/lib/utils";
+import { MvpVoting } from "@/components/mvp-voting";
 
 // Helper type for enriched player stats in a match
 interface MatchPlayerStats {
@@ -35,6 +36,7 @@ interface MatchPlayerStats {
 export default function MatchReportPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useUser();
     const gameId = params.gameId as string;
     
     const [match, setMatch] = React.useState<Match | null>(null);
@@ -64,22 +66,24 @@ export default function MatchReportPage() {
             // Fetch related data
             const promises = [];
             if (matchData.teamARef) {
-                promises.push(getDoc(doc(db, "teams", matchData.teamARef)).then(snap => {
-                    if (snap.exists()) setTeamA({ id: snap.id, ...snap.data() } as Team);
-                }));
+                promises.push(getDoc(doc(db, "teams", matchData.teamARef)));
             }
             if (matchData.teamBRef) {
-                promises.push(getDoc(doc(db, "teams", matchData.teamBRef)).then(snap => {
-                     if (snap.exists()) setTeamB({ id: snap.id, ...snap.data() } as Team);
-                }));
+                 promises.push(getDoc(doc(db, "teams", matchData.teamBRef)));
             }
-            if (matchData.pitchRef) {
-                promises.push(getDoc(doc(db, "pitches", matchData.pitchRef)).then(snap => {
-                     if (snap.exists()) setPitch({ id: snap.id, ...snap.data() } as Pitch);
-                }));
+             if (matchData.pitchRef) {
+                promises.push(getDoc(doc(db, "pitches", matchData.pitchRef)));
             }
 
-            await Promise.all(promises);
+            const [teamASnap, teamBSnap, pitchSnap] = await Promise.all([
+                matchData.teamARef ? getDoc(doc(db, "teams", matchData.teamARef)) : Promise.resolve(null),
+                matchData.teamBRef ? getDoc(doc(db, "teams", matchData.teamBRef)) : Promise.resolve(null),
+                matchData.pitchRef ? getDoc(doc(db, "pitches", matchData.pitchRef)) : Promise.resolve(null),
+            ]);
+
+            if (teamASnap?.exists()) setTeamA({ id: teamASnap.id, ...teamASnap.data() } as Team);
+            if (teamBSnap?.exists()) setTeamB({ id: teamBSnap.id, ...teamBSnap.data() } as Team);
+            if (pitchSnap?.exists()) setPitch({ id: pitchSnap.id, ...pitchSnap.data() } as Pitch);
 
 
             // Process player stats from events
@@ -136,6 +140,14 @@ export default function MatchReportPage() {
     React.useEffect(() => {
         fetchMatchReportData();
     }, [fetchMatchReportData]);
+    
+    const handleMvpUpdated = (mvpId: string) => {
+        // Find the player stats and update the MVP state
+        const newMvp = playerStats.find(p => p.playerId === mvpId);
+        if (newMvp) {
+            setMvp(newMvp);
+        }
+    };
 
     if (loading) {
         return (
@@ -147,13 +159,24 @@ export default function MatchReportPage() {
         )
     }
 
-    if (!match || !pitch) {
-        return <div>Match data could not be loaded.</div>;
+    if (!match || !pitch || !user) {
+        return (
+             <div className="flex flex-col items-center justify-center min-h-[50vh]">
+                <CardTitle>Match data could not be loaded.</CardTitle>
+                <CardDescription>Please try again later or go back to your games.</CardDescription>
+                <Button variant="outline" asChild className="mt-4">
+                    <Link href="/dashboard/my-games">
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Back to My Games
+                    </Link>
+                </Button>
+            </div>
+        )
     }
     
     const isPracticeMatch = !!teamA && !teamB;
     const teamAName = isPracticeMatch ? `${teamA?.name} A` : teamA?.name || "Team A";
-    const teamBName = isPracticeMatch ? `${teamA?.name} B` : teamB?.name || "Vests B";
+    const teamBName = isPracticeMatch ? `${teamA?.name} B` : "Vests B";
     const gameDuration = getGameDuration(pitch.sport);
 
     return (
@@ -181,23 +204,7 @@ export default function MatchReportPage() {
                 </CardHeader>
             </Card>
 
-            {mvp && (
-                <Card className="bg-gradient-to-r from-primary/10 to-transparent">
-                    <CardHeader className="text-center">
-                        <div className="flex justify-center items-center gap-2 text-primary">
-                            <Star className="h-6 w-6" />
-                            <CardTitle className="font-headline text-2xl">Man of the Match</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="text-center">
-                        <h3 className="text-3xl font-bold">{mvp.playerName}</h3>
-                        <div className="flex justify-center items-center gap-4 mt-2 text-muted-foreground">
-                            <span>{mvp.goals} <span className="text-xs">Goals</span></span>
-                            <span>{mvp.assists} <span className="text-xs">Assists</span></span>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+            <MvpVoting match={match} user={user} onMvpUpdated={handleMvpUpdated} />
 
             {match.events && match.events.length > 0 && (
                  <Card>

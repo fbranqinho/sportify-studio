@@ -1,8 +1,9 @@
 
+
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Calendar, ShieldCheck, DollarSign, Goal, Foot } from "lucide-react";
+import { AlertCircle, Calendar, ShieldCheck, DollarSign, Goal, Foot, Award } from "lucide-react";
 import type { PlayerProfile } from "@/types";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
@@ -21,7 +22,7 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
   const { profile, upcomingGames, pendingPayments } = data;
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Upcoming Games</CardTitle>
@@ -49,6 +50,16 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
             </Button>
         </CardContent>
       </Card>
+       <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">Accolades</CardTitle>
+          <Award className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+           <div className="text-2xl font-bold">{profile?.mvps ?? 0} <span className="text-sm font-normal">MVPs</span></div>
+           <p className="text-xs text-muted-foreground">{profile?.teamOfWeek ?? 0} Team of the Week</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -73,7 +84,7 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
         </CardContent>
       </Card>
       
-      <Card className="lg:col-span-3">
+      <Card className="lg:col-span-4">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
