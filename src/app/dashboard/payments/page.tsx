@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Reservation, Notification, Team, Match } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -105,9 +105,9 @@ export default function PaymentsPage() {
     setLoading(true);
     let paymentsQuery;
     if (user.role === 'PLAYER') {
-      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), orderBy("date", "desc"));
+      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
     } else if (user.role === 'MANAGER') {
-      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id), orderBy("date", "desc"));
+      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else {
       setPayments([]);
       setLoading(false);
@@ -116,6 +116,8 @@ export default function PaymentsPage() {
 
     const unsubscribe = onSnapshot(paymentsQuery, (querySnapshot) => {
       const paymentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+      // Sort payments client-side
+      paymentsData.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
       setPayments(paymentsData);
       setLoading(false);
     }, (error) => {
