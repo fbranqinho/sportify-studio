@@ -56,43 +56,15 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             };
             batch.set(ownerNotificationRef, ownerNotification);
             
-            // Get Team and Players to create reimbursement payments and invitations
+            // Get Team and Players to create invitations
             const teamRef = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRef);
-            if (!teamDoc.exists()) throw new Error("Team not found to create reimbursements.");
+            if (!teamDoc.exists()) throw new Error("Team not found to create invitations.");
             const team = teamDoc.data() as Team;
             const playerIds = team.playerIds;
             
             if (playerIds.length > 0) {
-                 const amountPerPlayer = reservation.totalAmount / playerIds.length;
-                
                  for (const playerId of playerIds) {
-                    // Create Reimbursement Payment for Player (if not manager)
-                    if (playerId !== reservation.managerRef) {
-                        const playerPaymentRef = doc(collection(db, "payments"));
-                        batch.set(playerPaymentRef, {
-                            type: "reimbursement",
-                            amount: amountPerPlayer,
-                            status: "Pending",
-                            date: new Date().toISOString(),
-                            reservationRef: reservation.id,
-                            teamRef: reservation.teamRef,
-                            playerRef: playerId,
-                            managerRef: reservation.managerRef,
-                            pitchName: reservation.pitchName,
-                            teamName: team.name,
-                        });
-
-                        const paymentNotificationRef = doc(collection(db, 'notifications'));
-                        batch.set(paymentNotificationRef, {
-                            userId: playerId,
-                            message: `The manager paid for the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
-                            link: '/dashboard/payments',
-                            read: false,
-                            createdAt: serverTimestamp() as any,
-                        });
-                    }
-
                     // Create Match Invitation for all players (including manager)
                     const invitationRef = doc(collection(db, "matchInvitations"));
                     batch.set(invitationRef, {
@@ -120,7 +92,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been invited and notified to reimburse you." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been invited." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -564,6 +536,47 @@ export default function MyGamesPage() {
 
         if (accepted) {
             batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
+
+            // Create reimbursement payment if applicable
+            const matchDoc = await getDoc(matchRef);
+            const matchData = matchDoc.data() as Match;
+
+            if (matchData.reservationRef) {
+                const reservationDoc = await getDoc(doc(db, 'reservations', matchData.reservationRef));
+                if (reservationDoc.exists()) {
+                    const reservation = reservationDoc.data() as Reservation;
+                    const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
+                    if (teamDoc.exists()) {
+                        const team = teamDoc.data() as Team;
+                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef) {
+                            const amountPerPlayer = reservation.totalAmount / team.playerIds.length;
+                            
+                            const playerPaymentRef = doc(collection(db, "payments"));
+                            batch.set(playerPaymentRef, {
+                                type: "reimbursement",
+                                amount: amountPerPlayer,
+                                status: "Pending",
+                                date: new Date().toISOString(),
+                                reservationRef: reservation.id,
+                                teamRef: invitation.teamId,
+                                playerRef: user.id,
+                                managerRef: reservation.managerRef,
+                                pitchName: reservation.pitchName,
+                                teamName: team.name,
+                            });
+                            
+                             const paymentNotificationRef = doc(collection(db, 'notifications'));
+                             batch.set(paymentNotificationRef, {
+                                 userId: user.id,
+                                 message: `You've accepted the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
+                                 link: '/dashboard/payments',
+                                 read: false,
+                                 createdAt: serverTimestamp() as any,
+                             });
+                        }
+                    }
+                }
+            }
         }
         
         await batch.commit();
@@ -708,7 +721,7 @@ export default function MyGamesPage() {
       const team = teams.get(invitation.teamId);
       const match = matches.find(m => m.id === invitation.matchId);
 
-      if (!team || !match) return null; // Don't render if data isn't loaded yet
+      if (!team || !match) return <Skeleton className="h-52" />;
 
       return (
         <Card>
@@ -863,3 +876,4 @@ export default function MyGamesPage() {
 
 
     
+
