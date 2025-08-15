@@ -2,21 +2,77 @@
 "use client";
 
 import * as React from "react";
-import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, getDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, getDoc, updateDoc, increment, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Star, CheckCircle } from "lucide-react";
+import { Star, CheckCircle, Trophy } from "lucide-react";
 import type { Match, User, MvpVote } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 interface MvpVotingProps {
   match: Match;
   user: User;
-  onMvpUpdated: (mvpId: string) => void;
+  onMvpUpdated: () => void;
+}
+
+function VotingEndedCard({ match, user, isSubmitting, handleFinalizeVotes }: { match: Match, user: User, isSubmitting: boolean, handleFinalizeVotes: () => void }) {
+    const [provisionalMvp, setProvisionalMvp] = React.useState<User | null>(null);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const calculateWinner = async () => {
+            const votesQuery = query(collection(db, "matches", match.id, "mvpVotes"));
+            const votesSnap = await getDocs(votesQuery);
+
+            if (votesSnap.empty) {
+                setLoading(false);
+                return;
+            }
+
+            const voteCounts: { [playerId: string]: number } = {};
+            votesSnap.forEach(doc => {
+                const vote = doc.data();
+                voteCounts[vote.votedForId] = (voteCounts[vote.votedForId] || 0) + 1;
+            });
+            
+            if (Object.keys(voteCounts).length > 0) {
+                 const mvpId = Object.keys(voteCounts).reduce((a, b) => voteCounts[a] > voteCounts[b] ? a : b);
+                 const userDoc = await getDoc(doc(db, "users", mvpId));
+                 if (userDoc.exists()) {
+                     setProvisionalMvp(userDoc.data() as User);
+                 }
+            }
+            setLoading(false);
+        };
+        calculateWinner();
+    }, [match.id]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Trophy className="text-amber-500" /> MVP Voting has ended</CardTitle>
+                <CardDescription>The voting period for this match has closed. The manager can now finalize the results.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? <Skeleton className="h-8 w-1/2" /> :
+                    provisionalMvp ? (
+                        <p className="font-semibold">Provisional Winner: <span className="text-primary">{provisionalMvp.name}</span></p>
+                    ) : (
+                        <p className="text-muted-foreground">No votes were cast in this match.</p>
+                    )
+                }
+                {user.role === 'MANAGER' && (
+                    <Button onClick={handleFinalizeVotes} disabled={isSubmitting || !provisionalMvp} className="mt-4">
+                        {isSubmitting ? "Finalizing..." : "Finalize MVP & Award"}
+                    </Button>
+                )}
+            </CardContent>
+        </Card>
+    );
 }
 
 export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
@@ -161,19 +217,7 @@ export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
   }
   
   if (!isVotingOpen && !match.mvpPlayerId) {
-    return (
-       <Card>
-            <CardHeader>
-                <CardTitle>MVP Voting has ended</CardTitle>
-                 <CardDescription>The voting period for this match has closed. The manager can now finalize the results.</CardDescription>
-            </CardHeader>
-            {user.role === 'MANAGER' && (
-                 <CardContent>
-                    <Button onClick={handleFinalizeVotes} disabled={isSubmitting}>Finalize MVP Results</Button>
-                </CardContent>
-            )}
-        </Card>
-    );
+    return <VotingEndedCard match={match} user={user} isSubmitting={isSubmitting} handleFinalizeVotes={handleFinalizeVotes} />
   }
 
   if (match.mvpPlayerId) {
@@ -202,3 +246,5 @@ export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
     </Card>
   )
 }
+
+    
