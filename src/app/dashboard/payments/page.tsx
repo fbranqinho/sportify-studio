@@ -7,13 +7,15 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, orderBy } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Reservation, Notification, Team, Match } from "@/types";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Users, Shield, User } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 
 const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
@@ -85,7 +87,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
     }
 
     return (
-        <Button className="w-full mt-4" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+        <Button size="sm" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
     )
 }
 
@@ -103,9 +105,9 @@ export default function PaymentsPage() {
     setLoading(true);
     let paymentsQuery;
     if (user.role === 'PLAYER') {
-      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+      paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), orderBy("date", "desc"));
     } else if (user.role === 'MANAGER') {
-      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+      paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id), orderBy("date", "desc"));
     } else {
       setPayments([]);
       setLoading(false);
@@ -114,7 +116,6 @@ export default function PaymentsPage() {
 
     const unsubscribe = onSnapshot(paymentsQuery, (querySnapshot) => {
       const paymentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-      paymentsData.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
       setPayments(paymentsData);
       setLoading(false);
     }, (error) => {
@@ -127,72 +128,68 @@ export default function PaymentsPage() {
   }, [user, toast]);
 
   React.useEffect(() => {
-    const unsubscribe = fetchPayments();
+    const unsubscribePromise = fetchPayments();
     return () => {
-      unsubscribe.then(unsub => unsub && unsub());
+      unsubscribePromise.then(unsub => unsub && unsub());
     }
   }, [fetchPayments]);
   
 
-  const getStatusInfo = (status: Payment["status"]) => {
+  const getStatusBadge = (status: Payment["status"]) => {
     switch(status) {
-      case "Paid": return { text: "Paid", icon: CheckCircle, color: "text-green-600" };
-      case "Pending": return { text: "Pending", icon: Clock, color: "text-amber-600" };
-      case "Cancelled": return { text: "Cancelled", icon: Ban, color: "text-muted-foreground" };
-      default: return { text: "N/A", icon: DollarSign, color: "text-primary" };
+      case "Paid": return <Badge variant="default" className="bg-green-600">Paid</Badge>;
+      case "Pending": return <Badge variant="destructive">Pending</Badge>;
+      case "Cancelled": return <Badge variant="outline">Cancelled</Badge>;
+      default: return <Badge>{status}</Badge>;
     }
   }
 
-  const PaymentCard = ({ payment }: { payment: Payment }) => {
-    const statusInfo = getStatusInfo(payment.status);
+  const getPaymentTitle = (payment: Payment) => {
+    if (payment.type === 'booking_split') return `Game fee: ${payment.teamName} @ ${payment.pitchName}`;
+    if (payment.type === 'reimbursement') return `Reimbursement to Manager for game at ${payment.pitchName}`;
+    return 'Payment';
+  }
 
-    const getTitle = () => {
-        if(payment.type === 'booking_split') return `Game fee: ${payment.teamName}`;
-        if(payment.type === 'reimbursement') return `Reimbursement to Manager`;
-        return 'Payment';
-    }
-    
-     const getContext = () => {
-        if(payment.type === 'reimbursement') return `For game: ${payment.pitchName}`;
-        if(payment.pitchName) return `Pitch: ${payment.pitchName}`;
-        return '';
-    }
 
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex justify-between items-center">
-            <span>{getTitle()}</span>
-            <Badge variant={payment.status === 'Pending' ? 'destructive' : payment.status === 'Paid' ? 'default' : 'outline'}>{payment.status}</Badge>
-          </CardTitle>
-           <CardDescription>
-                {payment.date ? format(new Date(payment.date), "PPP") : 'Date not available'}
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="text-4xl font-bold text-center">
-            {payment.amount.toFixed(2)}€
-          </div>
-           <div className="flex items-center justify-center gap-2 text-sm">
-            <statusInfo.icon className={`h-4 w-4 ${statusInfo.color}`} />
-            <span className={`font-semibold ${statusInfo.color}`}>{statusInfo.text}</span>
-          </div>
-          {getContext() && <p className="text-xs text-center text-muted-foreground">{getContext()}</p>}
+  const PaymentsTable = ({ payments, showActions }: { payments: Payment[], showActions: boolean }) => (
+    <Card>
+        <CardContent className="p-0">
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="w-[150px]">Date</TableHead>
+                        <TableHead className="w-[120px] text-center">Status</TableHead>
+                        <TableHead className="w-[120px] text-right">Amount</TableHead>
+                        {showActions && <TableHead className="w-[150px] text-right">Action</TableHead>}
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {payments.map((p) => (
+                        <TableRow key={p.id}>
+                            <TableCell className="font-medium">{getPaymentTitle(p)}</TableCell>
+                            <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
+                            <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
+                            <TableCell className="text-right font-mono">{p.amount.toFixed(2)}€</TableCell>
+                             {showActions && (
+                                 <TableCell className="text-right">
+                                    {p.status === 'Pending' && user?.role === 'PLAYER' && (
+                                        <PlayerPaymentButton payment={p} onPaymentProcessed={() => fetchPayments()} />
+                                    )}
+                                </TableCell>
+                            )}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
         </CardContent>
-        {payment.status === 'Pending' && user?.role === 'PLAYER' && (
-          <CardFooter>
-            <PlayerPaymentButton payment={payment} onPaymentProcessed={() => fetchPayments()} />
-          </CardFooter>
-        )}
-      </Card>
-    )
-  }
+    </Card>
+  )
 
   const LoadingSkeleton = () => (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+      <div className="space-y-4">
+         <Skeleton className="h-10 w-1/4" />
+         <Skeleton className="h-48 w-full" />
       </div>
   )
 
@@ -219,9 +216,7 @@ export default function PaymentsPage() {
        <div className="space-y-4">
         <h2 className="text-2xl font-bold font-headline text-primary">Pending Payments ({pendingPayments.length})</h2>
         {loading ? <LoadingSkeleton /> : pendingPayments.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {pendingPayments.map(p => <PaymentCard key={p.id} payment={p} />)}
-          </div>
+          <PaymentsTable payments={pendingPayments} showActions={true} />
         ) : (
           <EmptyState icon={CheckCircle} title="All Caught Up!" description="You have no pending payments." />
         )}
@@ -230,9 +225,7 @@ export default function PaymentsPage() {
       <div className="border-t pt-8 space-y-4">
         <h2 className="text-2xl font-bold font-headline">Payment History ({historyPayments.length})</h2>
         {loading ? <LoadingSkeleton /> : historyPayments.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {historyPayments.map(p => <PaymentCard key={p.id} payment={p} />)}
-          </div>
+          <PaymentsTable payments={historyPayments} showActions={false}/>
         ) : (
           <EmptyState icon={History} title="No Payment History" description="Your past payments will appear here." />
         )}
