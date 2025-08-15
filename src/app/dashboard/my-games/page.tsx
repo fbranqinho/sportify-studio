@@ -63,7 +63,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const team = teamDoc.data() as Team;
             const playerIds = team.playerIds;
             
-            if (playerIds.length > 0) {
+            if (playerIds && playerIds.length > 0) {
                  for (const playerId of playerIds) {
                     // Create Match Invitation for all players (including manager)
                     const invitationRef = doc(collection(db, "matchInvitations"));
@@ -529,12 +529,12 @@ export default function MyGamesPage() {
      if (!user) return;
      const batch = writeBatch(db);
      const invitationRef = doc(db, "matchInvitations", invitation.id);
-     const matchRef = doc(db, "matches", invitation.matchId);
-
+     
      try {
         batch.update(invitationRef, { status: accepted ? "accepted" : "declined" });
 
         if (accepted) {
+            const matchRef = doc(db, "matches", invitation.matchId);
             batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
 
             // Create reimbursement payment if applicable
@@ -548,7 +548,7 @@ export default function MyGamesPage() {
                     const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
                     if (teamDoc.exists()) {
                         const team = teamDoc.data() as Team;
-                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef) {
+                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && reservation.paymentStatus === 'Paid') {
                             const amountPerPlayer = reservation.totalAmount / team.playerIds.length;
                             
                             const playerPaymentRef = doc(collection(db, "payments"));
