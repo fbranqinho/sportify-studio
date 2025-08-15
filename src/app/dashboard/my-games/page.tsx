@@ -520,7 +520,6 @@ export default function MyGamesPage() {
             const matchRef = doc(db, "matches", invitation.matchId);
             batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
 
-            // Create reimbursement payment if applicable
             const matchDoc = await getDoc(matchRef);
             if (!matchDoc.exists()) throw new Error("Match document not found.");
             const matchData = matchDoc.data() as Match;
@@ -561,10 +560,25 @@ export default function MyGamesPage() {
                     }
                 }
             }
+        } else {
+             // If declined, find any wrongfully created pending payment and cancel it.
+            const matchDoc = await getDoc(doc(db, "matches", invitation.matchId));
+            const matchData = matchDoc.data() as Match;
+            if (matchData?.reservationRef) {
+                const q = query(collection(db, "payments"), 
+                    where("playerRef", "==", user.id), 
+                    where("reservationRef", "==", matchData.reservationRef),
+                    where("status", "==", "Pending")
+                );
+                const paymentSnap = await getDocs(q);
+                paymentSnap.forEach(paymentDoc => {
+                    batch.update(paymentDoc.ref, { status: "Cancelled" });
+                });
+            }
         }
         
         await batch.commit();
-        toast({ title: "Response Recorded", description: "Your response to the game invitation has been saved." });
+        toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}`, description: `Your response to the game invitation has been saved.` });
      } catch (error: any) {
         console.error("Error responding to invitation:", error);
         toast({ variant: "destructive", title: "Error", description: `Could not save your response: ${error.message}` });
@@ -862,3 +876,4 @@ export default function MyGamesPage() {
     
 
     
+
