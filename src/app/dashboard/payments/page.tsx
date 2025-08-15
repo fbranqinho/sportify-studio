@@ -4,14 +4,14 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc, addDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Reservation, Notification, Team, Match } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -88,6 +88,42 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
 
     return (
         <Button size="sm" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+    )
+}
+
+const ManagerRemindButton = ({ payment }: { payment: Payment }) => {
+    const { toast } = useToast();
+    const [isSending, setIsSending] = React.useState(false);
+
+    const handleRemind = async () => {
+        if (!payment.playerRef || !payment.teamName || !payment.pitchName) {
+            toast({ variant: "destructive", title: "Error", description: "Payment details are incomplete." });
+            return;
+        }
+        setIsSending(true);
+        try {
+            const notification: Omit<Notification, 'id'> = {
+                userId: payment.playerRef,
+                message: `Reminder: You have a pending payment to your manager for the game with ${payment.teamName}.`,
+                link: '/dashboard/payments',
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            await addDoc(collection(db, "notifications"), notification);
+
+            toast({ title: "Reminder Sent!", description: "A notification has been sent to the player." });
+        } catch (error: any) {
+            console.error("Error sending reminder:", error);
+            toast({ variant: "destructive", title: "Error", description: `Could not send reminder: ${error.message}` });
+        } finally {
+            setIsSending(false);
+        }
+    }
+
+    return (
+        <Button size="sm" variant="outline" onClick={handleRemind} disabled={isSending}>
+           {isSending ? "Sending..." : <><Send className="mr-2 h-3 w-3" /> Remind</>}
+        </Button>
     )
 }
 
@@ -177,6 +213,9 @@ export default function PaymentsPage() {
                                  <TableCell className="text-right">
                                     {p.status === 'Pending' && user?.role === 'PLAYER' && (
                                         <PlayerPaymentButton payment={p} onPaymentProcessed={() => fetchPayments()} />
+                                    )}
+                                    {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'reimbursement' && (
+                                        <ManagerRemindButton payment={p} />
                                     )}
                                 </TableCell>
                             )}
