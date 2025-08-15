@@ -23,8 +23,8 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     const { toast } = useToast();
 
     const handlePayFull = async () => {
-        if (!reservation.teamRef) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
+        if (!reservation.teamRef || !reservation.managerRef) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team or manager.' });
             return;
         }
 
@@ -39,6 +39,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 throw new Error("Associated match not found for this reservation.");
             }
             const matchRef = matchSnap.docs[0].ref;
+            const matchId = matchSnap.docs[0].id;
 
             // Update reservation and match status
             batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
@@ -55,36 +56,60 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             };
             batch.set(ownerNotificationRef, ownerNotification);
             
-            // Get Team and Players to create reimbursement payments
+            // Get Team and Players to create reimbursement payments and invitations
             const teamRef = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRef);
             if (!teamDoc.exists()) throw new Error("Team not found to create reimbursements.");
             const team = teamDoc.data() as Team;
-            const playerIds = team.playerIds.filter(id => id !== reservation.managerRef); // Exclude manager from reimbursement
+            const playerIds = team.playerIds;
             
             if (playerIds.length > 0) {
-                 const amountPerPlayer = reservation.totalAmount / (playerIds.length + 1); // +1 for the manager
+                 const amountPerPlayer = reservation.totalAmount / playerIds.length;
                 
                  for (const playerId of playerIds) {
-                    const playerPaymentRef = doc(collection(db, "payments"));
-                    batch.set(playerPaymentRef, {
-                        type: "reimbursement",
-                        amount: amountPerPlayer,
-                        status: "Pending",
-                        date: new Date().toISOString(),
-                        reservationRef: reservation.id,
-                        teamRef: reservation.teamRef,
-                        playerRef: playerId,
-                        managerRef: reservation.managerRef,
-                        pitchName: reservation.pitchName,
-                        teamName: team.name,
+                    // Create Reimbursement Payment for Player (if not manager)
+                    if (playerId !== reservation.managerRef) {
+                        const playerPaymentRef = doc(collection(db, "payments"));
+                        batch.set(playerPaymentRef, {
+                            type: "reimbursement",
+                            amount: amountPerPlayer,
+                            status: "Pending",
+                            date: new Date().toISOString(),
+                            reservationRef: reservation.id,
+                            teamRef: reservation.teamRef,
+                            playerRef: playerId,
+                            managerRef: reservation.managerRef,
+                            pitchName: reservation.pitchName,
+                            teamName: team.name,
+                        });
+
+                        const paymentNotificationRef = doc(collection(db, 'notifications'));
+                        batch.set(paymentNotificationRef, {
+                            userId: playerId,
+                            message: `The manager paid for the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
+                            link: '/dashboard/payments',
+                            read: false,
+                            createdAt: serverTimestamp() as any,
+                        });
+                    }
+
+                    // Create Match Invitation for all players (including manager)
+                    const invitationRef = doc(collection(db, "matchInvitations"));
+                    batch.set(invitationRef, {
+                        matchId: matchId,
+                        teamId: team.id,
+                        playerId: playerId,
+                        managerId: reservation.managerRef,
+                        status: "pending",
+                        invitedAt: serverTimestamp(),
                     });
 
-                    const playerNotificationRef = doc(collection(db, 'notifications'));
-                    batch.set(playerNotificationRef, {
+                    // Create Notification for the invitation
+                    const inviteNotificationRef = doc(collection(db, 'notifications'));
+                    batch.set(inviteNotificationRef, {
                         userId: playerId,
-                        message: `The manager paid for the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
-                        link: '/dashboard/payments',
+                        message: `You've been invited to a game with ${team.name}.`,
+                        link: '/dashboard/my-games',
                         read: false,
                         createdAt: serverTimestamp() as any,
                     });
@@ -95,7 +120,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been notified to reimburse you." });
+            toast({ title: "Payment Successful!", description: "The reservation is confirmed, the game is scheduled, and players have been invited and notified to reimburse you." });
         } catch (error: any) {
              console.error("Error processing full payment:", error);
              toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
