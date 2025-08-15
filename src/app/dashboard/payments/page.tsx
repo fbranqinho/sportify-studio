@@ -3,14 +3,14 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Notification, PaymentStatus } from "@/types";
+import type { Payment, Notification, PaymentStatus, Reservation } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send, CircleSlash, Search } from "lucide-react";
+import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send, CircleSlash, Search, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -104,7 +104,7 @@ const ManagerRemindButton = ({ payment }: { payment: Payment }) => {
         try {
             const notification: Omit<Notification, 'id'> = {
                 userId: payment.playerRef,
-                message: `Reminder: You have a pending payment to your manager for the game with ${payment.teamName}.`,
+                message: `Reminder: You have a pending payment for the game with ${payment.teamName}.`,
                 link: '/dashboard/payments',
                 read: false,
                 createdAt: serverTimestamp() as any,
@@ -131,6 +131,7 @@ export default function PaymentsPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const [allPayments, setAllPayments] = React.useState<Payment[]>([]);
+  const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
 
@@ -144,9 +145,23 @@ export default function PaymentsPage() {
     const roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
     const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
         const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
         setAllPayments(paymentsData);
+
+        if (paymentsData.length > 0) {
+            const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(id => id))];
+            if (reservationIds.length > 0) {
+                const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
+                const reservationsSnap = await getDocs(reservationsQuery);
+                const reservationsMap = new Map<string, Reservation>();
+                reservationsSnap.forEach(doc => {
+                    reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
+                });
+                setReservations(reservationsMap);
+            }
+        }
+        
         setLoading(false);
     }, (error) => {
         console.error("Error fetching payments:", error);
@@ -187,34 +202,39 @@ export default function PaymentsPage() {
                     <TableRow>
                         <TableHead>Team</TableHead>
                         <TableHead>Pitch</TableHead>
-                        <TableHead className="w-[150px]">Date</TableHead>
+                        <TableHead className="w-[150px]">Game Date</TableHead>
+                        <TableHead className="w-[150px]">Payment Date</TableHead>
                         <TableHead className="w-[120px] text-center">Status</TableHead>
                         <TableHead className="w-[120px] text-right">Amount</TableHead>
                         {showActions && <TableHead className="w-[150px] text-right">Action</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {payments.length > 0 ? payments.map((p) => (
-                        <TableRow key={p.id}>
-                            <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
-                            <TableCell>{p.pitchName || '-'}</TableCell>
-                            <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
-                            <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
-                            <TableCell className="text-right font-mono">{p.amount.toFixed(2)}€</TableCell>
-                             {showActions && (
-                                 <TableCell className="text-right">
-                                    {p.status === 'Pending' && user?.role === 'PLAYER' && (
-                                        <PlayerPaymentButton payment={p} onPaymentProcessed={() => {}} />
-                                    )}
-                                    {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'reimbursement' && (
-                                        <ManagerRemindButton payment={p} />
-                                    )}
-                                </TableCell>
-                            )}
-                        </TableRow>
-                    )) : (
+                    {payments.length > 0 ? payments.map((p) => {
+                        const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
+                        return (
+                            <TableRow key={p.id}>
+                                <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
+                                <TableCell>{p.pitchName || '-'}</TableCell>
+                                <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
+                                <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
+                                <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
+                                <TableCell className="text-right font-mono">{p.amount.toFixed(2)}€</TableCell>
+                                {showActions && (
+                                    <TableCell className="text-right">
+                                        {p.status === 'Pending' && user?.role === 'PLAYER' && (
+                                            <PlayerPaymentButton payment={p} onPaymentProcessed={() => {}} />
+                                        )}
+                                        {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'reimbursement' && (
+                                            <ManagerRemindButton payment={p} />
+                                        )}
+                                    </TableCell>
+                                )}
+                            </TableRow>
+                        )
+                    }) : (
                         <TableRow>
-                            <TableCell colSpan={showActions ? 6 : 5} className="h-24 text-center">
+                            <TableCell colSpan={showActions ? 7 : 6} className="h-24 text-center">
                                 No payments match your criteria.
                             </TableCell>
                         </TableRow>
@@ -282,3 +302,5 @@ export default function PaymentsPage() {
     </div>
   );
 }
+
+    
