@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy, DollarSign, CreditCard } from "lucide-react";
+import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy, DollarSign, CreditCard, ArrowRight } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
@@ -116,7 +116,6 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
                 throw new Error("Associated match not found for this reservation.");
             }
             const matchId = matchSnap.docs[0].id;
-            const teamRef = teamSnap.docs[0].data() as Team;
     
             // Get Team and Players
             const teamRefDoc = doc(db, "teams", reservation.teamRef);
@@ -611,6 +610,8 @@ export default function MyGamesPage() {
       }
       return 'Match Details';
     }
+    
+    const buttonText = isFinished ? "View Report" : "Manage Game";
 
     return (
         <Card>
@@ -671,19 +672,13 @@ export default function MyGamesPage() {
                     </div>
                  )}
             </CardContent>
-             <CardFooter className="gap-2">
+             <CardFooter>
                 <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/dashboard/games/${match.id}`}>
-                        {(isManager || isPlayer) && !isFinished ? "Manage Game" : "View Details"}
+                    <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
+                        <span>{buttonText}</span>
+                        <ArrowRight className="h-4 w-4" />
                     </Link>
                 </Button>
-                {isFinished && (
-                     <Button variant="secondary" asChild className="w-full">
-                        <Link href={`/dashboard/games/${match.id}/report`}>
-                            <Trophy className="mr-2" /> Match Report
-                        </Link>
-                    </Button>
-                )}
             </CardFooter>
         </Card>
     )

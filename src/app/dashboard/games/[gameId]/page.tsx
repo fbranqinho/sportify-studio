@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock, Star } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +36,7 @@ import { cn, getGameDuration } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { v4 as uuidv4 } from 'uuid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { MvpVoting } from "@/components/mvp-voting";
 
 
 export function EventTimeline({ events, teamAName, teamBName, duration }: { events: MatchEvent[], teamAName?: string, teamBName?: string, duration: number }) {
@@ -884,18 +885,133 @@ function PlayerRoster({
     );
 }
 
-const getPlayerCapacity = (sport: PitchSport): number => {
-    switch (sport) {
-        case 'fut5': case 'futsal': return 10;
-        case 'fut7': return 14;
-        case 'fut11': return 22;
-        default: return 0;
-    }
-};
+// Helper type for enriched player stats in a match
+interface MatchPlayerStats {
+  playerId: string;
+  playerName: string;
+  teamId: "A" | "B";
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  mvpScore: number;
+}
 
-interface InvitationCounts {
-    pending: number;
-    declined: number;
+function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: { match: Match, teamA: Team | null, teamB: Team | null, pitch: Pitch, user: User, onMvpUpdate: () => void }) {
+    const [playerStats, setPlayerStats] = React.useState<MatchPlayerStats[]>([]);
+    const [mvp, setMvp] = React.useState<MatchPlayerStats | null>(null);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const processStats = async () => {
+            const stats: { [key: string]: MatchPlayerStats } = {};
+            const allPlayerIds = new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])]);
+
+            allPlayerIds.forEach(id => {
+                stats[id] = {
+                    playerId: id,
+                    playerName: "Unknown", // Placeholder name
+                    teamId: (match.teamAPlayers || []).includes(id) ? "A" : "B",
+                    goals: 0, assists: 0, yellowCards: 0, redCards: 0, mvpScore: 0
+                };
+            });
+
+            (match.events || []).forEach(event => {
+                if (!stats[event.playerId]) return;
+                switch(event.type) {
+                    case "Goal": stats[event.playerId].goals++; stats[event.playerId].mvpScore += 3; break;
+                    case "Assist": stats[event.playerId].assists++; stats[event.playerId].mvpScore += 2; break;
+                    case "YellowCard": stats[event.playerId].yellowCards++; stats[event.playerId].mvpScore -= 1; break;
+                    case "RedCard": stats[event.playerId].redCards++; stats[event.playerId].mvpScore -= 3; break;
+                }
+            });
+            
+            if (allPlayerIds.size > 0) {
+                const usersQuery = query(collection(db, "users"), where(documentId(), "in", Array.from(allPlayerIds)));
+                const usersSnap = await getDocs(usersQuery);
+                usersSnap.forEach(userDoc => {
+                    if (stats[userDoc.id]) {
+                        stats[userDoc.id].playerName = userDoc.data().name;
+                    }
+                });
+            }
+
+            const processedStats = Object.values(stats);
+            setPlayerStats(processedStats);
+            
+            if (processedStats.length > 0) {
+                const sortedByMvp = [...processedStats].sort((a, b) => b.mvpScore - a.mvpScore);
+                setMvp(sortedByMvp[0]);
+            }
+            setLoading(false);
+        };
+        processStats();
+    }, [match]);
+    
+    const isPracticeMatch = !!teamA && !teamB;
+    const teamAName = isPracticeMatch ? `${teamA?.name} A` : teamA?.name || "Team A";
+    const teamBName = isPracticeMatch ? `${teamA?.name} B` : (teamB?.name || "Vests B");
+    const gameDuration = getGameDuration(pitch.sport);
+
+    if(loading) {
+        return <Skeleton className="h-64" />;
+    }
+
+    return (
+        <div className="space-y-6">
+            <MvpVoting match={match} user={user} onMvpUpdated={onMvpUpdate} />
+             {match.events && match.events.length > 0 && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Event Timeline</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <EventTimeline events={match.events} teamAName={teamAName} teamBName={teamBName} duration={gameDuration}/>
+                    </CardContent>
+                </Card>
+            )}
+             <Card>
+                <CardHeader>
+                    <CardTitle className="font-headline">Player Statistics</CardTitle>
+                    <CardDescription>Performance of all players in this match.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Player</TableHead>
+                                <TableHead>Team</TableHead>
+                                <TableHead className="text-center">Goals</TableHead>
+                                <TableHead className="text-center">Assists</TableHead>
+                                <TableHead className="text-center">Cards</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {playerStats.sort((a, b) => b.mvpScore - a.mvpScore).map(p => (
+                                <TableRow key={p.playerId}>
+                                    <TableCell className="font-medium flex items-center gap-2">
+                                        {p.playerName}
+                                        {match.mvpPlayerId === p.playerId && <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-800"><Star className="h-3 w-3 text-amber-500" /> MVP</Badge>}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={p.teamId === 'A' ? "default" : "secondary"}>
+                                            {p.teamId === 'A' ? teamAName : teamBName}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-center font-mono">{p.goals}</TableCell>
+                                    <TableCell className="text-center font-mono">{p.assists}</TableCell>
+                                    <TableCell className="text-center flex justify-center gap-1">
+                                        {p.yellowCards > 0 && <Square className="h-4 w-4 text-yellow-500 fill-current" />}
+                                        {p.redCards > 0 && <Square className="h-4 w-4 text-red-600 fill-current" />}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
+    )
 }
 
 export default function GameDetailsPage() {
@@ -909,12 +1025,13 @@ export default function GameDetailsPage() {
     const [pitch, setPitch] = React.useState<Pitch | null>(null);
     const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
     const [reservation, setReservation] = React.useState<Reservation | null>(null);
-    const [invitationCounts, setInvitationCounts] = React.useState<InvitationCounts>({ pending: 0, declined: 0 });
+    const [invitationCounts, setInvitationCounts] = React.useState<{ pending: number, declined: number }>({ pending: 0, declined: 0 });
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
 
     const fetchGameDetails = React.useCallback(async () => {
         try {
+            setLoading(true);
             const matchRef = doc(db, "matches", gameId);
             const matchSnap = await getDoc(matchRef);
 
@@ -997,7 +1114,7 @@ export default function GameDetailsPage() {
 
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
-        if (data.teamAPlayers || data.teamBPlayers || data.events) {
+        if (data.teamAPlayers || data.teamBPlayers || data.events || data.status === 'Finished') {
             fetchGameDetails(); // Re-fetch to get correct player states
         }
     }
@@ -1018,14 +1135,16 @@ export default function GameDetailsPage() {
         </div>
     }
 
-    if (!match) {
-        return <div>Match not found.</div>;
+    if (!match || !user) {
+        return <div>Match not found or user not logged in.</div>;
     }
     
     const isManager = user?.id === teamA?.managerId;
+    const isFinished = match.status === 'Finished';
 
     const getMatchTitle = () => {
-        if (match.status === 'Finished') return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;
+        const teamAName = teamA?.name || 'Team A';
+        if (isFinished) return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;
         if (teamA && !teamB && !match.invitedTeamId && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         if (teamA && match.invitedTeamId && !teamB) {
@@ -1057,7 +1176,6 @@ export default function GameDetailsPage() {
     };
 
     const statusInfo = getStatusInfo();
-    
 
     return (
         <div className="space-y-6">
@@ -1074,7 +1192,7 @@ export default function GameDetailsPage() {
             <div className="grid md:grid-cols-3 gap-6">
                 <Card className="md:col-span-2">
                     <CardHeader>
-                        <CardTitle>Match Details</CardTitle>
+                        <CardTitle>{isFinished ? 'Match Summary' : 'Match Details'}</CardTitle>
                         <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1131,25 +1249,17 @@ export default function GameDetailsPage() {
                 )}
             </div>
             
-            {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
-            
-            <PlayerRoster 
-                match={match} 
-                isManager={isManager} 
-                onUpdate={handleMatchUpdate}
-                onEventAdded={handleEventAdded}
-            />
-            
-            {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
-
-            {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
-            
+            {isFinished ? (
+                 pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />
+            ) : (
+                <>
+                    {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
+                    <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} />
+                    {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
+                    {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
+                </>
+            )}
         </div>
     );
 }
-
-    
-
-
-    
 
