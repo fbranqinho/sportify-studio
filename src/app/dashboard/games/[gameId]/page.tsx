@@ -899,11 +899,11 @@ interface MatchPlayerStats {
 
 function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: { match: Match, teamA: Team | null, teamB: Team | null, pitch: Pitch, user: User, onMvpUpdate: () => void }) {
     const [playerStats, setPlayerStats] = React.useState<MatchPlayerStats[]>([]);
-    const [mvp, setMvp] = React.useState<MatchPlayerStats | null>(null);
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
         const processStats = async () => {
+            setLoading(true);
             const stats: { [key: string]: MatchPlayerStats } = {};
             const allPlayerIds = new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])]);
 
@@ -938,11 +938,6 @@ function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: { match:
 
             const processedStats = Object.values(stats);
             setPlayerStats(processedStats);
-            
-            if (processedStats.length > 0) {
-                const sortedByMvp = [...processedStats].sort((a, b) => b.mvpScore - a.mvpScore);
-                setMvp(sortedByMvp[0]);
-            }
             setLoading(false);
         };
         processStats();
@@ -953,9 +948,41 @@ function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: { match:
     const teamBName = isPracticeMatch ? `${teamA?.name} B` : (teamB?.name || "Vests B");
     const gameDuration = getGameDuration(pitch.sport);
 
+    const teamAPlayers = playerStats.filter(p => p.teamId === 'A').sort((a, b) => b.mvpScore - a.mvpScore);
+    const teamBPlayers = playerStats.filter(p => p.teamId === 'B').sort((a, b) => b.mvpScore - a.mvpScore);
+
     if(loading) {
         return <Skeleton className="h-64" />;
     }
+
+    const PlayerStatsTable = ({ players }: { players: MatchPlayerStats[] }) => (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Player</TableHead>
+                    <TableHead className="text-center">G</TableHead>
+                    <TableHead className="text-center">A</TableHead>
+                    <TableHead className="text-center">Cards</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {players.map(p => (
+                    <TableRow key={p.playerId}>
+                        <TableCell className="font-medium flex items-center gap-2">
+                            {p.playerName}
+                            {match.mvpPlayerId === p.playerId && <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-800"><Star className="h-3 w-3 text-amber-500" /> MVP</Badge>}
+                        </TableCell>
+                        <TableCell className="text-center font-mono">{p.goals}</TableCell>
+                        <TableCell className="text-center font-mono">{p.assists}</TableCell>
+                        <TableCell className="text-center flex justify-center gap-1">
+                            {p.yellowCards > 0 && <Square className="h-4 w-4 text-yellow-500 fill-current" />}
+                            {p.redCards > 0 && <Square className="h-4 w-4 text-red-600 fill-current" />}
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    );
 
     return (
         <div className="space-y-6">
@@ -970,46 +997,28 @@ function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: { match:
                     </CardContent>
                 </Card>
             )}
-             <Card>
-                <CardHeader>
-                    <CardTitle className="font-headline">Player Statistics</CardTitle>
-                    <CardDescription>Performance of all players in this match.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Player</TableHead>
-                                <TableHead>Team</TableHead>
-                                <TableHead className="text-center">Goals</TableHead>
-                                <TableHead className="text-center">Assists</TableHead>
-                                <TableHead className="text-center">Cards</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {playerStats.sort((a, b) => b.mvpScore - a.mvpScore).map(p => (
-                                <TableRow key={p.playerId}>
-                                    <TableCell className="font-medium flex items-center gap-2">
-                                        {p.playerName}
-                                        {match.mvpPlayerId === p.playerId && <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-800"><Star className="h-3 w-3 text-amber-500" /> MVP</Badge>}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={p.teamId === 'A' ? "default" : "secondary"}>
-                                            {p.teamId === 'A' ? teamAName : teamBName}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-center font-mono">{p.goals}</TableCell>
-                                    <TableCell className="text-center font-mono">{p.assists}</TableCell>
-                                    <TableCell className="text-center flex justify-center gap-1">
-                                        {p.yellowCards > 0 && <Square className="h-4 w-4 text-yellow-500 fill-current" />}
-                                        {p.redCards > 0 && <Square className="h-4 w-4 text-red-600 fill-current" />}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
+             <div className="space-y-2">
+                 <h3 className="text-xl font-bold font-headline px-2">Player Statistics</h3>
+                 <p className="text-muted-foreground px-2">Performance of all players in this match.</p>
+                <div className="grid md:grid-cols-2 gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>{teamAName}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <PlayerStatsTable players={teamAPlayers} />
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>{teamBName}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <PlayerStatsTable players={teamBPlayers} />
+                        </CardContent>
+                    </Card>
+                </div>
+             </div>
         </div>
     )
 }
@@ -1262,5 +1271,6 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
 
 
