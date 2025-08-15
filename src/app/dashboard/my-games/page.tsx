@@ -60,7 +60,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const teamRef = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRef);
             if (!teamDoc.exists()) throw new Error("Team not found to create invitations.");
-            const team = teamDoc.data() as Team;
+            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
             const playerIds = team.playerIds;
             
             if (playerIds && playerIds.length > 0) {
@@ -563,17 +563,19 @@ export default function MyGamesPage() {
         } else {
              // If declined, find any wrongfully created pending payment and cancel it.
             const matchDoc = await getDoc(doc(db, "matches", invitation.matchId));
-            const matchData = matchDoc.data() as Match;
-            if (matchData?.reservationRef) {
-                const q = query(collection(db, "payments"), 
-                    where("playerRef", "==", user.id), 
-                    where("reservationRef", "==", matchData.reservationRef),
-                    where("status", "==", "Pending")
-                );
-                const paymentSnap = await getDocs(q);
-                paymentSnap.forEach(paymentDoc => {
-                    batch.update(paymentDoc.ref, { status: "Cancelled" });
-                });
+            if (matchDoc.exists()) {
+                const matchData = matchDoc.data() as Match;
+                if (matchData?.reservationRef) {
+                    const q = query(collection(db, "payments"), 
+                        where("playerRef", "==", user.id), 
+                        where("reservationRef", "==", matchData.reservationRef),
+                        where("status", "==", "Pending")
+                    );
+                    const paymentSnap = await getDocs(q);
+                    paymentSnap.forEach(paymentDoc => {
+                        batch.update(paymentDoc.ref, { status: "Cancelled" });
+                    });
+                }
             }
         }
         
@@ -876,4 +878,5 @@ export default function MyGamesPage() {
     
 
     
+
 
