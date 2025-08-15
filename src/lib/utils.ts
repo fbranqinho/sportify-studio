@@ -32,3 +32,18 @@ export const getGameDuration = (sport: PitchSport): number => {
         default: return 90;
     }
 };
+
+export const getPlayerCapacity = (sport?: PitchSport): number => {
+    if (!sport) return 0;
+    switch (sport) {
+        case 'fut5':
+        case 'futsal':
+            return 10;
+        case 'fut7':
+            return 14;
+        case 'fut11':
+            return 22;
+        default:
+            return 0; // Should not happen
+    }
+};

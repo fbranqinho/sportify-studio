@@ -32,7 +32,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge";
-import { cn, getGameDuration } from "@/lib/utils";
+import { cn, getGameDuration, getPlayerCapacity } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { v4 as uuidv4 } from 'uuid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1262,4 +1262,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
 

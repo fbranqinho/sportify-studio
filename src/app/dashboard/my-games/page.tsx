@@ -16,6 +16,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { getPlayerCapacity } from "@/lib/utils";
 
 const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
@@ -565,22 +566,6 @@ export default function MyGamesPage() {
   const now = new Date();
   const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  
-  const getPlayerCapacity = (sport?: Pitch["sport"]): number => {
-    if (!sport) return 0;
-    switch (sport) {
-        case 'fut5':
-        case 'futsal':
-            return 10;
-        case 'fut7':
-            return 14;
-        case 'fut11':
-            return 22;
-        default:
-            return 0; // Should not happen
-    }
-  };
 
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
