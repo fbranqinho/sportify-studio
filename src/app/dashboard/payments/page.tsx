@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Payment, Notification, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -140,15 +139,15 @@ export default function PaymentsPage() {
         setLoading(false);
         return;
     }
+    
     setLoading(true);
-
     const roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
     const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
         setAllPayments(paymentsData);
-        if (loading) setLoading(false);
+        setLoading(false);
     }, (error) => {
         console.error("Error fetching payments:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch payments." });
@@ -156,7 +155,7 @@ export default function PaymentsPage() {
     });
 
     return () => unsubscribe();
-  }, [user, toast, loading]);
+  }, [user, toast]);
 
   const filteredPayments = React.useMemo(() => {
     return allPayments.filter(p => {
