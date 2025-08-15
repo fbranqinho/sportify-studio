@@ -539,6 +539,7 @@ export default function MyGamesPage() {
 
             // Create reimbursement payment if applicable
             const matchDoc = await getDoc(matchRef);
+            if (!matchDoc.exists()) throw new Error("Match document not found.");
             const matchData = matchDoc.data() as Match;
 
             if (matchData.reservationRef) {
@@ -874,5 +875,7 @@ export default function MyGamesPage() {
 }
 
 
+
+    
 
     
