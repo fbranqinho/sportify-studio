@@ -73,10 +73,6 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
     
         const batch = writeBatch(db);
         try {
-            const teamRefDoc = doc(db, "teams", reservation.teamRef);
-            const teamDoc = await getDoc(teamRefDoc);
-            if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
-
             // Update the original reservation to 'Split'
             const originalReservationRef = doc(db, "reservations", reservation.id);
             batch.update(originalReservationRef, { paymentStatus: "Split" });
@@ -261,11 +257,6 @@ export default function MyGamesPage() {
                 const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
                 userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
             }
-
-            if (userTeamIds.length > 0) {
-                const teamsMap = await fetchDetails('teams', userTeamIds);
-                setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-            }
             
             // --- Player-specific listeners ---
             if (user.role === 'PLAYER') {
@@ -308,8 +299,17 @@ export default function MyGamesPage() {
                 }));
             }
 
+            // Only run team-based queries if the user is in at least one team
+            if (userTeamIds.length === 0) {
+                setLoading(false);
+                return;
+            }
+
+            const teamsMap = await fetchDetails('teams', userTeamIds);
+            setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+
             // --- Manager-specific listeners ---
-            if (user.role === 'MANAGER' && userTeamIds.length > 0) {
+            if (user.role === 'MANAGER') {
                 const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
                 unsubscribes.push(onSnapshot(teamInvQuery, async (snapshot) => {
                     const teamInvs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
@@ -323,71 +323,70 @@ export default function MyGamesPage() {
             }
             
             // --- Common match listeners ---
-            if (userTeamIds.length > 0) {
-                const processMatchesSnapshot = async (snapshot: DocumentData) => {
-                    const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data()} as Match));
-                    setMatches(prev => {
-                        const combined = new Map(prev.map(m => [m.id, m]));
-                        newMatches.forEach(m => combined.set(m.id, m));
-                        return Array.from(combined.values());
-                    });
+            const processMatchesSnapshot = async (snapshot: DocumentData) => {
+                const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data()} as Match));
+                setMatches(prev => {
+                    const combined = new Map(prev.map(m => [m.id, m]));
+                    newMatches.forEach(m => combined.set(m.id, m));
+                    return Array.from(combined.values());
+                });
 
-                    // Fetch related data for all matches
-                    const allMatches = Array.from(new Map([...matches, ...newMatches].map(m => [m.id, m])).values());
-                    const teamIdsToFetch = new Set<string>();
-                    const pitchIdsToFetch = new Set<string>();
-                    const reservationIdsToFetch = new Set<string>();
+                // Fetch related data for all matches
+                const allMatches = Array.from(new Map([...matches, ...newMatches].map(m => [m.id, m])).values());
+                const teamIdsToFetch = new Set<string>();
+                const pitchIdsToFetch = new Set<string>();
+                const reservationIdsToFetch = new Set<string>();
+                
+                allMatches.forEach((match: Match) => {
+                    if (match.teamARef) teamIdsToFetch.add(match.teamARef);
+                    if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
+                    if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
+                    if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
+                });
                     
-                    allMatches.forEach((match: Match) => {
-                        if (match.teamARef) teamIdsToFetch.add(match.teamARef);
-                        if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
-                        if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
-                        if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
-                    });
-                     
-                    if (teamIdsToFetch.size > 0) {
-                        const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
-                        setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-                    }
+                if (teamIdsToFetch.size > 0) {
+                    const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
+                    setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                }
 
-                    if (reservationIdsToFetch.size > 0) {
-                        const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
-                        setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
-                        
-                        const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
-                        if(splitReservationIds.length > 0) {
-                           const paymentCounts = new Map<string, { paid: number, total: number }>();
-                           for (const resId of splitReservationIds) {
-                               const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId));
-                               const paymentsSnap = await getDocs(paymentsQuery);
-                               const total = paymentsSnap.size;
-                               const paid = paymentsSnap.docs.filter(d => d.data().status === 'Paid').length;
-                               paymentCounts.set(resId, { paid, total });
-                           }
-                           setSplitPaymentCounts(paymentCounts);
+                if (reservationIdsToFetch.size > 0) {
+                    const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
+                    setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
+                    
+                    const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
+                    if(splitReservationIds.length > 0) {
+                        const paymentCounts = new Map<string, { paid: number, total: number }>();
+                        for (const resId of splitReservationIds) {
+                            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId));
+                            const paymentsSnap = await getDocs(paymentsQuery);
+                            const total = paymentsSnap.size;
+                            const paid = paymentsSnap.docs.filter(d => d.data().status === 'Paid').length;
+                            paymentCounts.set(resId, { paid, total });
                         }
+                        setSplitPaymentCounts(paymentCounts);
                     }
+                }
 
-                     if (pitchIdsToFetch.size > 0) {
-                        const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
-                        setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
+                    if (pitchIdsToFetch.size > 0) {
+                    const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
+                    setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
-                        const ownerProfileIdsToFetch = new Set<string>();
-                        pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
+                    const ownerProfileIdsToFetch = new Set<string>();
+                    pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
 
-                        if(ownerProfileIdsToFetch.size > 0){
-                             const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
-                             setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
-                        }
+                    if(ownerProfileIdsToFetch.size > 0){
+                            const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
+                            setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
                     }
-                };
+                }
+            };
 
-                const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
-                const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-                 
-                unsubscribes.push(onSnapshot(q1, processMatchesSnapshot));
-                unsubscribes.push(onSnapshot(q2, processMatchesSnapshot));
-            }
+            const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+            const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
+                
+            unsubscribes.push(onSnapshot(q1, processMatchesSnapshot));
+            unsubscribes.push(onSnapshot(q2, processMatchesSnapshot));
+            
         } catch (error) {
             console.error("Error setting up listeners: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
@@ -450,7 +449,7 @@ export default function MyGamesPage() {
                     const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
                     if (teamDoc.exists()) {
                         const team = teamDoc.data() as Team;
-                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && (reservation.paymentStatus === 'Paid' || reservation.paymentStatus === 'Split')) {
+                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && reservation.paymentStatus === 'Split') {
                             const amountPerPlayer = reservation.totalAmount / team.playerIds.length;
                             
                             const playerPaymentRef = doc(collection(db, "payments"));
@@ -533,8 +532,7 @@ export default function MyGamesPage() {
   const now = new Date();
   const upcomingMatches = matches.filter(m => {
     const isPlayerInGame = user ? (m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id)) : false;
-    const isManagerOfGame = user ? (user.role === 'MANAGER' && (teams.get(m.teamARef || '')?.managerId === user.id || teams.get(m.teamBRef || '')?.managerId === user.id)) : false;
-    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isPlayerInGame || isManagerOfGame);
+    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && isPlayerInGame;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
