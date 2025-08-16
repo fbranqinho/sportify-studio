@@ -153,10 +153,11 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
         batch.update(paymentRef, { status: "Paid" });
         
         try {
+            // First, commit the payment status update.
             await batch.commit();
 
+            // Then, check if the full amount has been paid.
             const reservationRef = doc(db, "reservations", payment.reservationRef);
-            // Re-fetch all payments for the reservation to check totals
             const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef));
             const paymentsSnap = await getDocs(paymentsQuery);
             
@@ -167,11 +168,12 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             if (!reservationDoc.exists()) return;
             const reservation = reservationDoc.data() as Reservation;
 
-            // If total paid meets or exceeds reservation total, mark as Paid
+            // If total paid meets or exceeds reservation total, mark reservation as Paid
             if (totalPaid >= reservation.totalAmount) {
                 const finalBatch = writeBatch(db);
                 finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
+                // Update the associated match status as well
                 const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
                 const matchSnap = await getDocs(matchQuery);
                 if(!matchSnap.empty) {
@@ -179,6 +181,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
                     finalBatch.update(matchRef, { status: 'Scheduled' });
                 }
 
+                // Notify the owner
                 const ownerNotificationRef = doc(collection(db, "notifications"));
                 const notification: Omit<Notification, 'id'> = {
                     ownerProfileId: reservation.ownerProfileId,
@@ -402,12 +405,13 @@ export default function MyGamesPage() {
             batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
             
             const matchDoc = await getDoc(matchRef);
-            if (matchDoc.exists() && matchDoc.data().reservationRef) {
-                const reservationDoc = await getDoc(doc(db, "reservations", matchDoc.data().reservationRef));
-                if (reservationDoc.exists() && reservationDoc.data().paymentStatus !== 'Paid') {
-                    // Logic to create a split payment for this player if the reservation is not yet paid.
-                    // This logic might need to be more complex, e.g. what if the split has already happened?
-                    // For now, we assume this is for games where players are added before the manager splits the cost.
+            if (matchDoc.exists()) {
+                const matchData = matchDoc.data();
+                if (matchData.reservationRef) {
+                    const reservationDoc = await getDoc(doc(db, "reservations", matchData.reservationRef));
+                    if (reservationDoc.exists() && reservationDoc.data().paymentStatus !== 'Paid') {
+                        // Player accepted, but do not create a payment if the reservation is already paid for.
+                    }
                 }
             }
         }
@@ -449,8 +453,12 @@ export default function MyGamesPage() {
   
   const upcomingMatches = matches.filter(m => {
     const isFuture = new Date(m.date) >= now;
-    const isNotFinished = m.status !== 'Finished' && m.status !== 'Cancelled';
+    const isNotFinishedOrCancelled = m.status !== 'Finished' && m.status !== 'Cancelled';
     
+    // Any game that is not finished/cancelled and is in the future is potentially an upcoming game
+    const isPotentiallyUpcoming = isFuture && isNotFinishedOrCancelled;
+    if (!isPotentiallyUpcoming) return false;
+
     // For managers: games their team is in, or has been invited to.
     const isManagerInvolved = user?.role === 'MANAGER' && (
         teams.get(m.teamARef || '')?.managerId === user?.id ||
@@ -458,14 +466,17 @@ export default function MyGamesPage() {
         teamMatchInvitations.has(m.id)
     );
 
-    // For players: games they are confirmed in, or have an invitation for.
+    // For players: games they are confirmed in, or have an invitation for, or their team is in.
     const isPlayerInvolved = user?.role === 'PLAYER' && (
         m.teamAPlayers?.includes(user.id) ||
         m.teamBPlayers?.includes(user.id) ||
-        invitations.has(m.id)
+        invitations.has(m.id) ||
+        (m.teamARef && userTeamIds.includes(m.teamARef)) ||
+        (m.teamBRef && userTeamIds.includes(m.teamBRef))
     );
 
-    return isFuture && isNotFinished && (isManagerInvolved || isPlayerInvolved);
+    return isManagerInvolved || isPlayerInvolved;
+
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
