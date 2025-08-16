@@ -148,25 +148,28 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
         }
 
         const paymentRef = doc(db, "payments", payment.id);
+        const batch = writeBatch(db);
+        
+        batch.update(paymentRef, { status: "Paid" });
         
         try {
-            await updateDoc(paymentRef, { status: "Paid" });
+            await batch.commit(); // Commit the payment status update first
 
+            // Now, check if the reservation is fully paid
             const reservationRef = doc(db, "reservations", payment.reservationRef);
             const reservationDoc = await getDoc(reservationRef);
             if (!reservationDoc.exists()) return;
 
             const reservation = reservationDoc.data() as Reservation;
 
-            // After payment, check if the reservation is now fully paid
             const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef));
             const paymentsSnap = await getDocs(paymentsQuery);
             
             const totalPaid = paymentsSnap.docs
-                .filter(doc => doc.data().status === 'Paid')
-                .reduce((sum, doc) => sum + doc.data().amount, 0);
-
+                .reduce((sum, doc) => (doc.data().status === 'Paid' ? sum + doc.data().amount : sum), 0);
+            
             if (totalPaid >= reservation.totalAmount) {
+                // If total is covered, update the reservation and match
                 const finalBatch = writeBatch(db);
                 finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
@@ -349,39 +352,6 @@ export default function MyGamesPage() {
         if (reservationIdsToFetch.size > 0) {
             const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
             setReservations(reservationsMap);
-
-            // --- Automatic Consistency Check ---
-            const consistencyBatch = writeBatch(db);
-            let hasUpdates = false;
-
-            for (const res of reservationsMap.values()) {
-                if (res.paymentStatus === 'Split') {
-                     const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", res.id));
-                     const paymentsSnap = await getDocs(paymentsQuery);
-                     const totalPaid = paymentsSnap.docs
-                        .filter(doc => doc.data().status === 'Paid')
-                        .reduce((sum, doc) => sum + doc.data().amount, 0);
-                    
-                    if (totalPaid >= res.totalAmount) {
-                        const resRef = doc(db, "reservations", res.id);
-                        consistencyBatch.update(resRef, { paymentStatus: "Paid", status: "Scheduled" });
-                        
-                        const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', res.id));
-                        const matchSnap = await getDocs(matchQuery);
-                        if (!matchSnap.empty) {
-                            const matchRef = matchSnap.docs[0].ref;
-                            consistencyBatch.update(matchRef, { status: 'Scheduled' });
-                        }
-                        hasUpdates = true;
-                    }
-                }
-            }
-
-            if (hasUpdates) {
-                await consistencyBatch.commit();
-                fetchGameDetails(); // Re-fetch data after correction
-                return; // Exit to avoid race conditions with state updates
-            }
             
             const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
             if(splitReservationIds.length > 0) {
@@ -491,7 +461,7 @@ export default function MyGamesPage() {
 
   const pastMatches = matches.filter(m => {
        const isFinishedOrCancelled = m.status === 'Finished' || m.status === 'Cancelled';
-       const isPast = new Date(m.date) < now && !isFinishedOrCancelled;
+       const isPast = new Date(m.date) < now && (m.status !== 'Finished' && m.status !== 'Cancelled');
        return isFinishedOrCancelled || isPast;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -709,3 +679,4 @@ export default function MyGamesPage() {
     </div>
   );
 }
+

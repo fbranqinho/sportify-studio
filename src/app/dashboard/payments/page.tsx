@@ -1,12 +1,11 @@
 
-
 "use client";
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Notification, PaymentStatus, Reservation, User } from "@/types";
+import type { Payment, Notification, PaymentStatus, Reservation, User, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,48 +35,53 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             await batch.commit();
 
             const reservationRef = doc(db, "reservations", payment.reservationRef);
+            
+            const reservationDoc = await getDoc(reservationRef);
+            if (!reservationDoc.exists()) return;
+
+            const reservation = {id: reservationDoc.id, ...reservationDoc.data()} as Reservation;
+
             const paymentsQuery = query(
                 collection(db, "payments"), 
-                where("reservationRef", "==", payment.reservationRef), 
-                where("status", "==", "Pending")
+                where("reservationRef", "==", payment.reservationRef),
             );
             
-            const pendingPaymentsSnap = await getDocs(paymentsQuery);
+            const paymentsSnap = await getDocs(paymentsQuery);
+            const totalPaid = paymentsSnap.docs
+                .filter(doc => doc.id === payment.id || doc.data().status === 'Paid') // Include current payment
+                .reduce((sum, doc) => sum + doc.data().amount, 0);
 
-            if (pendingPaymentsSnap.empty) {
-                const reservationDoc = await getDoc(reservationRef);
-                if (reservationDoc.exists()) {
-                    const reservation = reservationDoc.data() as any;
-                    const finalBatch = writeBatch(db);
-                    finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-                    
-                    const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-                    const matchSnap = await getDocs(matchQuery);
-                    if(!matchSnap.empty) {
-                        const matchRef = matchSnap.docs[0].ref;
-                        finalBatch.update(matchRef, { status: 'Scheduled' });
-                    }
-
-                    const ownerNotificationRef = doc(collection(db, "notifications"));
-                    const notification: Omit<Notification, 'id'> = {
-                        ownerProfileId: reservation.ownerProfileId,
-                        message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
-                        link: `/dashboard/schedule`,
-                        read: false,
-                        createdAt: serverTimestamp() as any,
-                    };
-                    finalBatch.set(ownerNotificationRef, notification);
-                    await finalBatch.commit();
+            if (totalPaid >= reservation.totalAmount) {
+                const finalBatch = writeBatch(db);
+                finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
-                    toast({
-                        title: "Final Payment Received!",
-                        description: "The reservation is now confirmed and scheduled.",
-                    });
+                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+                const matchSnap = await getDocs(matchQuery);
+                if(!matchSnap.empty) {
+                    const matchRef = matchSnap.docs[0].ref;
+                    finalBatch.update(matchRef, { status: 'Scheduled' });
                 }
-            } else {
+
+                const ownerNotificationRef = doc(collection(db, "notifications"));
+                const notification: Omit<Notification, 'id'> = {
+                    ownerProfileId: reservation.ownerProfileId,
+                    message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
+                    link: `/dashboard/schedule`,
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                finalBatch.set(ownerNotificationRef, notification);
+                await finalBatch.commit();
+            
                 toast({
+                    title: "Final Payment Received!",
+                    description: "The reservation is now confirmed and scheduled.",
+                });
+            } else {
+                 const remainingToPay = paymentsSnap.docs.filter(p => p.data().status === 'Pending' && p.id !== payment.id).length;
+                 toast({
                     title: "Payment Successful!",
-                    description: `Your payment has been registered. Waiting for ${pendingPaymentsSnap.size} other players.`,
+                    description: `Your payment has been registered. Waiting for ${remainingToPay > 0 ? `${remainingToPay} other players` : 'other payments'}.`,
                 });
             }
             onPaymentProcessed();
@@ -137,56 +141,115 @@ export default function PaymentsPage() {
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
 
-  React.useEffect(() => {
+  const runConsistencyCheck = React.useCallback(async (reservationsMap: Map<string, Reservation>) => {
+        const consistencyBatch = writeBatch(db);
+        let hasUpdates = false;
+
+        const reservationsToCheck = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split');
+
+        for (const res of reservationsToCheck) {
+            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", res.id));
+            const paymentsSnap = await getDocs(paymentsQuery);
+            const totalPaid = paymentsSnap.docs
+                .filter(doc => doc.data().status === 'Paid')
+                .reduce((sum, doc) => sum + doc.data().amount, 0);
+            
+            if (totalPaid >= res.totalAmount) {
+                const resRef = doc(db, "reservations", res.id);
+                consistencyBatch.update(resRef, { paymentStatus: "Paid", status: "Scheduled" });
+                
+                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', res.id));
+                const matchSnap = await getDocs(matchQuery);
+                if (!matchSnap.empty) {
+                    const matchRef = matchSnap.docs[0].ref;
+                    consistencyBatch.update(matchRef, { status: 'Scheduled' });
+                }
+                hasUpdates = true;
+            }
+        }
+
+        if (hasUpdates) {
+            try {
+              await consistencyBatch.commit();
+              toast({ title: "Data Synced", description: "Corrected the status of some pending games." });
+              return true; // Indicates an update happened
+            } catch(e) {
+                console.error("Consistency check failed:", e);
+                return false;
+            }
+        }
+        return false;
+
+  }, [toast]);
+
+  const fetchData = React.useCallback(async () => {
     if (!user) {
         setLoading(false);
         return;
     }
-    
-    setLoading(true);
-    let roleField = user.role === 'PLAYER' ? 'playerRef' : user.role === 'MANAGER' ? 'managerRef' : 'ownerRef';
-    
-    const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
+    setLoading(true);
+
+    let roleField: string;
+    let initialQuery;
+
+    if (user.role === 'PLAYER') {
+        roleField = 'playerRef';
+        initialQuery = query(collection(db, "payments"), where(roleField, "==", user.id));
+    } else if (user.role === 'MANAGER') {
+        const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
+        const teamsSnap = await getDocs(teamsQuery);
+        const teamIds = teamsSnap.docs.map(d => d.id);
+        if (teamIds.length > 0) {
+            initialQuery = query(collection(db, "payments"), where("teamRef", "in", teamIds));
+        } else {
+             setAllPayments([]);
+             setLoading(false);
+             return;
+        }
+    } else if (user.role === 'OWNER') {
+        // Owner logic might be different, for now let's assume it's based on ownerRef in payments.
+        roleField = 'ownerRef';
+        initialQuery = query(collection(db, "payments"), where(roleField, "==", user.id));
+    } else {
+        setLoading(false);
+        return;
+    }
+
+    const unsubscribe = onSnapshot(initialQuery, async (snapshot) => {
         const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
         setAllPayments(paymentsData);
 
-        const detailsToFetch = new Map<string, Set<string>>();
-        detailsToFetch.set('reservations', new Set());
-        if (user.role === 'MANAGER') {
-            detailsToFetch.set('players', new Set());
-        }
+        const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
+        const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean))];
 
-        paymentsData.forEach(p => {
-            if (p.reservationRef) detailsToFetch.get('reservations')!.add(p.reservationRef);
-            if (user.role === 'MANAGER' && p.playerRef) {
-                detailsToFetch.get('players')!.add(p.playerRef);
-            }
-        });
-
-        const reservationIds = Array.from(detailsToFetch.get('reservations')!);
+        const reservationsMap = new Map<string, Reservation>();
         if (reservationIds.length > 0) {
             const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
             const reservationsSnap = await getDocs(reservationsQuery);
-            const reservationsMap = new Map<string, Reservation>();
             reservationsSnap.forEach(doc => {
                 reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
             });
             setReservations(reservationsMap);
+
+             // Run consistency check only for managers for now
+            if (user.role === 'MANAGER') {
+               const updated = await runConsistencyCheck(reservationsMap);
+               if (updated) {
+                   // If an update happened, the onSnapshot listener will re-trigger with fresh data.
+                   return;
+               }
+            }
         }
         
-        if (user.role === 'MANAGER') {
-            const playerIds = Array.from(detailsToFetch.get('players')!);
-            if (playerIds.length > 0) {
-                const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
-                const usersSnap = await getDocs(usersQuery);
-                const usersMap = new Map<string, User>();
-                usersSnap.forEach(doc => {
-                    usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
-                });
-                setPlayerUsers(usersMap);
-            }
+        if (playerIds.length > 0) {
+            const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
+            const usersSnap = await getDocs(usersQuery);
+            const usersMap = new Map<string, User>();
+            usersSnap.forEach(doc => {
+                usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+            });
+            setPlayerUsers(usersMap);
         }
         
         setLoading(false);
@@ -197,7 +260,11 @@ export default function PaymentsPage() {
     });
 
     return () => unsubscribe();
-  }, [user, toast]);
+  }, [user, toast, runConsistencyCheck]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filteredPayments = React.useMemo(() => {
     return allPayments.filter(p => {
@@ -244,7 +311,7 @@ export default function PaymentsPage() {
                         const playerName = p.playerRef ? playerUsers.get(p.playerRef)?.name : null;
                         return (
                             <TableRow key={p.id}>
-                                {user.role === 'MANAGER' && <TableCell className="font-medium">{playerName || '-'}</TableCell>}
+                                {user.role === 'MANAGER' && <TableCell className="font-medium">{playerName || p.playerRef || '-'}</TableCell>}
                                 <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
                                 <TableCell>{p.pitchName || '-'}</TableCell>
                                 <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
@@ -254,7 +321,7 @@ export default function PaymentsPage() {
                                 {showActions && (
                                     <TableCell className="text-right">
                                         {p.status === 'Pending' && user?.role === 'PLAYER' && (
-                                            <PlayerPaymentButton payment={p} onPaymentProcessed={() => {}} />
+                                            <PlayerPaymentButton payment={p} onPaymentProcessed={fetchData} />
                                         )}
                                         {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'booking_split' && (
                                             <ManagerRemindButton payment={p} />
@@ -281,14 +348,6 @@ export default function PaymentsPage() {
          <Skeleton className="h-10 w-1/4" />
          <Skeleton className="h-48 w-full" />
       </div>
-  )
-
-  const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
-    <Card className="flex flex-col items-center justify-center p-12 text-center mt-4 border-dashed">
-        <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-semibold font-headline">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </Card>
   )
   
   return (
