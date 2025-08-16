@@ -75,7 +75,7 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const teamRefDoc = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRefDoc);
             if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
-            
+
             // Update the original reservation to 'Split'
             const originalReservationRef = doc(db, "reservations", reservation.id);
             batch.update(originalReservationRef, { paymentStatus: "Split" });
@@ -244,12 +244,13 @@ export default function MyGamesPage() {
         return;
     }
 
-    setLoading(true);
     const unsubscribes: (() => void)[] = [];
-    let userTeamIds: string[] = [];
 
     const setupListeners = async () => {
+        setLoading(true);
         try {
+            let userTeamIds: string[] = [];
+
             if (user.role === 'PLAYER') {
                 const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
                 const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
@@ -259,19 +260,18 @@ export default function MyGamesPage() {
                 const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
                 userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
             }
+
             if (userTeamIds.length > 0) {
-                 const teamsMap = await fetchDetails('teams', userTeamIds);
-                 setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                const teamsMap = await fetchDetails('teams', userTeamIds);
+                setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
             }
             
-            // Player-specific listeners
+            // --- Player-specific listeners ---
             if (user.role === 'PLAYER') {
-                // Individual match invitations for players
                 const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
-                const unsubscribeInvitations = onSnapshot(invQuery, async (snapshot) => {
+                unsubscribes.push(onSnapshot(invQuery, async (snapshot) => {
                     const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
                     setInvitations(invs);
-
                     if (invs.length > 0) {
                         const teamIds = invs.map(inv => inv.teamId);
                         const teamsMap = await fetchDetails('teams', teamIds);
@@ -280,54 +280,50 @@ export default function MyGamesPage() {
                         const matchIds = invs.map(inv => inv.matchId);
                         const matchesMap = await fetchDetails('matches', matchIds);
                         setMatches(prev => {
-                             const combined = new Map(prev.map(m => [m.id, m]));
-                             matchesMap.forEach((match, id) => combined.set(id, match));
-                             return Array.from(combined.values());
+                            const combined = new Map(prev.map(m => [m.id, m]));
+                            matchesMap.forEach((match, id) => combined.set(id, match));
+                            return Array.from(combined.values());
                         });
-
                     }
-                }, (error) => console.error("Error fetching invitations:", error));
-                unsubscribes.push(unsubscribeInvitations);
+                }));
 
-                // Split payments for players
                 const playerPaymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
-                const unsubPayments = onSnapshot(playerPaymentsQuery, (snap) => {
+                unsubscribes.push(onSnapshot(playerPaymentsQuery, (snap) => {
                     const playerPayments = new Map<string, Payment>();
                     snap.forEach(doc => {
                         const payment = { id: doc.id, ...doc.data() } as Payment;
-                        if(payment.reservationRef) {
-                            playerPayments.set(payment.reservationRef, payment);
-                        }
+                        if(payment.reservationRef) playerPayments.set(payment.reservationRef, payment);
                     });
                     setPayments(playerPayments);
-                });
-                unsubscribes.push(unsubPayments);
+                }));
             }
 
-            // Manager-specific listeners
+            // --- Manager-specific listeners ---
             if (user.role === 'MANAGER' && userTeamIds.length > 0) {
                 const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
-                const unsubscribeTeamInvites = onSnapshot(teamInvQuery, async (snapshot) => {
+                unsubscribes.push(onSnapshot(teamInvQuery, async (snapshot) => {
                     const teamInvs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
                     setTeamMatchInvitations(teamInvs);
-                     if (teamInvs.length > 0) {
+                    if (teamInvs.length > 0) {
                         const hostTeamIds = teamInvs.map(inv => inv.teamARef).filter((id): id is string => !!id);
                         const teamsMap = await fetchDetails('teams', hostTeamIds);
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
-                }, (error) => console.error("Error fetching team match invitations:", error));
-                unsubscribes.push(unsubscribeTeamInvites);
+                }));
             }
             
-            // Common match listeners
+            // --- Common match listeners ---
             if (userTeamIds.length > 0) {
-                 const combinedMatches = new Map<string, Match>();
-                 
-                 const processMatchesSnapshot = async (snapshot: DocumentData, initialLoadDone: () => void) => {
-                    snapshot.docs.forEach((doc: DocumentData) => combinedMatches.set(doc.id, { id: doc.id, ...doc.data()} as Match));
-                    const allMatches = Array.from(combinedMatches.values());
-                    setMatches(allMatches);
+                const processMatchesSnapshot = async (snapshot: DocumentData) => {
+                    const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data()} as Match));
+                    setMatches(prev => {
+                        const combined = new Map(prev.map(m => [m.id, m]));
+                        newMatches.forEach(m => combined.set(m.id, m));
+                        return Array.from(combined.values());
+                    });
 
+                    // Fetch related data for all matches
+                    const allMatches = Array.from(new Map([...matches, ...newMatches].map(m => [m.id, m])).values());
                     const teamIdsToFetch = new Set<string>();
                     const pitchIdsToFetch = new Set<string>();
                     const reservationIdsToFetch = new Set<string>();
@@ -348,10 +344,7 @@ export default function MyGamesPage() {
                         const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
                         setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
                         
-                        const splitReservationIds = Array.from(reservationsMap.values())
-                            .filter(r => r.paymentStatus === 'Split')
-                            .map(r => r.id);
-
+                        const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
                         if(splitReservationIds.length > 0) {
                            const paymentCounts = new Map<string, { paid: number, total: number }>();
                            for (const resId of splitReservationIds) {
@@ -370,38 +363,25 @@ export default function MyGamesPage() {
                         setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
                         const ownerProfileIdsToFetch = new Set<string>();
-                        pitchesMap.forEach(pitch => {
-                            if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef);
-                        })
+                        pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
 
                         if(ownerProfileIdsToFetch.size > 0){
                              const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
                              setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
                         }
                     }
-                    initialLoadDone();
-                 };
-                 
-                 const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
-                 const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-                 
-                 let initLoads = 2;
-                 const initialLoadDone = () => {
-                     initLoads--;
-                     if(initLoads === 0) setLoading(false);
-                 }
+                };
 
-                 const unsub1 = onSnapshot(q1, (snap) => processMatchesSnapshot(snap, initialLoadDone));
-                 const unsub2 = onSnapshot(q2, (snap) => processMatchesSnapshot(snap, initialLoadDone));
+                const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+                const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
                  
-                 unsubscribes.push(unsub1, unsub2);
-            } else {
-                 setLoading(false);
+                unsubscribes.push(onSnapshot(q1, processMatchesSnapshot));
+                unsubscribes.push(onSnapshot(q2, processMatchesSnapshot));
             }
-
         } catch (error) {
             console.error("Error setting up listeners: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
+        } finally {
             setLoading(false);
         }
     };
