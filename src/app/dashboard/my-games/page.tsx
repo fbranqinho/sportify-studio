@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -55,9 +54,6 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             };
             batch.set(ownerNotificationRef, ownerNotification);
             
-            // This is the correct place for payment processing logic, but invitation logic was removed
-            // as it is now handled when the owner confirms the reservation.
-
             await batch.commit();
             setIsDialogOpen(false);
             onPaymentProcessed();
@@ -79,14 +75,10 @@ const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation
             const teamRefDoc = doc(db, "teams", reservation.teamRef);
             const teamDoc = await getDoc(teamRefDoc);
             if (!teamDoc.exists()) throw new Error("Team not found to split payment.");
-            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
-
+            
             // Update the original reservation to 'Split'
             const originalReservationRef = doc(db, "reservations", reservation.id);
             batch.update(originalReservationRef, { paymentStatus: "Split" });
-    
-            // Invitation logic has been removed from here to prevent duplicates.
-            // It is now handled when the owner confirms the reservation.
     
             await batch.commit();
             setIsDialogOpen(false);
@@ -425,7 +417,8 @@ export default function MyGamesPage() {
   const refreshData = async () => {
     // This function can be simplified or expanded based on what needs refreshing
     // For now, it re-fetches reservations and payments
-    if (user?.role === 'PLAYER') {
+    if (!user) return;
+    if (user.role === 'PLAYER') {
         const playerPaymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
         const snap = await getDocs(playerPaymentsQuery);
         const playerPayments = new Map<string, Payment>();
@@ -808,14 +801,5 @@ export default function MyGamesPage() {
     </div>
   );
 }
-
-
-
-    
-
-    
-
-
-
 
     
