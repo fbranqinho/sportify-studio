@@ -144,8 +144,7 @@ export default function PaymentsPage() {
     }
     
     setLoading(true);
-    let roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
-    if(user.role === 'OWNER') roleField = 'ownerRef';
+    let roleField = user.role === 'PLAYER' ? 'playerRef' : user.role === 'MANAGER' ? 'managerRef' : 'ownerRef';
     
     const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
@@ -155,12 +154,16 @@ export default function PaymentsPage() {
 
         const detailsToFetch = new Map<string, Set<string>>();
         detailsToFetch.set('reservations', new Set());
-        if(user.role === 'MANAGER') detailsToFetch.set('players', new Set());
+        if (user.role === 'MANAGER') {
+            detailsToFetch.set('players', new Set());
+        }
 
         paymentsData.forEach(p => {
             if (p.reservationRef) detailsToFetch.get('reservations')!.add(p.reservationRef);
-            if (user.role === 'MANAGER' && p.playerRef) detailsToFetch.get('players')!.add(p.playerRef);
-        })
+            if (user.role === 'MANAGER' && p.playerRef) {
+                detailsToFetch.get('players')!.add(p.playerRef);
+            }
+        });
 
         const reservationIds = Array.from(detailsToFetch.get('reservations')!);
         if (reservationIds.length > 0) {
@@ -173,15 +176,17 @@ export default function PaymentsPage() {
             setReservations(reservationsMap);
         }
         
-        const playerIds = Array.from(detailsToFetch.get('players')!);
-        if (playerIds.length > 0) {
-            const usersQuery = query(collection(db, 'users'), where('id', 'in', playerIds));
-            const usersSnap = await getDocs(usersQuery);
-            const usersMap = new Map<string, User>();
-            usersSnap.forEach(doc => {
-                usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
-            });
-            setPlayerUsers(usersMap);
+        if (user.role === 'MANAGER') {
+            const playerIds = Array.from(detailsToFetch.get('players')!);
+            if (playerIds.length > 0) {
+                const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
+                const usersSnap = await getDocs(usersQuery);
+                const usersMap = new Map<string, User>();
+                usersSnap.forEach(doc => {
+                    usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+                });
+                setPlayerUsers(usersMap);
+            }
         }
         
         setLoading(false);
