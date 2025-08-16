@@ -270,7 +270,7 @@ export default function MyGamesPage() {
             const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
             const invSnapshot = await getDocs(invQuery);
             const invs = invSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
-            const matchIdsFromInvs = invs.map(inv => inv.matchId);
+            const matchIdsFromInvs = invs.map(inv => inv.matchId).filter(id => id);
             
             if (matchIdsFromInvs.length > 0) {
                 const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
@@ -745,6 +745,7 @@ export default function MyGamesPage() {
 }
 
     
+
 
 
 
