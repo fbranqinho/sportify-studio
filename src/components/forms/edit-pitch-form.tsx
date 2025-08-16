@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Pitch, PitchSport } from "@/types";
+import { Switch } from "../ui/switch";
 
 const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
 
@@ -33,6 +35,7 @@ const formSchema = z.object({
   sport: z.enum(sports),
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
   basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
+  allowPostGamePayments: z.boolean().default(false),
 });
 
 interface EditPitchFormProps {
@@ -50,6 +53,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
       sport: pitch.sport,
       capacity: pitch.capacity,
       basePrice: pitch.basePrice || 50,
+      allowPostGamePayments: pitch.allowPostGamePayments || false,
     },
   });
 
@@ -61,6 +65,7 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
         sport: values.sport,
         capacity: values.capacity,
         basePrice: values.basePrice,
+        allowPostGamePayments: values.allowPostGamePayments,
       });
 
       toast({
@@ -147,6 +152,28 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
               </FormItem>
             )}
           />
+        <FormField
+          control={form.control}
+          name="allowPostGamePayments"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">
+                  Allow Post-Game Payments
+                </FormLabel>
+                <FormDescription>
+                  Permit games to start before all players have paid.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
         <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
         </Button>

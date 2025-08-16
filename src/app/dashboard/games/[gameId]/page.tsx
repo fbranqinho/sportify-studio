@@ -126,9 +126,35 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
 
     const handleStartGame = async () => {
         const matchRef = doc(db, "matches", match.id);
+        const batch = writeBatch(db);
+
         try {
-            await updateDoc(matchRef, { status: "InProgress" });
-            onMatchUpdate({ status: "InProgress" });
+             // Enforce minimum players to start
+            const minPlayers = getPlayerCapacity(pitch?.sport);
+            const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+            if (confirmedPlayers < minPlayers) {
+                toast({ variant: "destructive", title: "Cannot Start Game", description: `You need at least ${minPlayers} confirmed players to start.` });
+                return;
+            }
+
+            let updateData: Partial<Match> = { status: "InProgress" };
+
+            // Auto-shuffle for practice matches if teams are not set
+            if (isPracticeMatch && (!match.teamAPlayers || match.teamAPlayers.length === 0)) {
+                 const allConfirmedPlayers = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
+                 const shuffled = [...allConfirmedPlayers].sort(() => 0.5 - Math.random());
+                 const half = Math.ceil(shuffled.length / 2);
+                 const newTeamAPlayers = shuffled.slice(0, half);
+                 const newTeamBPlayers = shuffled.slice(half);
+                 updateData.teamAPlayers = newTeamAPlayers;
+                 updateData.teamBPlayers = newTeamBPlayers;
+                 toast({ title: "Teams auto-shuffled!"});
+            }
+
+            batch.update(matchRef, updateData);
+            await batch.commit();
+
+            onMatchUpdate(updateData);
             toast({ title: "Game Started!", description: "The game is now live." });
         } catch (error) {
             console.error("Error starting game:", error);
@@ -245,14 +271,16 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
     }, [isEndGameOpen, match.events]);
     
     const isPaid = reservation?.paymentStatus === 'Paid';
-    const hasPlayers = (match.teamAPlayers?.length || 0) > 0 || (match.teamBPlayers?.length || 0) > 0;
-    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && (isPaid || !!match.allowPostGamePayments) && hasPlayers;
+    const allowPostGamePay = pitch?.allowPostGamePayments;
+    const minPlayers = getPlayerCapacity(pitch?.sport);
+    const hasEnoughPlayers = ((match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0)) >= minPlayers;
+    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && (isPaid || !!allowPostGamePay) && hasEnoughPlayers;
     
     let disabledTooltipContent = "";
-    if (!isPaid && !match.allowPostGamePayments) {
+    if (!isPaid && !allowPostGamePay) {
         disabledTooltipContent = "The game must be paid for (or allow post-game payments) before it can start.";
-    } else if (!hasPlayers) {
-        disabledTooltipContent = "The game cannot start until at least one player has confirmed their attendance.";
+    } else if (!hasEnoughPlayers) {
+        disabledTooltipContent = `The game requires at least ${minPlayers} confirmed players to start.`;
     }
 
 
@@ -345,18 +373,6 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
             toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
         }
     }
-
-    const handleTogglePostGamePayments = async (checked: boolean) => {
-        const matchRef = doc(db, "matches", match.id);
-        try {
-            await updateDoc(matchRef, { allowPostGamePayments: checked });
-            onMatchUpdate({ allowPostGamePayments: checked });
-            toast({ title: "Settings updated", description: `Post-game payments are now ${checked ? 'allowed' : 'disallowed'}.`});
-        } catch (error) {
-            console.error("Error updating match settings:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
-        }
-    }
     
     const handleDeleteGame = async () => {
         const batch = writeBatch(db);
@@ -436,21 +452,6 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                         id="allow-external"
                         checked={!!match.allowExternalPlayers}
                         onCheckedChange={handleToggleExternalPlayers}
-                    />
-                </div>
-                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="allow-post-game-payments" className="text-base font-semibold">
-                            Allow Post-Game Payments
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Permit the game to start before all players have paid. Debts will be tracked.
-                        </p>
-                    </div>
-                    <Switch
-                        id="allow-post-game-payments"
-                        checked={!!match.allowPostGamePayments}
-                        onCheckedChange={handleTogglePostGamePayments}
                     />
                 </div>
                  <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
@@ -1309,7 +1310,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-
-
-

@@ -1,11 +1,5 @@
 
 
-
-
-
-
-
-
 import type { LucideIcon } from "lucide-react";
 import type { FieldValue, Timestamp } from "firebase/firestore";
 
@@ -206,6 +200,7 @@ export interface Pitch {
   sport: PitchSport;
   basePrice: number;
   coords: { lat: number; lng: number };
+  allowPostGamePayments?: boolean;
 }
 
 export type ReservationStatus = "Pending" | "Confirmed" | "Scheduled" | "Canceled";
@@ -268,7 +263,6 @@ export interface Match {
     refereeId: string | null;
     managerRef: string | null;
     allowExternalPlayers?: boolean;
-    allowPostGamePayments?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
     finishTime?: Timestamp | null;
