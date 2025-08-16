@@ -479,10 +479,15 @@ export default function MyGamesPage() {
 
 
   const now = new Date();
+  
   const upcomingMatches = matches.filter(m => {
-    const isPlayerInGame = user ? (m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id)) : false;
-    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && isPlayerInGame;
+      const isManager = user?.id === m.managerRef;
+      const isPlayerInTeam = user ? (m.teamARef && Array.from(teams.values()).some(t => t.id === m.teamARef && t.playerIds.includes(user.id))) || (m.teamBRef && Array.from(teams.values()).some(t => t.id === m.teamBRef && t.playerIds.includes(user.id))) : false;
+      const isPlayerConfirmed = user ? (m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id)) : false;
+
+      return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isManager || isPlayerInTeam || isPlayerConfirmed);
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
 
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -745,6 +750,7 @@ export default function MyGamesPage() {
 }
 
     
+
 
 
 
