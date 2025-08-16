@@ -634,11 +634,13 @@ function PlayerRoster({
     isManager, 
     onUpdate,
     onEventAdded,
+    reservation,
 }: { 
     match: Match; 
     isManager: boolean;
     onUpdate: (data: Partial<Match>) => void;
     onEventAdded: (event: MatchEvent) => void;
+    reservation: Reservation | null;
 }) {
     const [players, setPlayers] = React.useState<RosterPlayer[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -706,7 +708,13 @@ function PlayerRoster({
                 if(isConfirmedA) team = 'A';
                 if(isConfirmedB) team = 'B';
                 
-                const paymentStatus = (isConfirmedA || isConfirmedB) ? paymentsMap.get(user.id) || 'Pending' : undefined;
+                let paymentStatus: PaymentStatus | undefined;
+                if (reservation?.paymentStatus === 'Paid') {
+                    paymentStatus = 'Paid';
+                } else if (isConfirmedA || isConfirmedB) {
+                    paymentStatus = paymentsMap.get(user.id);
+                }
+
 
                 return { ...user, status, team, paymentStatus };
             }).sort((a, b) => a.name.localeCompare(b.name));
@@ -716,7 +724,7 @@ function PlayerRoster({
         };
 
         fetchPlayersAndPayments();
-    }, [match]);
+    }, [match, reservation]);
 
      const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
         setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
@@ -1345,7 +1353,7 @@ export default function GameDetailsPage() {
             ) : (
                 <>
                     {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
-                    <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} />
+                    <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} reservation={reservation}/>
                     {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
                     {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
                 </>
