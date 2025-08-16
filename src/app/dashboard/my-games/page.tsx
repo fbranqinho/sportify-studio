@@ -147,33 +147,29 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             return;
         }
 
-        const batch = writeBatch(db);
         const paymentRef = doc(db, "payments", payment.id);
         
-        batch.update(paymentRef, { status: "Paid" });
-        
         try {
-            // First, commit the payment status update.
-            await batch.commit();
+            await updateDoc(paymentRef, { status: "Paid" });
 
-            // Then, check if the full amount has been paid.
             const reservationRef = doc(db, "reservations", payment.reservationRef);
+            const reservationDoc = await getDoc(reservationRef);
+            if (!reservationDoc.exists()) return;
+
+            const reservation = reservationDoc.data() as Reservation;
+
+            // After payment, check if the reservation is now fully paid
             const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef));
             const paymentsSnap = await getDocs(paymentsQuery);
             
-            const allPayments = paymentsSnap.docs.map(d => d.data() as Payment);
-            const totalPaid = allPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
-            
-            const reservationDoc = await getDoc(reservationRef);
-            if (!reservationDoc.exists()) return;
-            const reservation = reservationDoc.data() as Reservation;
+            const totalPaid = paymentsSnap.docs
+                .filter(doc => doc.data().status === 'Paid')
+                .reduce((sum, doc) => sum + doc.data().amount, 0);
 
-            // If total paid meets or exceeds reservation total, mark reservation as Paid
             if (totalPaid >= reservation.totalAmount) {
                 const finalBatch = writeBatch(db);
                 finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
-                // Update the associated match status as well
                 const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
                 const matchSnap = await getDocs(matchQuery);
                 if(!matchSnap.empty) {
@@ -198,7 +194,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
                     description: "The reservation is now confirmed and scheduled.",
                 });
             } else {
-                 const remainingToPay = allPayments.filter(p => p.status === 'Pending').length;
+                 const remainingToPay = paymentsSnap.docs.filter(p => p.data().status === 'Pending').length;
                  toast({
                     title: "Payment Successful!",
                     description: `Your payment has been registered. Waiting for ${remainingToPay > 0 ? `${remainingToPay} other players` : 'other payments'}.`,
@@ -454,46 +450,13 @@ export default function MyGamesPage() {
   const upcomingMatches = matches.filter(m => {
     const isFuture = new Date(m.date) >= now;
     const isNotFinishedOrCancelled = m.status !== 'Finished' && m.status !== 'Cancelled';
-    
-    // Any game that is not finished/cancelled and is in the future is potentially an upcoming game
-    const isPotentiallyUpcoming = isFuture && isNotFinishedOrCancelled;
-    if (!isPotentiallyUpcoming) return false;
-
-    // For managers: games their team is in, or has been invited to.
-    const isManagerInvolved = user?.role === 'MANAGER' && (
-        teams.get(m.teamARef || '')?.managerId === user?.id ||
-        teams.get(m.teamBRef || '')?.managerId === user?.id ||
-        teamMatchInvitations.has(m.id)
-    );
-
-    // For players: games they are confirmed in, or have an invitation for, or their team is in.
-    const isPlayerInvolved = user?.role === 'PLAYER' && (
-        m.teamAPlayers?.includes(user.id) ||
-        m.teamBPlayers?.includes(user.id) ||
-        invitations.has(m.id) ||
-        (m.teamARef && userTeamIds.includes(m.teamARef)) ||
-        (m.teamBRef && userTeamIds.includes(m.teamBRef))
-    );
-
-    return isManagerInvolved || isPlayerInvolved;
-
+    return isFuture && isNotFinishedOrCancelled;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
   const pastMatches = matches.filter(m => {
        const isFinishedOrCancelled = m.status === 'Finished' || m.status === 'Cancelled';
-       
-       const isManagerInvolved = user?.role === 'MANAGER' && (
-            teams.get(m.teamARef || '')?.managerId === user?.id ||
-            teams.get(m.teamBRef || '')?.managerId === user?.id
-       );
-
-       const isPlayerInvolved = user?.role === 'PLAYER' && (
-           m.teamAPlayers?.includes(user.id) ||
-           m.teamBPlayers?.includes(user.id)
-       );
-       
-       return isFinishedOrCancelled && (isManagerInvolved || isPlayerInvolved);
+       return isFinishedOrCancelled;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const MatchCard = ({ match }: { match: Match }) => {
