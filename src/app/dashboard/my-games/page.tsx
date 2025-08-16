@@ -32,24 +32,33 @@ import {
 const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = React.useState(false);
-    const [team, setTeam] = React.useState<Team | null>(null);
+    const [associatedMatch, setAssociatedMatch] = React.useState<Match | null>(null);
 
     React.useEffect(() => {
-        const fetchTeam = async () => {
-            if (reservation.teamRef) {
-                const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
-                if (teamDoc.exists()) {
-                    setTeam({ id: teamDoc.id, ...teamDoc.data() } as Team);
+        const fetchMatch = async () => {
+            if (reservation.id) {
+                const matchQuery = query(collection(db, "matches"), where("reservationRef", "==", reservation.id));
+                const matchSnap = await getDocs(matchQuery);
+                if (!matchSnap.empty) {
+                    const matchDoc = matchSnap.docs[0];
+                    setAssociatedMatch({ id: matchDoc.id, ...matchDoc.data() } as Match);
                 }
             }
         };
-        fetchTeam();
-    }, [reservation.teamRef]);
+        fetchMatch();
+    }, [reservation.id]);
 
     const handleSplitPayment = async () => {
         setIsProcessing(true);
-        if (!team || !team.playerIds || team.playerIds.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Team has no players to split the payment with.' });
+        if (!associatedMatch) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Associated match not found.' });
+            setIsProcessing(false);
+            return;
+        }
+
+        const confirmedPlayers = [...(associatedMatch.teamAPlayers || []), ...(associatedMatch.teamBPlayers || [])];
+        if (confirmedPlayers.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No confirmed players to split the payment with.' });
             setIsProcessing(false);
             return;
         }
@@ -58,12 +67,11 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
         const reservationRef = doc(db, "reservations", reservation.id);
     
         try {
-            const playerIds = team.playerIds;
-            const amountPerPlayer = reservation.totalAmount / playerIds.length;
+            const amountPerPlayer = reservation.totalAmount / confirmedPlayers.length;
 
             batch.update(reservationRef, { paymentStatus: "Split" });
     
-            for (const playerId of playerIds) {
+            for (const playerId of confirmedPlayers) {
                 const newPaymentRef = doc(collection(db, "payments"));
                 batch.set(newPaymentRef, {
                     type: "booking_split",
@@ -71,17 +79,17 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
                     status: "Pending",
                     date: new Date().toISOString(),
                     reservationRef: reservation.id,
-                    teamRef: team.id,
+                    teamRef: reservation.teamRef,
                     playerRef: playerId,
                     ownerRef: reservation.ownerProfileId,
                     pitchName: reservation.pitchName,
-                    teamName: team.name,
+                    teamName: reservation.actorName,
                 });
 
                 const notificationRef = doc(collection(db, 'notifications'));
                 batch.set(notificationRef, {
                     userId: playerId,
-                    message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game with ${team.name} is due.`,
+                    message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game at ${reservation.pitchName} is due.`,
                     link: '/dashboard/payments',
                     read: false,
                     createdAt: serverTimestamp() as any,
@@ -90,7 +98,7 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
 
             await batch.commit();
 
-            toast({ title: "Payment Split!", description: `Each player has been notified to pay their share.` });
+            toast({ title: "Payment Split!", description: `Each of the ${confirmedPlayers.length} confirmed players has been notified.` });
             onPaymentProcessed();
     
         } catch (error: any) {
@@ -101,14 +109,15 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
         }
     }
     
-    if (!team) return <Skeleton className="h-10 w-full" />;
+    if (!associatedMatch) return <Skeleton className="h-10 w-full" />;
 
-    const amountPerPlayer = team.playerIds.length > 0 ? (reservation.totalAmount / team.playerIds.length).toFixed(2) : '0.00';
+    const confirmedPlayersCount = (associatedMatch.teamAPlayers?.length || 0) + (associatedMatch.teamBPlayers?.length || 0);
+    const amountPerPlayer = confirmedPlayersCount > 0 ? (reservation.totalAmount / confirmedPlayersCount).toFixed(2) : '0.00';
 
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button className="w-full" disabled={isProcessing || team.playerIds.length === 0}>
+                <Button className="w-full" disabled={isProcessing || confirmedPlayersCount === 0}>
                     <CreditCard className="mr-2"/> 
                     {isProcessing ? "Processing..." : "Split Payment"}
                 </Button>
@@ -117,7 +126,7 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
                 <AlertDialogHeader>
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This action will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{team.playerIds.length}</strong> players on your team. This cannot be undone.
+                        This action will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{confirmedPlayersCount}</strong> confirmed players for this game. This cannot be undone.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -420,8 +429,15 @@ export default function MyGamesPage() {
 
   const now = new Date();
   
-  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingMatches = matches.filter(m => {
+    const isPlayerInvolved = m.teamAPlayers?.includes(user?.id || '') || m.teamBPlayers?.includes(user?.id || '');
+    const isManagerOfTeam = user?.role === 'MANAGER' && (m.teamARef && teams.get(m.teamARef)?.managerId === user.id);
+    const hasPendingPlayerInvite = user?.role === 'PLAYER' && invitations.has(m.id);
+    const hasPendingTeamInvite = user?.role === 'MANAGER' && teamMatchInvitations.has(m.id);
+
+    return new Date(m.date) >= now && (isPlayerInvolved || isManagerOfTeam || hasPendingPlayerInvite || hasPendingTeamInvite)
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
 
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
