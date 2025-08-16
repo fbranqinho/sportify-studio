@@ -7,14 +7,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation, Payment } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation, Payment, PaymentStatus } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock, Star } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock, Star, CreditCard, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -620,6 +620,7 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
 interface RosterPlayer extends User {
     status: InvitationStatus | 'confirmed';
     team: 'A' | 'B' | null;
+    paymentStatus?: PaymentStatus;
 }
 
 interface EventState {
@@ -655,7 +656,7 @@ function PlayerRoster({
 
 
     React.useEffect(() => {
-        const fetchPlayersAndInvitations = async () => {
+        const fetchPlayersAndPayments = async () => {
             setLoading(true);
             const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", match.id));
             const invSnapshot = await getDocs(invQuery);
@@ -678,6 +679,18 @@ function PlayerRoster({
             const usersSnapshot = await getDocs(usersQuery);
             const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
 
+            let paymentsMap = new Map<string, PaymentStatus>();
+            if (match.reservationRef) {
+                const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', match.reservationRef));
+                const paymentsSnap = await getDocs(paymentsQuery);
+                paymentsSnap.forEach(doc => {
+                    const payment = doc.data() as Payment;
+                    if(payment.playerRef) {
+                        paymentsMap.set(payment.playerRef, payment.status);
+                    }
+                });
+            }
+
             const rosterPlayers = usersData.map(user => {
                 const invitation = invitationMap.get(user.id);
                 const isConfirmedA = match.teamAPlayers?.includes(user.id);
@@ -692,15 +705,17 @@ function PlayerRoster({
                 let team: 'A' | 'B' | null = null;
                 if(isConfirmedA) team = 'A';
                 if(isConfirmedB) team = 'B';
+                
+                const paymentStatus = (isConfirmedA || isConfirmedB) ? paymentsMap.get(user.id) || 'Pending' : undefined;
 
-                return { ...user, status, team };
+                return { ...user, status, team, paymentStatus };
             }).sort((a, b) => a.name.localeCompare(b.name));
 
             setPlayers(rosterPlayers);
             setLoading(false);
         };
 
-        fetchPlayersAndInvitations();
+        fetchPlayersAndPayments();
     }, [match]);
 
      const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
@@ -783,6 +798,23 @@ function PlayerRoster({
         }
     };
 
+    const handleRemindPlayer = async (player: RosterPlayer) => {
+        if (!player.id) return;
+        try {
+            const notification: Omit<Notification, 'id'> = {
+                userId: player.id,
+                message: `Reminder: You have a pending payment for the game on ${format(new Date(match.date), "MMM d")}.`,
+                link: '/dashboard/payments',
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            await addDoc(collection(db, "notifications"), notification);
+            toast({ title: "Reminder Sent!", description: `A notification has been sent to ${player.name}.` });
+        } catch (error) {
+            console.error("Error sending reminder:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not send reminder." });
+        }
+    };
 
     const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => {
         const isSentOff = sentOffPlayers.includes(player.id);
@@ -823,6 +855,7 @@ function PlayerRoster({
     }
 
     const showTeamAssignment = isPracticeMatch && isManager && !isLive;
+    const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'PendingOpponent' || match.status === 'InProgress');
     const showLiveActions = isManager && isLive;
 
     return (
@@ -837,9 +870,10 @@ function PlayerRoster({
                     <TableHeader>
                         <TableRow>
                             <TableHead>Player</TableHead>
-                            <TableHead className="w-[150px]">Status</TableHead>
-                            <TableHead className="w-[180px]">Team</TableHead>
-                            {(showTeamAssignment || showLiveActions) && <TableHead className="text-right w-[150px]">Actions</TableHead>}
+                            <TableHead>Status</TableHead>
+                            {showTeamAssignment && <TableHead>Team</TableHead>}
+                            {showPaymentStatus && <TableHead>Payment</TableHead>}
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -852,37 +886,46 @@ function PlayerRoster({
                                         <span className="capitalize">{player.status}</span>
                                     </Badge>
                                 </TableCell>
-                                <TableCell>
-                                    { (player.team && !showTeamAssignment) ? `Vests ${player.team}` :
-                                      !showTeamAssignment ? '-' :
-                                      player.status !== 'confirmed' ? <span className="text-sm text-muted-foreground">-</span> :
-                                     (
-                                        <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Unassigned" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                <SelectItem value="A">Vests A</SelectItem>
-                                                <SelectItem value="B">Vests B</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                     )
-                                    }
-                                </TableCell>
-                                {(showTeamAssignment || showLiveActions) && (
-                                     <TableCell className="text-right">
-                                        {showLiveActions ? (
-                                            player.team && player.status === 'confirmed' ? (
-                                                <PlayerActions player={player} teamId={player.team} />
-                                            ) : (
-                                                <span className="text-sm text-muted-foreground">-</span>
-                                            )
-                                        ) : showTeamAssignment ? (
+                                {showTeamAssignment &&
+                                    <TableCell>
+                                        {player.status !== 'confirmed' ? <span className="text-sm text-muted-foreground">-</span> :
+                                        (
+                                            <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Unassigned" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    <SelectItem value="A">Vests A</SelectItem>
+                                                    <SelectItem value="B">Vests B</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )
+                                        }
+                                    </TableCell>
+                                }
+                                {showPaymentStatus && (
+                                    <TableCell>
+                                        {player.paymentStatus === 'Paid' ? (
+                                            <Badge variant="default" className="bg-green-600 gap-1.5"><CheckCircle className="h-3 w-3"/>Paid</Badge>
+                                        ) : player.paymentStatus === 'Pending' ? (
+                                            <Badge variant="destructive" className="gap-1.5"><Clock className="h-3 w-3"/>Pending</Badge>
+                                        ) : (
                                             <span className="text-sm text-muted-foreground">-</span>
-                                        ): null}
+                                        )}
                                     </TableCell>
                                 )}
+                                <TableCell className="text-right">
+                                    {showLiveActions && player.team && player.status === 'confirmed' ? (
+                                        <PlayerActions player={player} teamId={player.team} />
+                                    ) : showPaymentStatus && player.paymentStatus === 'Pending' ? (
+                                        <Button size="sm" variant="outline" onClick={() => handleRemindPlayer(player)}>
+                                            <Send className="mr-2 h-3 w-3" /> Remind
+                                        </Button>
+                                    ) : (
+                                        <span className="text-sm text-muted-foreground">-</span>
+                                    )}
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
