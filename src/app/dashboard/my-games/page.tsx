@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -271,19 +272,28 @@ export default function MyGamesPage() {
                 const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
                 unsubscribes.push(onSnapshot(invQuery, async (snapshot) => {
                     const invs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
-                    setInvitations(invs);
+                    
                     if (invs.length > 0) {
-                        const teamIds = invs.map(inv => inv.teamId);
-                        const teamsMap = await fetchDetails('teams', teamIds);
-                        setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-                        
                         const matchIds = invs.map(inv => inv.matchId);
                         const matchesMap = await fetchDetails('matches', matchIds);
-                        setMatches(prev => {
-                            const combined = new Map(prev.map(m => [m.id, m]));
-                            matchesMap.forEach((match, id) => combined.set(id, match));
-                            return Array.from(combined.values());
-                        });
+                        
+                        // Filter out invitations for which the match doesn't exist
+                        const validInvs = invs.filter(inv => matchesMap.has(inv.matchId));
+                        setInvitations(validInvs);
+                        
+                        if (validInvs.length > 0) {
+                            const teamIds = validInvs.map(inv => inv.teamId);
+                            const teamsMap = await fetchDetails('teams', teamIds);
+                            setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                            
+                            setMatches(prev => {
+                                const combined = new Map(prev.map(m => [m.id, m]));
+                                matchesMap.forEach((match, id) => combined.set(id, match));
+                                return Array.from(combined.values());
+                            });
+                        }
+                    } else {
+                        setInvitations([]);
                     }
                 }));
 
