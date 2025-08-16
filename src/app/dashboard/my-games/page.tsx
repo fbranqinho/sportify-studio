@@ -16,37 +16,53 @@ import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
 import { getPlayerCapacity } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 
 const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = React.useState(false);
+    const [team, setTeam] = React.useState<Team | null>(null);
+
+    React.useEffect(() => {
+        const fetchTeam = async () => {
+            if (reservation.teamRef) {
+                const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
+                if (teamDoc.exists()) {
+                    setTeam({ id: teamDoc.id, ...teamDoc.data() } as Team);
+                }
+            }
+        };
+        fetchTeam();
+    }, [reservation.teamRef]);
 
     const handleSplitPayment = async () => {
         setIsProcessing(true);
-        if (!reservation.teamRef) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
+        if (!team || !team.playerIds || team.playerIds.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Team has no players to split the payment with.' });
             setIsProcessing(false);
             return;
         }
-    
+
         const batch = writeBatch(db);
         const reservationRef = doc(db, "reservations", reservation.id);
     
         try {
-            // 1. Get Team data to find all players
-            const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
-            if (!teamDoc.exists() || !teamDoc.data().playerIds?.length) {
-                throw new Error("Team not found or has no players to split the payment with.");
-            }
-            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
             const playerIds = team.playerIds;
             const amountPerPlayer = reservation.totalAmount / playerIds.length;
 
-            // 2. Update the reservation to 'Split'
             batch.update(reservationRef, { paymentStatus: "Split" });
     
-            // 3. Create a pending payment for each player in the team
             for (const playerId of playerIds) {
                 const newPaymentRef = doc(collection(db, "payments"));
                 batch.set(newPaymentRef, {
@@ -57,12 +73,11 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
                     reservationRef: reservation.id,
                     teamRef: team.id,
                     playerRef: playerId,
-                    ownerRef: reservation.ownerProfileId, // Direct payment to owner
+                    ownerRef: reservation.ownerProfileId,
                     pitchName: reservation.pitchName,
                     teamName: team.name,
                 });
 
-                // 4. Create a notification for each player
                 const notificationRef = doc(collection(db, 'notifications'));
                 batch.set(notificationRef, {
                     userId: playerId,
@@ -85,12 +100,32 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
             setIsProcessing(false);
         }
     }
+    
+    if (!team) return <Skeleton className="h-10 w-full" />;
+
+    const amountPerPlayer = team.playerIds.length > 0 ? (reservation.totalAmount / team.playerIds.length).toFixed(2) : '0.00';
 
     return (
-        <Button className="w-full" onClick={handleSplitPayment} disabled={isProcessing}>
-            <CreditCard className="mr-2"/> 
-            {isProcessing ? "Processing..." : "Split Cost Between Players"}
-        </Button>
+        <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button className="w-full" disabled={isProcessing || team.playerIds.length === 0}>
+                    <CreditCard className="mr-2"/> 
+                    {isProcessing ? "Processing..." : "Split Payment"}
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{team.playerIds.length}</strong> players on your team. This cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleSplitPayment}>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     )
 }
 
