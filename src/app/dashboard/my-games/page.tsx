@@ -349,6 +349,39 @@ export default function MyGamesPage() {
         if (reservationIdsToFetch.size > 0) {
             const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
             setReservations(reservationsMap);
+
+            // --- Automatic Consistency Check ---
+            const consistencyBatch = writeBatch(db);
+            let hasUpdates = false;
+
+            for (const res of reservationsMap.values()) {
+                if (res.paymentStatus === 'Split') {
+                     const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", res.id));
+                     const paymentsSnap = await getDocs(paymentsQuery);
+                     const totalPaid = paymentsSnap.docs
+                        .filter(doc => doc.data().status === 'Paid')
+                        .reduce((sum, doc) => sum + doc.data().amount, 0);
+                    
+                    if (totalPaid >= res.totalAmount) {
+                        const resRef = doc(db, "reservations", res.id);
+                        consistencyBatch.update(resRef, { paymentStatus: "Paid", status: "Scheduled" });
+                        
+                        const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', res.id));
+                        const matchSnap = await getDocs(matchQuery);
+                        if (!matchSnap.empty) {
+                            const matchRef = matchSnap.docs[0].ref;
+                            consistencyBatch.update(matchRef, { status: 'Scheduled' });
+                        }
+                        hasUpdates = true;
+                    }
+                }
+            }
+
+            if (hasUpdates) {
+                await consistencyBatch.commit();
+                fetchGameDetails(); // Re-fetch data after correction
+                return; // Exit to avoid race conditions with state updates
+            }
             
             const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
             if(splitReservationIds.length > 0) {
@@ -405,8 +438,10 @@ export default function MyGamesPage() {
                 const matchData = matchDoc.data();
                 if (matchData.reservationRef) {
                     const reservationDoc = await getDoc(doc(db, "reservations", matchData.reservationRef));
-                    if (reservationDoc.exists() && reservationDoc.data().paymentStatus !== 'Paid') {
-                        // Player accepted, but do not create a payment if the reservation is already paid for.
+                     if (reservationDoc.exists() && reservationDoc.data().paymentStatus === 'Paid') {
+                        // If reservation is already paid, do not create a new payment
+                    } else if (reservationDoc.exists() && reservationDoc.data().paymentStatus === 'Split') {
+                        // Logic to create a new payment for this user might be needed here, if applicable
                     }
                 }
             }
@@ -456,7 +491,8 @@ export default function MyGamesPage() {
 
   const pastMatches = matches.filter(m => {
        const isFinishedOrCancelled = m.status === 'Finished' || m.status === 'Cancelled';
-       return isFinishedOrCancelled;
+       const isPast = new Date(m.date) < now && !isFinishedOrCancelled;
+       return isFinishedOrCancelled || isPast;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const MatchCard = ({ match }: { match: Match }) => {
