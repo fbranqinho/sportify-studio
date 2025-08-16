@@ -298,94 +298,90 @@ export default function MyGamesPage() {
                     setPayments(playerPayments);
                 }));
             }
+            
+            if (userTeamIds.length > 0) {
+                const teamsMap = await fetchDetails('teams', userTeamIds);
+                setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
 
-            // Only run team-based queries if the user is in at least one team
-            if (userTeamIds.length === 0) {
-                setLoading(false);
-                return;
-            }
+                // --- Manager-specific listeners ---
+                if (user.role === 'MANAGER') {
+                    const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
+                    unsubscribes.push(onSnapshot(teamInvQuery, async (snapshot) => {
+                        const teamInvs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
+                        setTeamMatchInvitations(teamInvs);
+                        if (teamInvs.length > 0) {
+                            const hostTeamIds = teamInvs.map(inv => inv.teamARef).filter((id): id is string => !!id);
+                            const teamsMap = await fetchDetails('teams', hostTeamIds);
+                            setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
+                        }
+                    }));
+                }
+                
+                // --- Common match listeners ---
+                const processMatchesSnapshot = async (snapshot: DocumentData) => {
+                    const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data()} as Match));
+                    setMatches(prev => {
+                        const combined = new Map(prev.map(m => [m.id, m]));
+                        newMatches.forEach(m => combined.set(m.id, m));
+                        return Array.from(combined.values());
+                    });
 
-            const teamsMap = await fetchDetails('teams', userTeamIds);
-            setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-
-            // --- Manager-specific listeners ---
-            if (user.role === 'MANAGER') {
-                const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
-                unsubscribes.push(onSnapshot(teamInvQuery, async (snapshot) => {
-                    const teamInvs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
-                    setTeamMatchInvitations(teamInvs);
-                    if (teamInvs.length > 0) {
-                        const hostTeamIds = teamInvs.map(inv => inv.teamARef).filter((id): id is string => !!id);
-                        const teamsMap = await fetchDetails('teams', hostTeamIds);
+                    // Fetch related data for all matches
+                    const allMatches = Array.from(new Map([...matches, ...newMatches].map(m => [m.id, m])).values());
+                    const teamIdsToFetch = new Set<string>();
+                    const pitchIdsToFetch = new Set<string>();
+                    const reservationIdsToFetch = new Set<string>();
+                    
+                    allMatches.forEach((match: Match) => {
+                        if (match.teamARef) teamIdsToFetch.add(match.teamARef);
+                        if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
+                        if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
+                        if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
+                    });
+                        
+                    if (teamIdsToFetch.size > 0) {
+                        const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
                         setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
                     }
-                }));
-            }
-            
-            // --- Common match listeners ---
-            const processMatchesSnapshot = async (snapshot: DocumentData) => {
-                const newMatches = snapshot.docs.map((doc: DocumentData) => ({ id: doc.id, ...doc.data()} as Match));
-                setMatches(prev => {
-                    const combined = new Map(prev.map(m => [m.id, m]));
-                    newMatches.forEach(m => combined.set(m.id, m));
-                    return Array.from(combined.values());
-                });
 
-                // Fetch related data for all matches
-                const allMatches = Array.from(new Map([...matches, ...newMatches].map(m => [m.id, m])).values());
-                const teamIdsToFetch = new Set<string>();
-                const pitchIdsToFetch = new Set<string>();
-                const reservationIdsToFetch = new Set<string>();
-                
-                allMatches.forEach((match: Match) => {
-                    if (match.teamARef) teamIdsToFetch.add(match.teamARef);
-                    if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
-                    if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
-                    if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
-                });
-                    
-                if (teamIdsToFetch.size > 0) {
-                    const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
-                    setTeams(prev => new Map([...Array.from(prev.entries()), ...Array.from(teamsMap.entries())]));
-                }
-
-                if (reservationIdsToFetch.size > 0) {
-                    const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
-                    setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
-                    
-                    const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
-                    if(splitReservationIds.length > 0) {
-                        const paymentCounts = new Map<string, { paid: number, total: number }>();
-                        for (const resId of splitReservationIds) {
-                            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId));
-                            const paymentsSnap = await getDocs(paymentsQuery);
-                            const total = paymentsSnap.size;
-                            const paid = paymentsSnap.docs.filter(d => d.data().status === 'Paid').length;
-                            paymentCounts.set(resId, { paid, total });
+                    if (reservationIdsToFetch.size > 0) {
+                        const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
+                        setReservations(prev => new Map([...Array.from(prev.entries()), ...Array.from(reservationsMap.entries())]));
+                        
+                        const splitReservationIds = Array.from(reservationsMap.values()).filter(r => r.paymentStatus === 'Split').map(r => r.id);
+                        if(splitReservationIds.length > 0) {
+                            const paymentCounts = new Map<string, { paid: number, total: number }>();
+                            for (const resId of splitReservationIds) {
+                                const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId));
+                                const paymentsSnap = await getDocs(paymentsQuery);
+                                const total = paymentsSnap.size;
+                                const paid = paymentsSnap.docs.filter(d => d.data().status === 'Paid').length;
+                                paymentCounts.set(resId, { paid, total });
+                            }
+                            setSplitPaymentCounts(paymentCounts);
                         }
-                        setSplitPaymentCounts(paymentCounts);
                     }
-                }
 
-                    if (pitchIdsToFetch.size > 0) {
-                    const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
-                    setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
+                        if (pitchIdsToFetch.size > 0) {
+                        const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
+                        setPitches(prev => new Map([...Array.from(prev.entries()), ...Array.from(pitchesMap.entries())]));
 
-                    const ownerProfileIdsToFetch = new Set<string>();
-                    pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
+                        const ownerProfileIdsToFetch = new Set<string>();
+                        pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
 
-                    if(ownerProfileIdsToFetch.size > 0){
-                            const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
-                            setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
+                        if(ownerProfileIdsToFetch.size > 0){
+                                const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
+                                setOwners(prev => new Map([...Array.from(prev.entries()), ...Array.from(ownersMap.entries())]));
+                        }
                     }
-                }
-            };
+                };
 
-            const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
-            const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-                
-            unsubscribes.push(onSnapshot(q1, processMatchesSnapshot));
-            unsubscribes.push(onSnapshot(q2, processMatchesSnapshot));
+                const q1 = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+                const q2 = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
+                    
+                unsubscribes.push(onSnapshot(q1, processMatchesSnapshot));
+                unsubscribes.push(onSnapshot(q2, processMatchesSnapshot));
+            }
             
         } catch (error) {
             console.error("Error setting up listeners: ", error);
@@ -404,8 +400,6 @@ export default function MyGamesPage() {
   }, [user, toast]);
   
   const refreshData = async () => {
-    // This function can be simplified or expanded based on what needs refreshing
-    // For now, it re-fetches reservations and payments
     if (!user) return;
     if (user.role === 'PLAYER') {
         const playerPaymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
@@ -498,6 +492,9 @@ export default function MyGamesPage() {
         }
         
         await batch.commit();
+        if (accepted) {
+            refreshData(); // Re-fetch payments after accepting
+        }
         toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}`, description: `Your response to the game invitation has been saved.` });
      } catch (error: any) {
         console.error("Error responding to invitation:", error);
@@ -796,3 +793,4 @@ export default function MyGamesPage() {
 }
 
     
+
