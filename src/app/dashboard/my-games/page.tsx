@@ -176,8 +176,8 @@ export default function MyGamesPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const [matches, setMatches] = React.useState<Match[]>([]);
-  const [invitations, setInvitations] = React.useState<MatchInvitation[]>([]);
-  const [teamMatchInvitations, setTeamMatchInvitations] = React.useState<Match[]>([]);
+  const [invitations, setInvitations] = React.useState<Map<string, MatchInvitation>>(new Map());
+  const [teamMatchInvitations, setTeamMatchInvitations] = React.useState<Map<string, Match>>(new Map());
   const [teams, setTeams] = React.useState<Map<string, Team>>(new Map());
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
@@ -199,13 +199,7 @@ export default function MyGamesPage() {
 
       for (const chunk of chunks) {
           if (chunk.length === 0) continue;
-          let docsQuery;
-          // The owner ref on a pitch is the owner *profile* ID, not user ID.
-          if (collectionName === 'ownerProfiles') {
-              docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
-          } else {
-              docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
-          }
+          const docsQuery = query(collection(db, collectionName), where(documentId(), "in", chunk));
           const snapshot = await getDocs(docsQuery);
           snapshot.forEach(doc => newMap.set(doc.id, { id: doc.id, ...doc.data() }));
       }
@@ -221,6 +215,7 @@ export default function MyGamesPage() {
      setLoading(true);
      try {
         let userTeamIds: string[] = [];
+        let teamIdToNameMap = new Map<string, string>();
 
         // 1. Get User's teams
         if (user.role === 'PLAYER') {
@@ -230,57 +225,46 @@ export default function MyGamesPage() {
         } else if (user.role === 'MANAGER') {
             const managerTeamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
             const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
-            userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
+            managerTeamsSnapshot.forEach(doc => {
+                userTeamIds.push(doc.id);
+                teamIdToNameMap.set(doc.id, doc.data().name);
+            })
         }
         
-        // 2. Fetch all related matches
-        let allMatches: Match[] = [];
+        // 2. Fetch all matches the user might be involved in
+        let allMatchesMap = new Map<string, Match>();
+
         if (userTeamIds.length > 0) {
             const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
             const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-            const [matchesASnap, matchesBSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery)]);
-            const matchesMap = new Map<string, Match>();
-            matchesASnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            matchesBSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            allMatches = Array.from(matchesMap.values());
+            const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
+            const [matchesASnap, matchesBSnap, teamInvSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery), getDocs(teamInvQuery)]);
+            
+            matchesASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            matchesBSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            teamInvSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+             const teamInvites = new Map(teamInvSnap.docs.map(doc => [doc.id, {id: doc.id, ...doc.data()} as Match]));
+            setTeamMatchInvitations(teamInvites);
         }
-        
-        // 3. Fetch Invitations and related matches
+
         if (user.role === 'PLAYER') {
             const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
             const invSnapshot = await getDocs(invQuery);
             const invs = invSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
             const matchIdsFromInvs = invs.map(inv => inv.matchId).filter(id => id);
-            
+
             if (matchIdsFromInvs.length > 0) {
                 const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
-                const validInvs = invs.filter(inv => matchesFromInvsMap.has(inv.matchId));
-                setInvitations(validInvs);
-                
-                const combinedMatches = new Map(allMatches.map(m => [m.id, m]));
-                matchesFromInvsMap.forEach((match, id) => combinedMatches.set(id, match));
-                allMatches = Array.from(combinedMatches.values());
-            } else {
-                setInvitations([]);
+                matchesFromInvsMap.forEach((match, id) => allMatchesMap.set(id, match));
             }
-        }
-         
-        // 4. Fetch manager-specific team invitations
-        if (user.role === 'MANAGER' && userTeamIds.length > 0) {
-            const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
-            const teamInvSnapshot = await getDocs(teamInvQuery);
-            const teamInvs = teamInvSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as Match);
-            setTeamMatchInvitations(teamInvs);
-             if (teamInvs.length > 0) {
-                const combinedMatches = new Map(allMatches.map(m => [m.id, m]));
-                teamInvs.forEach(m => combinedMatches.set(m.id, m));
-                allMatches = Array.from(combinedMatches.values());
-            }
+             const validInvs = new Map(invs.filter(inv => allMatchesMap.has(inv.matchId)).map(inv => [inv.matchId, inv]));
+             setInvitations(validInvs);
         }
 
+        const allMatches = Array.from(allMatchesMap.values());
         setMatches(allMatches);
         
-        // 5. Fetch all secondary details (teams, pitches, etc.)
+        // 3. Fetch all secondary details (teams, pitches, etc.)
         const teamIdsToFetch = new Set<string>();
         const pitchIdsToFetch = new Set<string>();
         const reservationIdsToFetch = new Set<string>();
@@ -364,55 +348,10 @@ export default function MyGamesPage() {
         if (accepted) {
             const matchRef = doc(db, "matches", invitation.matchId);
             batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
-
-            const matchDoc = await getDoc(matchRef);
-            if (!matchDoc.exists()) throw new Error("Match document not found.");
-            const matchData = matchDoc.data() as Match;
-
-            if (matchData.reservationRef) {
-                const reservationDoc = await getDoc(doc(db, 'reservations', matchData.reservationRef));
-                if (reservationDoc.exists()) {
-                    const reservation = {id: reservationDoc.id, ...reservationDoc.data()} as Reservation;
-                    // For split payments, the payment doc might already be created by the manager. We just notify the player.
-                    // If not, we don't create it here. It's the manager's job to initiate payments.
-                    if (reservation.paymentStatus === 'Split') {
-                        const paymentQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id), where('playerRef', '==', user.id));
-                        const paymentSnap = await getDocs(paymentQuery);
-                        if (!paymentSnap.empty) {
-                             const payment = paymentSnap.docs[0].data() as Payment;
-                             const paymentNotificationRef = doc(collection(db, 'notifications'));
-                             batch.set(paymentNotificationRef, {
-                                 userId: user.id,
-                                 message: `You've accepted the game. Your share of ${payment.amount.toFixed(2)}€ is now due.`,
-                                 link: '/dashboard/payments',
-                                 read: false,
-                                 createdAt: serverTimestamp() as any,
-                             });
-                        }
-                    }
-                }
-            }
-        } else {
-             // If declined, find any wrongfully created pending payment and cancel it.
-            const matchDoc = await getDoc(doc(db, "matches", invitation.matchId));
-            if (matchDoc.exists()) {
-                const matchData = matchDoc.data() as Match;
-                if (matchData?.reservationRef) {
-                    const q = query(collection(db, "payments"), 
-                        where("playerRef", "==", user.id), 
-                        where("reservationRef", "==", matchData.reservationRef),
-                        where("status", "==", "Pending")
-                    );
-                    const paymentSnap = await getDocs(q);
-                    paymentSnap.forEach(paymentDoc => {
-                        batch.update(paymentDoc.ref, { status: "Cancelled" });
-                    });
-                }
-            }
         }
         
         await batch.commit();
-        toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}`, description: `Your response to the game invitation has been saved.` });
+        toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}` });
         fetchGameDetails(); // Re-fetch all data to update the UI correctly
      } catch (error: any) {
         console.error("Error responding to invitation:", error);
@@ -444,23 +383,16 @@ export default function MyGamesPage() {
       }
   }
 
-
   const now = new Date();
   
-  const upcomingMatches = matches.filter(m => {
-    const isPlayerInTeam = user ? (m.teamARef && teams.get(m.teamARef)?.playerIds.includes(user.id)) || (m.teamBRef && teams.get(m.teamBRef)?.playerIds.includes(user.id)) : false;
-    const isManagerOfTeam = user ? user.id === teams.get(m.teamARef)?.managerId || user.id === teams.get(m.teamBRef)?.managerId : false;
-    const isPlayerConfirmed = user ? m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id) : false;
-    
-    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isManagerOfTeam || isPlayerInTeam || isPlayerConfirmed);
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
+  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
-    const teamB = match.teamBRef ? teams.get(match.teamBRef) : null;
+    const teamB = match.teamBRef ? teams.get(match.teamBRef) : (match.invitedTeamId ? teams.get(match.invitedTeamId) : null);
     const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
     const owner = pitch ? owners.get(pitch.ownerRef) : null;
     const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
@@ -472,22 +404,62 @@ export default function MyGamesPage() {
     const isPlayer = user?.role === 'PLAYER';
     const playerIsConfirmed = isPlayer && user ? (match.teamAPlayers?.includes(user.id) || match.teamBPlayers?.includes(user.id)): false;
 
+    // Invitation checks
+    const playerInvitation = isPlayer ? invitations.get(match.id) : null;
+    const managerInvitation = isManager ? teamMatchInvitations.get(match.id) : null;
+
     const confirmedPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     
     const playerCapacity = getPlayerCapacity(pitch?.sport);
     const missingPlayers = playerCapacity > 0 ? playerCapacity - confirmedPlayers : 0;
     
     const getMatchTitle = () => {
-      if (teamA && !teamB) {
-        return `${teamA.name} (Practice)`;
-      }
-      if (teamA && teamB) {
-        return `${teamA.name} vs ${teamB.name}`;
-      }
+      const teamAName = teamA?.name || 'Team A';
+      if (teamA && !teamB && !match.invitedTeamId) return `${teamAName} (Practice)`;
+      if (teamA && teamB) return `${teamAName} vs ${teamB.name}`;
+      if (teamA && match.invitedTeamId && !teamB) return `${teamAName} vs (Invited Team)`;
       return 'Match Details';
     }
     
-    const buttonText = isFinished ? "View Report" : "Manage Game";
+    let buttonContent;
+    if (playerInvitation) {
+        buttonContent = (
+            <div className="w-full flex flex-col items-center gap-2">
+                <p className="text-sm font-semibold text-center">You're invited to this game.</p>
+                <div className="flex gap-2 w-full">
+                    <Button size="sm" className="flex-1" onClick={() => handlePlayerInvitationResponse(playerInvitation, true)}>
+                       <Check className="mr-2 h-4 w-4" /> Accept
+                    </Button>
+                    <Button size="sm" variant="destructive" className="flex-1" onClick={() => handlePlayerInvitationResponse(playerInvitation, false)}>
+                       <X className="mr-2 h-4 w-4" /> Decline
+                    </Button>
+                </div>
+            </div>
+        );
+    } else if (managerInvitation) {
+        buttonContent = (
+             <div className="w-full flex flex-col items-center gap-2">
+                <p className="text-sm font-semibold text-center">Your team is invited to this match.</p>
+                <div className="flex gap-2 w-full">
+                    <Button size="sm" className="flex-1" onClick={() => handleTeamInvitationResponse(managerInvitation, true)}>
+                       <Check className="mr-2 h-4 w-4" /> Accept
+                    </Button>
+                    <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleTeamInvitationResponse(managerInvitation, false)}>
+                       <X className="mr-2 h-4 w-4" /> Decline
+                    </Button>
+                </div>
+            </div>
+        );
+    } else {
+        buttonContent = (
+            <Button variant="outline" className="w-full" asChild>
+                <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
+                    <span>{isFinished ? "View Report" : "Manage Game"}</span>
+                    <ArrowRight className="h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
 
     return (
         <Card>
@@ -549,83 +521,11 @@ export default function MyGamesPage() {
                  )}
             </CardContent>
              <CardFooter>
-                <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
-                        <span>{buttonText}</span>
-                        <ArrowRight className="h-4 w-4" />
-                    </Link>
-                </Button>
+                {buttonContent}
             </CardFooter>
         </Card>
     )
   }
-
-  const PlayerInvitationCard = ({ invitation }: { invitation: MatchInvitation }) => {
-      const team = teams.get(invitation.teamId);
-      const match = matches.find(m => m.id === invitation.matchId);
-
-      if (!team || !match) return <Skeleton className="h-52" />;
-
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Game Invitation: {team.name}</CardTitle>
-            <CardDescription>
-              Invited {invitation.invitedAt ? formatDistanceToNow(new Date((invitation.invitedAt as Timestamp).seconds * 1000), { addSuffix: true }) : 'recently'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-             <p className="text-sm">You have been invited to play in an upcoming game.</p>
-             <div className="text-sm font-semibold flex items-center gap-2 mt-2">
-                <Calendar className="h-4 w-4"/>
-                {format(new Date(match.date), "PPP 'at' HH:mm")}
-             </div>
-          </CardContent>
-           <CardFooter className="gap-2">
-              <Button size="sm" onClick={() => handlePlayerInvitationResponse(invitation, true)}>
-                 <Check className="mr-2 h-4 w-4" /> Accept
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => handlePlayerInvitationResponse(invitation, false)}>
-                 <X className="mr-2 h-4 w-4" /> Decline
-              </Button>
-            </CardFooter>
-        </Card>
-      )
-  }
-
-    const TeamMatchInvitationCard = ({ match }: { match: Match }) => {
-      const invitingTeam = match.teamARef ? teams.get(match.teamARef) : null;
-      const invitedTeam = match.invitedTeamId ? teams.get(match.invitedTeamId) : null;
-      
-      if (!invitingTeam || !invitedTeam) return <Skeleton className="h-56" />;
-
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Match Invitation</CardTitle>
-            <CardDescription>
-              From team: {invitingTeam.name}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>Your team, <b>{invitedTeam.name}</b>, has been invited to a match.</p>
-            <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> 
-                <span>{format(new Date(match.date), "PPP 'at' HH:mm")}</span>
-            </div>
-          </CardContent>
-           <CardFooter className="gap-2">
-              <Button size="sm" onClick={() => handleTeamInvitationResponse(match, true)}>
-                 <Check className="mr-2 h-4 w-4" /> Accept
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => handleTeamInvitationResponse(match, false)}>
-                 <X className="mr-2 h-4 w-4" /> Decline
-              </Button>
-            </CardFooter>
-        </Card>
-      )
-  }
-
 
   const MatchList = ({ matches }: { matches: Match[] }) => (
      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
@@ -673,26 +573,14 @@ export default function MyGamesPage() {
           View your upcoming and past games.
         </p>
       </div>
-      
-       {/* Invitations Section (for players and managers) */}
-       {(invitations.length > 0 || teamMatchInvitations.length > 0) && (
-        <div className="space-y-4">
-            <h2 className="text-2xl font-bold font-headline text-primary">Game Invitations ({invitations.length + teamMatchInvitations.length})</h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {user?.role === 'PLAYER' && invitations.map(inv => <PlayerInvitationCard key={inv.id} invitation={inv} />)}
-                {user?.role === 'MANAGER' && teamMatchInvitations.map(match => <TeamMatchInvitationCard key={match.id} match={match} />)}
-            </div>
-        </div>
-       )}
-
 
       {/* Upcoming Games Section */}
-      <div className="border-t pt-8 space-y-4">
+      <div className="space-y-4">
         <h2 className="text-2xl font-bold font-headline">Upcoming Games ({upcomingMatches.length})</h2>
         {upcomingMatches.length > 0 ? (
             <MatchList matches={upcomingMatches} />
         ) : (
-            <EmptyState icon={Gamepad2} title="No Upcoming Games" description="You don't have any games scheduled for the future." />
+            <EmptyState icon={Gamepad2} title="No Upcoming Games" description="You don't have any games scheduled or any pending invitations." />
         )}
       </div>
 
@@ -715,11 +603,3 @@ export default function MyGamesPage() {
     </div>
   );
 }
-
-    
-
-
-
-
-
-
