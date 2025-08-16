@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -620,7 +619,7 @@ function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () =>
 interface RosterPlayer extends User {
     status: InvitationStatus | 'confirmed';
     team: 'A' | 'B' | null;
-    paymentStatus?: PaymentStatus;
+    payment?: Payment;
 }
 
 interface EventState {
@@ -681,14 +680,14 @@ function PlayerRoster({
             const usersSnapshot = await getDocs(usersQuery);
             const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
 
-            let paymentsMap = new Map<string, PaymentStatus>();
+            let paymentsMap = new Map<string, Payment>();
             if (match.reservationRef) {
                 const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', match.reservationRef));
                 const paymentsSnap = await getDocs(paymentsQuery);
                 paymentsSnap.forEach(doc => {
-                    const payment = doc.data() as Payment;
+                    const payment = { id: doc.id, ...doc.data()} as Payment;
                     if(payment.playerRef) {
-                        paymentsMap.set(payment.playerRef, payment.status);
+                        paymentsMap.set(payment.playerRef, payment);
                     }
                 });
             }
@@ -708,15 +707,13 @@ function PlayerRoster({
                 if(isConfirmedA) team = 'A';
                 if(isConfirmedB) team = 'B';
                 
-                let paymentStatus: PaymentStatus | undefined;
-                if (reservation?.paymentStatus === 'Paid') {
-                    paymentStatus = 'Paid';
-                } else if (isConfirmedA || isConfirmedB) {
-                    paymentStatus = paymentsMap.get(user.id);
+                let payment: Payment | undefined;
+                if (isConfirmedA || isConfirmedB) {
+                    payment = paymentsMap.get(user.id);
                 }
 
 
-                return { ...user, status, team, paymentStatus };
+                return { ...user, status, team, payment };
             }).sort((a, b) => a.name.localeCompare(b.name));
 
             setPlayers(rosterPlayers);
@@ -865,6 +862,7 @@ function PlayerRoster({
     const showTeamAssignment = isPracticeMatch && isManager && !isLive;
     const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'PendingOpponent' || match.status === 'InProgress');
     const showLiveActions = isManager && isLive;
+    const isReservationPaid = reservation?.paymentStatus === 'Paid';
 
     return (
         <>
@@ -880,7 +878,10 @@ function PlayerRoster({
                             <TableHead>Player</TableHead>
                             <TableHead>Status</TableHead>
                             {showTeamAssignment && <TableHead>Team</TableHead>}
-                            {showPaymentStatus && <TableHead>Payment</TableHead>}
+                            {showPaymentStatus && <>
+                                <TableHead>Payment</TableHead>
+                                <TableHead>Amount</TableHead>
+                            </>}
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -913,20 +914,23 @@ function PlayerRoster({
                                     </TableCell>
                                 }
                                 {showPaymentStatus && (
-                                    <TableCell>
-                                        {player.paymentStatus === 'Paid' ? (
-                                            <Badge variant="default" className="bg-green-600 gap-1.5"><CheckCircle className="h-3 w-3"/>Paid</Badge>
-                                        ) : player.paymentStatus === 'Pending' ? (
-                                            <Badge variant="destructive" className="gap-1.5"><Clock className="h-3 w-3"/>Pending</Badge>
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground">-</span>
-                                        )}
-                                    </TableCell>
+                                    <>
+                                        <TableCell>
+                                            {isReservationPaid ? (<Badge variant="default" className="bg-green-600 gap-1.5"><CheckCircle className="h-3 w-3"/>Paid</Badge>) :
+                                                player.payment?.status === 'Paid' ? (<Badge variant="default" className="bg-green-600 gap-1.5"><CheckCircle className="h-3 w-3"/>Paid</Badge>) : 
+                                                player.payment?.status === 'Pending' ? (<Badge variant="destructive" className="gap-1.5"><Clock className="h-3 w-3"/>Pending</Badge>) :
+                                                (<span className="text-sm text-muted-foreground">-</span>)
+                                            }
+                                        </TableCell>
+                                        <TableCell className="font-mono">
+                                             {player.payment?.status === 'Paid' ? `${player.payment.amount.toFixed(2)}€` : <span className="text-sm text-muted-foreground">-</span>}
+                                        </TableCell>
+                                    </>
                                 )}
                                 <TableCell className="text-right">
                                     {showLiveActions && player.team && player.status === 'confirmed' ? (
                                         <PlayerActions player={player} teamId={player.team} />
-                                    ) : showPaymentStatus && player.paymentStatus === 'Pending' ? (
+                                    ) : (showPaymentStatus && !isReservationPaid && player.payment?.status === 'Pending') ? (
                                         <Button size="sm" variant="outline" onClick={() => handleRemindPlayer(player)}>
                                             <Send className="mr-2 h-3 w-3" /> Remind
                                         </Button>
@@ -1361,3 +1365,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
