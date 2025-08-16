@@ -708,7 +708,7 @@ function PlayerRoster({
                 if(isConfirmedB) team = 'B';
                 
                 let payment: Payment | undefined;
-                if (isConfirmedA || isConfirmedB) {
+                if (status === 'confirmed') {
                     payment = paymentsMap.get(user.id);
                 }
 
@@ -860,9 +860,10 @@ function PlayerRoster({
     }
 
     const showTeamAssignment = isPracticeMatch && isManager && !isLive;
+    const isReservationPaid = reservation?.paymentStatus === 'Paid';
     const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'PendingOpponent' || match.status === 'InProgress');
     const showLiveActions = isManager && isLive;
-    const isReservationPaid = reservation?.paymentStatus === 'Paid';
+    
 
     return (
         <>
