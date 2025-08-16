@@ -56,7 +56,7 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
             return;
         }
 
-        const confirmedPlayers = [...(associatedMatch.teamAPlayers || []), ...(associatedMatch.teamBPlayers || [])];
+        const confirmedPlayers = [...new Set([...(associatedMatch.teamAPlayers || []), ...(associatedMatch.teamBPlayers || [])])];
         if (confirmedPlayers.length === 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'No confirmed players to split the payment with.' });
             setIsProcessing(false);
@@ -124,9 +124,9 @@ const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservat
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This action will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{confirmedPlayersCount}</strong> confirmed players for this game. This cannot be undone.
+                        This will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{confirmedPlayersCount}</strong> confirmed players for this game. This cannot be undone.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -304,6 +304,16 @@ export default function MyGamesPage() {
              const validInvs = new Map(invs.filter(inv => allMatchesMap.has(inv.matchId)).map(inv => [inv.matchId, inv]));
              setInvitations(validInvs);
         }
+        
+        // Also fetch matches where player is directly confirmed
+         if (user.role === 'PLAYER') {
+            const confirmedAQuery = query(collection(db, "matches"), where("teamAPlayers", "array-contains", user.id));
+            const confirmedBQuery = query(collection(db, "matches"), where("teamBPlayers", "array-contains", user.id));
+            const [confirmedASnap, confirmedBSnap] = await Promise.all([getDocs(confirmedAQuery), getDocs(confirmedBQuery)]);
+            confirmedASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            confirmedBSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+        }
+
 
         const allMatches = Array.from(allMatchesMap.values());
         setMatches(allMatches);
@@ -430,16 +440,28 @@ export default function MyGamesPage() {
   const now = new Date();
   
   const upcomingMatches = matches.filter(m => {
-    const isPlayerInvolved = m.teamAPlayers?.includes(user?.id || '') || m.teamBPlayers?.includes(user?.id || '');
-    const isManagerOfTeam = user?.role === 'MANAGER' && (m.teamARef && teams.get(m.teamARef)?.managerId === user.id);
-    const hasPendingPlayerInvite = user?.role === 'PLAYER' && invitations.has(m.id);
-    const hasPendingTeamInvite = user?.role === 'MANAGER' && teamMatchInvitations.has(m.id);
+      const isManagerOfTeamA = user?.role === 'MANAGER' && teams.get(m.teamARef || '')?.managerId === user?.id;
+      const isManagerOfTeamB = user?.role === 'MANAGER' && teams.get(m.teamBRef || '')?.managerId === user?.id;
+      const hasTeamInvite = user?.role === 'MANAGER' && teamMatchInvitations.has(m.id);
+      const isPlayerInvolved = user?.role === 'PLAYER' && (invitations.has(m.id) || m.teamAPlayers.includes(user.id) || m.teamBPlayers.includes(user.id));
 
-    return new Date(m.date) >= now && (isPlayerInvolved || isManagerOfTeam || hasPendingPlayerInvite || hasPendingTeamInvite)
+      const isFuture = new Date(m.date) >= now;
+      const isNotFinished = m.status !== 'Finished' && m.status !== 'Cancelled';
+
+      return isFuture && isNotFinished && (isManagerOfTeamA || isManagerOfTeamB || hasTeamInvite || isPlayerInvolved);
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
-  const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const pastMatches = matches.filter(m => {
+       const isManagerOfTeamA = user?.role === 'MANAGER' && teams.get(m.teamARef || '')?.managerId === user?.id;
+       const isManagerOfTeamB = user?.role === 'MANAGER' && teams.get(m.teamBRef || '')?.managerId === user?.id;
+       const isPlayerInvolved = user?.role === 'PLAYER' && (m.teamAPlayers.includes(user.id) || m.teamBPlayers.includes(user.id));
+      
+       const isFinished = m.status === 'Finished' || m.status === 'Cancelled';
+       const isPastDate = new Date(m.date) < now;
+
+       return (isFinished || isPastDate) && (isManagerOfTeamA || isManagerOfTeamB || isPlayerInvolved);
+  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const MatchCard = ({ match }: { match: Match }) => {
     const teamA = match.teamARef ? teams.get(match.teamARef) : null;
