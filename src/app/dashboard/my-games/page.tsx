@@ -156,51 +156,49 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             await batch.commit();
 
             const reservationRef = doc(db, "reservations", payment.reservationRef);
-            // Re-fetch pending payments to check if this was the last one.
-            const paymentsQuery = query(
-                collection(db, "payments"), 
-                where("reservationRef", "==", payment.reservationRef), 
-                where("status", "==", "Pending")
-            );
+            // Re-fetch all payments for the reservation to check totals
+            const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef));
+            const paymentsSnap = await getDocs(paymentsQuery);
+            
+            const allPayments = paymentsSnap.docs.map(d => d.data() as Payment);
+            const totalPaid = allPayments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+            
+            const reservationDoc = await getDoc(reservationRef);
+            const reservation = reservationDoc.data() as Reservation;
 
-            const pendingPaymentsSnap = await getDocs(paymentsQuery);
-
-            if (pendingPaymentsSnap.empty) {
+            if (totalPaid >= reservation.totalAmount) {
                 // All payments are done, confirm reservation and notify owner
-                const reservationDoc = await getDoc(reservationRef);
-                if (reservationDoc.exists()) {
-                    const reservation = reservationDoc.data() as Reservation;
-                    const finalBatch = writeBatch(db);
-                    finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-                    
-                    // Also update the associated match status
-                    const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-                    const matchSnap = await getDocs(matchQuery);
-                    if(!matchSnap.empty) {
-                        const matchRef = matchSnap.docs[0].ref;
-                        finalBatch.update(matchRef, { status: 'Scheduled' });
-                    }
-
-                    const ownerNotificationRef = doc(collection(db, "notifications"));
-                    const notification: Omit<Notification, 'id'> = {
-                        ownerProfileId: reservation.ownerProfileId,
-                        message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
-                        link: `/dashboard/schedule`,
-                        read: false,
-                        createdAt: serverTimestamp() as any,
-                    };
-                    finalBatch.set(ownerNotificationRef, notification);
-                    await finalBatch.commit();
+                const finalBatch = writeBatch(db);
+                finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
-                    toast({
-                        title: "Final Payment Received!",
-                        description: "The reservation is now confirmed and scheduled.",
-                    });
+                // Also update the associated match status
+                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
+                const matchSnap = await getDocs(matchQuery);
+                if(!matchSnap.empty) {
+                    const matchRef = matchSnap.docs[0].ref;
+                    finalBatch.update(matchRef, { status: 'Scheduled' });
                 }
-            } else {
+
+                const ownerNotificationRef = doc(collection(db, "notifications"));
+                const notification: Omit<Notification, 'id'> = {
+                    ownerProfileId: reservation.ownerProfileId,
+                    message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
+                    link: `/dashboard/schedule`,
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                finalBatch.set(ownerNotificationRef, notification);
+                await finalBatch.commit();
+            
                 toast({
+                    title: "Final Payment Received!",
+                    description: "The reservation is now confirmed and scheduled.",
+                });
+            } else {
+                 const remainingToPay = allPayments.filter(p => p.status === 'Pending').length;
+                 toast({
                     title: "Payment Successful!",
-                    description: `Your payment has been registered. Waiting for ${pendingPaymentsSnap.size} other players.`,
+                    description: `Your payment has been registered. Waiting for ${remainingToPay} other players.`,
                 });
             }
             onPaymentProcessed();
@@ -444,11 +442,12 @@ export default function MyGamesPage() {
       const isManagerOfTeamB = user?.role === 'MANAGER' && teams.get(m.teamBRef || '')?.managerId === user?.id;
       const hasTeamInvite = user?.role === 'MANAGER' && teamMatchInvitations.has(m.id);
       const isPlayerInvolved = user?.role === 'PLAYER' && (invitations.has(m.id) || m.teamAPlayers.includes(user.id) || m.teamBPlayers.includes(user.id));
-
+      const hasPlayerInvite = user?.role === 'PLAYER' && invitations.has(m.id);
+      
       const isFuture = new Date(m.date) >= now;
       const isNotFinished = m.status !== 'Finished' && m.status !== 'Cancelled';
 
-      return isFuture && isNotFinished && (isManagerOfTeamA || isManagerOfTeamB || hasTeamInvite || isPlayerInvolved);
+      return isFuture && isNotFinished && (isManagerOfTeamA || isManagerOfTeamB || hasTeamInvite || isPlayerInvolved || hasPlayerInvite);
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
