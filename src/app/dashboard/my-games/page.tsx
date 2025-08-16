@@ -521,7 +521,12 @@ export default function MyGamesPage() {
 
 
   const now = new Date();
-  const upcomingMatches = matches.filter(m => (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingMatches = matches.filter(m => {
+    const isPlayerInGame = user ? (m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id)) : false;
+    const isManagerOfGame = user ? (user.role === 'MANAGER' && (teams.get(m.teamARef || '')?.managerId === user.id || teams.get(m.teamBRef || '')?.managerId === user.id)) : false;
+    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isPlayerInGame || isManagerOfGame);
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
   const pastMatches = matches.filter(m => m.status === 'Finished' || (new Date(m.date) < now && m.status !== 'Scheduled' && m.status !== 'PendingOpponent')).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const MatchCard = ({ match }: { match: Match }) => {
