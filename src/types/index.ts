@@ -5,6 +5,7 @@
 
 
 
+
 import type { LucideIcon } from "lucide-react";
 import type { FieldValue, Timestamp } from "firebase/firestore";
 
@@ -294,7 +295,7 @@ export interface Competition {
   format: CompetitionFormat;
 }
 
-export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee" | "booking_split" | "reimbursement";
+export type PaymentType = "subscription" | "booking" | "fine" | "tournament_fee" | "booking_split";
 export type PaymentStatus = "Pending" | "Paid" | "Cancelled" | "Refunded";
 
 

@@ -1,11 +1,12 @@
 
+
 "use client";
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Notification, PaymentStatus, Reservation } from "@/types";
+import type { Payment, Notification, PaymentStatus, Reservation, User } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -132,6 +133,7 @@ export default function PaymentsPage() {
   const { toast } = useToast();
   const [allPayments, setAllPayments] = React.useState<Payment[]>([]);
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
+  const [playerUsers, setPlayerUsers] = React.useState<Map<string, User>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
 
@@ -142,24 +144,44 @@ export default function PaymentsPage() {
     }
     
     setLoading(true);
-    const roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
+    let roleField = user.role === 'PLAYER' ? 'playerRef' : 'managerRef';
+    if(user.role === 'OWNER') roleField = 'ownerRef';
+    
     const q = query(collection(db, "payments"), where(roleField, "==", user.id));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
         const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
         setAllPayments(paymentsData);
 
-        if (paymentsData.length > 0) {
-            const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(id => id))];
-            if (reservationIds.length > 0) {
-                const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
-                const reservationsSnap = await getDocs(reservationsQuery);
-                const reservationsMap = new Map<string, Reservation>();
-                reservationsSnap.forEach(doc => {
-                    reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
-                });
-                setReservations(reservationsMap);
-            }
+        const detailsToFetch = new Map<string, Set<string>>();
+        detailsToFetch.set('reservations', new Set());
+        if(user.role === 'MANAGER') detailsToFetch.set('players', new Set());
+
+        paymentsData.forEach(p => {
+            if (p.reservationRef) detailsToFetch.get('reservations')!.add(p.reservationRef);
+            if (user.role === 'MANAGER' && p.playerRef) detailsToFetch.get('players')!.add(p.playerRef);
+        })
+
+        const reservationIds = Array.from(detailsToFetch.get('reservations')!);
+        if (reservationIds.length > 0) {
+            const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
+            const reservationsSnap = await getDocs(reservationsQuery);
+            const reservationsMap = new Map<string, Reservation>();
+            reservationsSnap.forEach(doc => {
+                reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
+            });
+            setReservations(reservationsMap);
+        }
+        
+        const playerIds = Array.from(detailsToFetch.get('players')!);
+        if (playerIds.length > 0) {
+            const usersQuery = query(collection(db, 'users'), where('id', 'in', playerIds));
+            const usersSnap = await getDocs(usersQuery);
+            const usersMap = new Map<string, User>();
+            usersSnap.forEach(doc => {
+                usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+            });
+            setPlayerUsers(usersMap);
         }
         
         setLoading(false);
@@ -177,9 +199,10 @@ export default function PaymentsPage() {
         const lowerCaseSearch = searchTerm.toLowerCase();
         const teamMatch = p.teamName?.toLowerCase().includes(lowerCaseSearch);
         const pitchMatch = p.pitchName?.toLowerCase().includes(lowerCaseSearch);
-        return teamMatch || pitchMatch;
+        const playerMatch = user.role === 'MANAGER' && p.playerRef && playerUsers.get(p.playerRef)?.name.toLowerCase().includes(lowerCaseSearch);
+        return teamMatch || pitchMatch || playerMatch;
     }).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [allPayments, searchTerm]);
+  }, [allPayments, searchTerm, user.role, playerUsers]);
 
   const pendingPayments = filteredPayments.filter(p => p.status === 'Pending');
   const historyPayments = filteredPayments.filter(p => p.status !== 'Pending');
@@ -200,6 +223,7 @@ export default function PaymentsPage() {
              <Table>
                 <TableHeader>
                     <TableRow>
+                        {user.role === 'MANAGER' && <TableHead>Player</TableHead>}
                         <TableHead>Team</TableHead>
                         <TableHead>Pitch</TableHead>
                         <TableHead className="w-[150px]">Game Date</TableHead>
@@ -212,8 +236,10 @@ export default function PaymentsPage() {
                 <TableBody>
                     {payments.length > 0 ? payments.map((p) => {
                         const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
+                        const playerName = p.playerRef ? playerUsers.get(p.playerRef)?.name : null;
                         return (
                             <TableRow key={p.id}>
+                                {user.role === 'MANAGER' && <TableCell className="font-medium">{playerName || '-'}</TableCell>}
                                 <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
                                 <TableCell>{p.pitchName || '-'}</TableCell>
                                 <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
@@ -225,7 +251,7 @@ export default function PaymentsPage() {
                                         {p.status === 'Pending' && user?.role === 'PLAYER' && (
                                             <PlayerPaymentButton payment={p} onPaymentProcessed={() => {}} />
                                         )}
-                                        {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'reimbursement' && (
+                                        {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'booking_split' && (
                                             <ManagerRemindButton payment={p} />
                                         )}
                                     </TableCell>
@@ -234,7 +260,7 @@ export default function PaymentsPage() {
                         )
                     }) : (
                         <TableRow>
-                            <TableCell colSpan={showActions ? 7 : 6} className="h-24 text-center">
+                            <TableCell colSpan={user.role === 'MANAGER' ? 8 : (showActions ? 7 : 6)} className="h-24 text-center">
                                 No payments match your criteria.
                             </TableCell>
                         </TableRow>
@@ -277,7 +303,7 @@ export default function PaymentsPage() {
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input 
-                    placeholder="Search by team or pitch name..."
+                    placeholder="Search by team, pitch or player name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"

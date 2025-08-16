@@ -15,102 +15,82 @@ import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, Hi
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { getPlayerCapacity } from "@/lib/utils";
 
-const ManagerPaymentDialog = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
-    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+
+const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
-
-    const handlePayFull = async () => {
-        if (!reservation.teamRef || !reservation.managerRef) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team or manager.' });
-            return;
-        }
-
-        const batch = writeBatch(db);
-        const reservationRef = doc(db, "reservations", reservation.id);
-        
-        try {
-            // Find the associated Match
-            const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-            const matchSnap = await getDocs(matchQuery);
-            if(matchSnap.empty) {
-                throw new Error("Associated match not found for this reservation.");
-            }
-            const matchRef = matchSnap.docs[0].ref;
-
-            // Update reservation and match status
-            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-            batch.update(matchRef, { status: "Scheduled" });
-
-            // Notify owner
-            const ownerNotificationRef = doc(collection(db, "notifications"));
-            const ownerNotification: Omit<Notification, 'id'> = {
-                ownerProfileId: reservation.ownerProfileId,
-                message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
-                link: `/dashboard/schedule`,
-                read: false,
-                createdAt: serverTimestamp() as any,
-            };
-            batch.set(ownerNotificationRef, ownerNotification);
-            
-            await batch.commit();
-            setIsDialogOpen(false);
-            onPaymentProcessed();
-            toast({ title: "Payment Successful!", description: "The reservation is confirmed and the game is scheduled." });
-        } catch (error: any) {
-             console.error("Error processing full payment:", error);
-             toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
-        }
-    }
+    const [isProcessing, setIsProcessing] = React.useState(false);
 
     const handleSplitPayment = async () => {
-        if (!reservation.teamRef || !reservation.managerRef) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team or manager.' });
+        setIsProcessing(true);
+        if (!reservation.teamRef) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Reservation is not associated with a team.' });
+            setIsProcessing(false);
             return;
         }
     
         const batch = writeBatch(db);
+        const reservationRef = doc(db, "reservations", reservation.id);
+    
         try {
-            // Update the original reservation to 'Split'
-            const originalReservationRef = doc(db, "reservations", reservation.id);
-            batch.update(originalReservationRef, { paymentStatus: "Split" });
+            // 1. Get Team data to find all players
+            const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
+            if (!teamDoc.exists() || !teamDoc.data().playerIds?.length) {
+                throw new Error("Team not found or has no players to split the payment with.");
+            }
+            const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
+            const playerIds = team.playerIds;
+            const amountPerPlayer = reservation.totalAmount / playerIds.length;
+
+            // 2. Update the reservation to 'Split'
+            batch.update(reservationRef, { paymentStatus: "Split" });
     
+            // 3. Create a pending payment for each player in the team
+            for (const playerId of playerIds) {
+                const newPaymentRef = doc(collection(db, "payments"));
+                batch.set(newPaymentRef, {
+                    type: "booking_split",
+                    amount: amountPerPlayer,
+                    status: "Pending",
+                    date: new Date().toISOString(),
+                    reservationRef: reservation.id,
+                    teamRef: team.id,
+                    playerRef: playerId,
+                    ownerRef: reservation.ownerProfileId, // Direct payment to owner
+                    pitchName: reservation.pitchName,
+                    teamName: team.name,
+                });
+
+                // 4. Create a notification for each player
+                const notificationRef = doc(collection(db, 'notifications'));
+                batch.set(notificationRef, {
+                    userId: playerId,
+                    message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game with ${team.name} is due.`,
+                    link: '/dashboard/payments',
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                });
+            }
+
             await batch.commit();
-            setIsDialogOpen(false);
+
+            toast({ title: "Payment Split!", description: `Each player has been notified to pay their share.` });
             onPaymentProcessed();
-            toast({ title: "Payment Split!", description: `Each player will be asked to pay their share as they accept the game invitation.` });
     
-        } catch (error: any)
-{
+        } catch (error: any) {
             console.error("Error splitting payment:", error);
             toast({ variant: "destructive", title: "Error", description: `Could not split payment: ${error.message}` });
+        } finally {
+            setIsProcessing(false);
         }
     }
 
     return (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-                <Button className="w-full"><CreditCard className="mr-2"/> Process Payment</Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>How do you want to pay?</DialogTitle>
-                    <DialogDescription>
-                        You can pay the full amount now, or split the cost equally among all players on your team.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-col gap-4 pt-4">
-                    <Button size="lg" onClick={handlePayFull}>
-                        <DollarSign className="mr-2"/> Pay full amount ({reservation.totalAmount.toFixed(2)}€)
-                    </Button>
-                     <Button size="lg" variant="outline" onClick={handleSplitPayment}>
-                        <Users className="mr-2"/> Split between players
-                    </Button>
-                </div>
-            </DialogContent>
-        </Dialog>
+        <Button className="w-full" onClick={handleSplitPayment} disabled={isProcessing}>
+            <CreditCard className="mr-2"/> 
+            {isProcessing ? "Processing..." : "Split Cost Between Players"}
+        </Button>
     )
 }
 
@@ -393,30 +373,17 @@ export default function MyGamesPage() {
                 const reservationDoc = await getDoc(doc(db, 'reservations', matchData.reservationRef));
                 if (reservationDoc.exists()) {
                     const reservation = {id: reservationDoc.id, ...reservationDoc.data()} as Reservation;
-                    const teamDoc = await getDoc(doc(db, 'teams', invitation.teamId));
-                    if (teamDoc.exists()) {
-                        const team = teamDoc.data() as Team;
-                        if (team.playerIds.length > 0 && reservation.managerRef && user.id !== reservation.managerRef && reservation.paymentStatus === 'Split') {
-                            const amountPerPlayer = reservation.totalAmount / team.playerIds.length;
-                            
-                            const playerPaymentRef = doc(collection(db, "payments"));
-                            batch.set(playerPaymentRef, {
-                                type: "reimbursement",
-                                amount: amountPerPlayer,
-                                status: "Pending",
-                                date: new Date().toISOString(),
-                                reservationRef: reservation.id,
-                                teamRef: invitation.teamId,
-                                playerRef: user.id,
-                                managerRef: reservation.managerRef,
-                                pitchName: reservation.pitchName,
-                                teamName: team.name,
-                            });
-                            
+                    // For split payments, the payment doc might already be created by the manager. We just notify the player.
+                    // If not, we don't create it here. It's the manager's job to initiate payments.
+                    if (reservation.paymentStatus === 'Split') {
+                        const paymentQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id), where('playerRef', '==', user.id));
+                        const paymentSnap = await getDocs(paymentQuery);
+                        if (!paymentSnap.empty) {
+                             const payment = paymentSnap.docs[0].data() as Payment;
                              const paymentNotificationRef = doc(collection(db, 'notifications'));
                              batch.set(paymentNotificationRef, {
                                  userId: user.id,
-                                 message: `You've accepted the game with ${team.name}. Your share of ${amountPerPlayer.toFixed(2)}€ is now due to the manager.`,
+                                 message: `You've accepted the game. Your share of ${payment.amount.toFixed(2)}€ is now due.`,
                                  link: '/dashboard/payments',
                                  read: false,
                                  createdAt: serverTimestamp() as any,
@@ -481,11 +448,11 @@ export default function MyGamesPage() {
   const now = new Date();
   
   const upcomingMatches = matches.filter(m => {
-      const isManager = user?.id === m.managerRef;
-      const isPlayerInTeam = user ? (m.teamARef && Array.from(teams.values()).some(t => t.id === m.teamARef && t.playerIds.includes(user.id))) || (m.teamBRef && Array.from(teams.values()).some(t => t.id === m.teamBRef && t.playerIds.includes(user.id))) : false;
-      const isPlayerConfirmed = user ? (m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id)) : false;
-
-      return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isManager || isPlayerInTeam || isPlayerConfirmed);
+    const isPlayerInTeam = user ? (m.teamARef && teams.get(m.teamARef)?.playerIds.includes(user.id)) || (m.teamBRef && teams.get(m.teamBRef)?.playerIds.includes(user.id)) : false;
+    const isManagerOfTeam = user ? user.id === teams.get(m.teamARef)?.managerId || user.id === teams.get(m.teamBRef)?.managerId : false;
+    const isPlayerConfirmed = user ? m.teamAPlayers?.includes(user.id) || m.teamBPlayers?.includes(user.id) : false;
+    
+    return (m.status === 'Scheduled' || m.status === 'PendingOpponent') && new Date(m.date) >= now && (isManagerOfTeam || isPlayerInTeam || isPlayerConfirmed);
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
@@ -568,7 +535,7 @@ export default function MyGamesPage() {
                             <span className="font-semibold text-destructive">Payment Due</span>
                             <span className="font-bold text-destructive">{reservation.totalAmount.toFixed(2)}€</span>
                         </div>
-                        <ManagerPaymentDialog reservation={reservation} onPaymentProcessed={fetchGameDetails} />
+                        <StartSplitPaymentButton reservation={reservation} onPaymentProcessed={fetchGameDetails} />
                     </div>
                  )}
                   {isPlayer && playerIsConfirmed && payment && (
@@ -750,6 +717,7 @@ export default function MyGamesPage() {
 }
 
     
+
 
 
 
