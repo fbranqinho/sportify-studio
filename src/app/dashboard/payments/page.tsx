@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -208,9 +209,16 @@ export default function PaymentsPage() {
              return;
         }
     } else if (user.role === 'OWNER') {
-        // Owner logic might be different, for now let's assume it's based on ownerRef in payments.
-        roleField = 'ownerRef';
-        initialQuery = query(collection(db, "payments"), where(roleField, "==", user.id));
+        const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+        const ownerProfileSnap = await getDocs(ownerProfileQuery);
+        if(!ownerProfileSnap.empty) {
+            const ownerProfileId = ownerProfileSnap.docs[0].id;
+            initialQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
+        } else {
+            setAllPayments([]);
+            setLoading(false);
+            return;
+        }
     } else {
         setLoading(false);
         return;
@@ -295,7 +303,7 @@ export default function PaymentsPage() {
              <Table>
                 <TableHeader>
                     <TableRow>
-                        {user.role === 'MANAGER' && <TableHead>Player</TableHead>}
+                        {user.role !== 'PLAYER' && <TableHead>Player/Manager</TableHead>}
                         <TableHead>Team</TableHead>
                         <TableHead>Pitch</TableHead>
                         <TableHead className="w-[150px]">Game Date</TableHead>
@@ -308,10 +316,11 @@ export default function PaymentsPage() {
                 <TableBody>
                     {payments.length > 0 ? payments.map((p) => {
                         const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
-                        const playerName = p.playerRef ? playerUsers.get(p.playerRef)?.name : null;
+                        const actorId = p.playerRef || p.managerRef;
+                        const actorName = actorId ? playerUsers.get(actorId)?.name : "N/A";
                         return (
                             <TableRow key={p.id}>
-                                {user.role === 'MANAGER' && <TableCell className="font-medium">{playerName || p.playerRef || '-'}</TableCell>}
+                                {user.role !== 'PLAYER' && <TableCell className="font-medium">{actorName}</TableCell>}
                                 <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
                                 <TableCell>{p.pitchName || '-'}</TableCell>
                                 <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
@@ -332,7 +341,7 @@ export default function PaymentsPage() {
                         )
                     }) : (
                         <TableRow>
-                            <TableCell colSpan={user.role === 'MANAGER' ? 8 : (showActions ? 7 : 6)} className="h-24 text-center">
+                            <TableCell colSpan={user.role !== 'PLAYER' ? 8 : (showActions ? 7 : 6)} className="h-24 text-center">
                                 No payments match your criteria.
                             </TableCell>
                         </TableRow>
@@ -392,5 +401,7 @@ export default function PaymentsPage() {
     </div>
   );
 }
+
+    
 
     

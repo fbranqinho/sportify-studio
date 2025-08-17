@@ -165,8 +165,16 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", payment.reservationRef));
             const paymentsSnap = await getDocs(paymentsQuery);
             
+            // Re-calculate total paid including the current payment which is now 'Paid'
             const totalPaid = paymentsSnap.docs
-                .reduce((sum, doc) => (doc.data().status === 'Paid' ? sum + doc.data().amount : sum), 0);
+                .reduce((sum, doc) => {
+                    const docData = doc.data();
+                    // Include the current payment's amount, as its update was just committed (or use its known value)
+                    if (doc.id === payment.id) return sum + payment.amount;
+                    // Include other already paid amounts
+                    if (docData.status === 'Paid') return sum + docData.amount;
+                    return sum;
+                }, 0);
             
             if (totalPaid >= reservation.totalAmount) {
                 // If total is covered, update the reservation and match
@@ -197,7 +205,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
                     description: "The reservation is now confirmed and scheduled.",
                 });
             } else {
-                 const remainingToPay = paymentsSnap.docs.filter(p => p.data().status === 'Pending').length;
+                 const remainingToPay = paymentsSnap.docs.filter(p => p.data().status === 'Pending' && p.id !== payment.id).length;
                  toast({
                     title: "Payment Successful!",
                     description: `Your payment has been registered. Waiting for ${remainingToPay > 0 ? `${remainingToPay} other players` : 'other payments'}.`,
@@ -401,19 +409,21 @@ export default function MyGamesPage() {
 
         if (accepted) {
             const matchRef = doc(db, "matches", invitation.matchId);
-            batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
-            
             const matchDoc = await getDoc(matchRef);
-            if (matchDoc.exists()) {
-                const matchData = matchDoc.data();
-                if (matchData.reservationRef) {
-                    const reservationDoc = await getDoc(doc(db, "reservations", matchData.reservationRef));
-                     if (reservationDoc.exists() && reservationDoc.data().paymentStatus === 'Paid') {
-                        // If reservation is already paid, do not create a new payment
-                    } else if (reservationDoc.exists() && reservationDoc.data().paymentStatus === 'Split') {
-                        // Logic to create a new payment for this user might be needed here, if applicable
-                    }
+
+            // Check if reservation is already paid before adding player
+            if (matchDoc.exists() && matchDoc.data().reservationRef) {
+                const reservationDoc = await getDoc(doc(db, "reservations", matchDoc.data().reservationRef));
+                 if (reservationDoc.exists() && reservationDoc.data().paymentStatus !== 'Paid') {
+                    // Only add player if payment is not completed, otherwise it's up to manager
+                    batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
+                } else if (!reservationDoc.exists() || reservationDoc.data().paymentStatus === 'Paid') {
+                    // If already paid, still add player but don't create payment
+                    batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
                 }
+            } else {
+                // No reservation or other cases, just add the player
+                batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
             }
         }
         
@@ -680,3 +690,6 @@ export default function MyGamesPage() {
   );
 }
 
+
+
+    

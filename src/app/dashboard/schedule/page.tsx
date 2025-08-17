@@ -142,8 +142,22 @@ export default function SchedulePage() {
         const actorId = reservation.managerRef || reservation.playerRef;
         if (!actorId) throw new Error("Reservation is missing a manager or player reference.");
         
-        // --- 1. Update Reservation to require payment ---
+        // --- 1. Update Reservation and create initial Payment ---
         batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
+        const newPaymentRef = doc(collection(db, "payments"));
+        batch.set(newPaymentRef, {
+            type: "booking",
+            amount: reservation.totalAmount,
+            status: "Pending",
+            date: new Date().toISOString(),
+            reservationRef: reservation.id,
+            teamRef: reservation.teamRef,
+            playerRef: reservation.playerRef,
+            managerRef: reservation.managerRef,
+            ownerRef: reservation.ownerProfileId,
+            pitchName: reservation.pitchName,
+            teamName: reservation.actorName,
+        });
 
         // --- 2. Create the Match document ---
         const newMatchRef = doc(collection(db, "matches"));
@@ -382,3 +396,6 @@ export default function SchedulePage() {
 
 
 
+
+
+    

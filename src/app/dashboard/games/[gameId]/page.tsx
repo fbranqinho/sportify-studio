@@ -707,10 +707,7 @@ function PlayerRoster({
                 if(isConfirmedA) team = 'A';
                 if(isConfirmedB) team = 'B';
                 
-                let payment: Payment | undefined;
-                if (status === 'confirmed') {
-                    payment = paymentsMap.get(user.id);
-                }
+                const payment = paymentsMap.get(user.id);
 
 
                 return { ...user, status, team, payment };
@@ -850,7 +847,7 @@ function PlayerRoster({
         return null;
     }
     
-    const title = "Player Roster & Status";
+    let title = "Player Roster & Status";
     let description = "Overview of all invited players and their invitation status.";
 
     if (isLive) {
@@ -924,7 +921,7 @@ function PlayerRoster({
                                             }
                                         </TableCell>
                                         <TableCell className="font-mono">
-                                             {player.payment?.status === 'Paid' ? `${player.payment.amount.toFixed(2)}€` : <span className="text-sm text-muted-foreground">-</span>}
+                                             {player.payment?.amount ? `${player.payment.amount.toFixed(2)}€` : <span className="text-sm text-muted-foreground">-</span>}
                                         </TableCell>
                                     </>
                                 )}
@@ -1366,5 +1363,7 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
 
     
