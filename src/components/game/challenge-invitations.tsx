@@ -25,6 +25,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const fetchChallenges = async () => {
             setLoading(true);
             try {
+                // Corrected query with the missing 'type' filter
                 const challengesQuery = query(
                     collection(db, "notifications"),
                     where("userId", "==", user.id),
@@ -36,12 +37,13 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                 setChallenges(challengesData);
             } catch (e) {
                 console.error("Error fetching challenges (check index)", e);
+                toast({ variant: "destructive", title: "Query Error", description: "Could not fetch challenges. The database might need a specific index."});
             } finally {
                 setLoading(false);
             }
         };
         fetchChallenges();
-    }, [match.id, user]);
+    }, [match.id, user, toast]);
 
     const handleResponse = async (notification: Notification, accepted: boolean) => {
         const { payload } = notification;
