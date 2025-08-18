@@ -144,7 +144,9 @@ export default function GameDetailsPage() {
         return <div>Match not found or user not logged in.</div>;
     }
     
-    const isManager = user?.id === teamA?.managerId;
+    const isManagerA = user?.id === teamA?.managerId;
+    const isManagerB = user?.id === teamB?.managerId;
+    const isManager = isManagerA || isManagerB;
     const isFinished = match.status === 'Finished';
 
     const getMatchTitle = () => {
@@ -257,11 +259,19 @@ export default function GameDetailsPage() {
                  pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />
             ) : (
                 <div className="space-y-6">
-                    {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
-                    <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} reservation={reservation}/>
-                    {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
-                    {isManager && <ChallengeInvitations match={match} onUpdate={fetchGameDetails} />}
-                    {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} />}
+                    {isManagerA && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
+                    <PlayerRoster 
+                        match={match} 
+                        isManager={isManager} 
+                        onUpdate={handleMatchUpdate} 
+                        onEventAdded={handleEventAdded} 
+                        reservation={reservation}
+                        teamA={teamA}
+                        teamB={teamB}
+                    />
+                    {isManagerA && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
+                    {isManagerA && <ChallengeInvitations match={match} onUpdate={fetchGameDetails} />}
+                    {isManagerA && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} />}
                 </div>
             )}
         </div>
