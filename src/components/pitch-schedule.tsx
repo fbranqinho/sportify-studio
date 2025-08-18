@@ -99,22 +99,27 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
         
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
-        const match = matches.find(m => isSameTime(new Date(m.date)));
         
-        if (reservation && (reservation.paymentStatus === 'Paid' || reservation.paymentStatus === 'Split') && match) {
-             const isPracticeMatch = !match.teamBRef && !match.invitedTeamId;
-             
-             if (isPracticeMatch) {
-                 if (user.role === 'MANAGER' && match.allowChallenges && match.managerRef !== user.id) {
-                     return { status: 'OpenForTeam', match, reservation, price: 0 };
+        if (reservation && reservation.status === 'Pending') {
+            // Treat as available if reservation is pending
+        } else if (reservation) {
+            const match = matches.find(m => m.reservationRef === reservation.id);
+            if (match) {
+                 if (match.status === 'PendingOpponent') {
+                     const totalPlayers = (match.teamAPlayers?.length || 0);
+                     const capacity = getPlayerCapacity(pitch.sport);
+
+                     if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
+                         return { status: 'OpenForTeam', match, reservation, price: 0 };
+                     }
+                     if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < capacity) {
+                         return { status: 'OpenForPlayers', match, reservation, price: 0 };
+                     }
                  }
-                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                 const capacity = getPlayerCapacity(pitch.sport);
-                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && !match.teamBPlayers.includes(user.id) && totalPlayers < capacity) {
-                     return { status: 'OpenForPlayers', match, reservation, price: 0 };
-                 }
-             }
-             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+            }
+            // Reservation exists but no match? Treat as booked to be safe.
+            return { status: 'Booked', reservation, price: reservation.totalAmount };
         }
         
         const dayOfWeek = getDay(day);
