@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp, arrayUnion, getDoc } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Pitch, PlayerProfile, Reservation } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -40,16 +40,17 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
 
             let updateData: Partial<Match> = { status: "InProgress" };
 
-            if (isPracticeMatch && (!match.teamAPlayers || match.teamAPlayers.length === 0)) {
-                 const allConfirmedPlayers = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
-                 const shuffled = [...allConfirmedPlayers].sort(() => 0.5 - Math.random());
-                 const half = Math.ceil(shuffled.length / 2);
-                 const newTeamAPlayers = shuffled.slice(0, half);
-                 const newTeamBPlayers = shuffled.slice(half);
-                 updateData.teamAPlayers = newTeamAPlayers;
-                 updateData.teamBPlayers = newTeamBPlayers;
-                 toast({ title: "Teams auto-shuffled!"});
-            }
+            // This logic is now handled in the Dressing Room
+            // if (isPracticeMatch && (!match.teamAPlayers || match.teamAPlayers.length === 0)) {
+            //      const allConfirmedPlayers = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
+            //      const shuffled = [...allConfirmedPlayers].sort(() => 0.5 - Math.random());
+            //      const half = Math.ceil(shuffled.length / 2);
+            //      const newTeamAPlayers = shuffled.slice(0, half);
+            //      const newTeamBPlayers = shuffled.slice(half);
+            //      updateData.teamAPlayers = newTeamAPlayers;
+            //      updateData.teamBPlayers = newTeamBPlayers;
+            //      toast({ title: "Teams auto-shuffled!"});
+            // }
 
             batch.update(matchRef, updateData);
             await batch.commit();
@@ -191,75 +192,78 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
         disabledTooltipContent = `The game requires at least ${minPlayers} confirmed players to start.`;
     }
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Game Control</CardTitle>
-                <CardDescription>Manage the game flow from start to finish.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                 <div className="flex items-center justify-center gap-4">
-                    {(match.status === 'Scheduled' || match.status === 'Collecting players') && (
-                         <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div>
-                                        <Button onClick={handleStartGame} size="lg" disabled={!canStartGame}>
-                                            <Play className="mr-2" /> Start Game
-                                        </Button>
+    if (match.status === 'InProgress' || match.status === 'Finished') {
+        return (
+             <Card>
+                <CardHeader>
+                    <CardTitle>Game Control</CardTitle>
+                    <CardDescription>Manage the game flow from start to finish.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div className="flex items-center justify-center gap-4">
+                        {match.status === 'InProgress' && (
+                            <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="destructive" size="lg">
+                                        <Flag className="mr-2" /> End Game
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Set Final Score</DialogTitle>
+                                        <DialogDescription>The score is calculated automatically based on recorded goals. Confirm to finish.</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="grid grid-cols-2 gap-4 items-center">
+                                        <div className="space-y-2 text-center">
+                                            <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (teamA?.name || "Team A")}</Label>
+                                            <Input id="scoreA" type="number" value={scoreA} disabled className="text-center text-4xl h-20 font-bold"/>
+                                        </div>
+                                        <div className="space-y-2 text-center">
+                                            <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (teamB?.name || "Team B")}</Label>
+                                            <Input id="scoreB" type="number" value={scoreB} disabled className="text-center text-4xl h-20 font-bold"/>
+                                        </div>
                                     </div>
-                                </TooltipTrigger>
-                                {!canStartGame && (
-                                <TooltipContent>
-                                    <p className="flex items-center gap-2"><Lock className="h-4 w-4" /> {disabledTooltipContent}</p>
-                                </TooltipContent>
-                                )}
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
-                    {match.status === 'InProgress' && (
-                         <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="destructive" size="lg">
-                                    <Flag className="mr-2" /> End Game
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Set Final Score</DialogTitle>
-                                    <DialogDescription>The score is calculated automatically based on recorded goals. Confirm to finish.</DialogDescription>
-                                </DialogHeader>
-                                <div className="grid grid-cols-2 gap-4 items-center">
-                                    <div className="space-y-2 text-center">
-                                        <Label htmlFor="scoreA" className="text-lg font-bold">{isPracticeMatch ? "Vests A" : (teamA?.name || "Team A")}</Label>
-                                        <Input id="scoreA" type="number" value={scoreA} disabled className="text-center text-4xl h-20 font-bold"/>
-                                    </div>
-                                    <div className="space-y-2 text-center">
-                                         <Label htmlFor="scoreB" className="text-lg font-bold">{isPracticeMatch ? "Vests B" : (teamB?.name || "Team B")}</Label>
-                                        <Input id="scoreB" type="number" value={scoreB} disabled className="text-center text-4xl h-20 font-bold"/>
-                                    </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button variant="outline" onClick={() => setIsEndGameOpen(false)}>Cancel</Button>
-                                    <Button onClick={handleEndGame}><Trophy className="mr-2"/>Confirm & Finish</Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                    )}
-                     {match.status === 'Finished' && (
-                        <div className="text-center">
-                            <p className="text-muted-foreground">Final Score</p>
-                            <p className="text-4xl font-bold font-headline">{match.scoreA} - {match.scoreB}</p>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setIsEndGameOpen(false)}>Cancel</Button>
+                                        <Button onClick={handleEndGame}><Trophy className="mr-2"/>Confirm & Finish</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
+                        {match.status === 'Finished' && (
+                            <div className="text-center">
+                                <p className="text-muted-foreground">Final Score</p>
+                                <p className="text-4xl font-bold font-headline">{match.scoreA} - {match.scoreB}</p>
+                            </div>
+                        )}
+                    </div>
+                    {match.events && (
+                        <div className="border-t pt-4">
+                            <h4 className="font-semibold mb-2 text-center">Event Timeline</h4>
+                            <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name} duration={gameDuration}/>
                         </div>
                     )}
-                </div>
-                {(match.status === 'InProgress' || match.status === 'Finished') && match.events && (
-                     <div className="border-t pt-4">
-                        <h4 className="font-semibold mb-2 text-center">Event Timeline</h4>
-                        <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name} duration={gameDuration}/>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+         <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div>
+                        <Button onClick={handleStartGame} size="lg" disabled={!canStartGame} className="w-full">
+                            <Play className="mr-2" /> Start Game
+                        </Button>
                     </div>
+                </TooltipTrigger>
+                {!canStartGame && (
+                <TooltipContent>
+                    <p className="flex items-center gap-2"><Lock className="h-4 w-4" /> {disabledTooltipContent}</p>
+                </TooltipContent>
                 )}
-            </CardContent>
-        </Card>
-    );
+            </Tooltip>
+        </TooltipProvider>
+    )
 }

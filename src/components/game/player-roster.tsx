@@ -16,9 +16,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { UserCheck, UserX, MailQuestion, CheckCircle, Clock, Send, Shuffle, Goal, CirclePlus, Square } from "lucide-react";
+import { UserCheck, UserX, MailQuestion, CheckCircle, Clock, Send, Shuffle, Goal, CirclePlus, Square, Shirt } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
+import { DressingRoom } from "./dressing-room";
+import { GameFlowManager } from './game-flow-manager';
 
 interface RosterPlayer extends User {
     status: InvitationStatus | 'confirmed';
@@ -54,6 +56,7 @@ export function PlayerRoster({
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
     const [isEventDialogOpen, setIsEventDialogOpen] = React.useState(false);
+    const [isDressingRoomOpen, setIsDressingRoomOpen] = React.useState(false);
     const [currentEvent, setCurrentEvent] = React.useState<EventState | null>(null);
     const [eventMinute, setEventMinute] = React.useState<number | "">("");
 
@@ -127,42 +130,7 @@ export function PlayerRoster({
         };
 
         fetchPlayersAndPayments();
-    }, [match, reservation]);
-
-     const handleTeamChange = (playerId: string, team: 'A' | 'B' | 'unassigned') => {
-        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, team: team === 'unassigned' ? null : team } : p));
-    };
-    
-    const handleShuffle = () => {
-        const confirmedPlayers = players.filter(p => p.status === 'confirmed');
-        const shuffled = [...confirmedPlayers].sort(() => 0.5 - Math.random());
-        const half = Math.ceil(shuffled.length / 2);
-        const teamAPlayers = shuffled.slice(0, half);
-        
-        const newAssignments = players.map(player => {
-            if (player.status !== 'confirmed') return player;
-            if (teamAPlayers.some(p => p.id === player.id)) return { ...player, team: 'A' as const };
-            return { ...player, team: 'B' as const };
-        });
-
-        setPlayers(newAssignments);
-        toast({ title: "Teams Shuffled!", description: "Review the new teams and click Save."});
-    };
-
-    const handleSaveChanges = async () => {
-        const teamAPlayers = players.filter(p => p.team === 'A').map(p => p.id);
-        const teamBPlayers = players.filter(p => p.team === 'B').map(p => p.id);
-        
-        const matchRef = doc(db, "matches", match.id);
-        try {
-            await updateDoc(matchRef, { teamAPlayers, teamBPlayers });
-            toast({ title: "Teams Saved", description: "The practice teams have been updated." });
-            onUpdate({ teamAPlayers, teamBPlayers });
-        } catch (error) {
-            console.error("Error saving teams:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not save team assignments." });
-        }
-    };
+    }, [match]);
     
     const openEventDialog = (player: User, type: MatchEventType, teamId: string | null) => {
         if (!teamId) {
@@ -265,12 +233,12 @@ export function PlayerRoster({
         let title = "Player Roster & Status";
         let description = "Overview of all invited players and their invitation status.";
         if (isLive) description = "Record in-game events as they happen.";
-        else if (isPracticeMatch && isManager) description = "Assign confirmed players to a team for this practice match.";
+        else if (isPracticeMatch && isManager) description = "Set up teams in the Dressing Room before starting the game.";
 
-        const showTeamAssignment = isPracticeMatch && isManager && !isLive;
         const isReservationPaid = reservation?.paymentStatus === 'Paid';
-        const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'PendingOpponent' || match.status === 'InProgress');
+        const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'Collecting players' || match.status === 'InProgress');
         const showLiveActions = isManager && isLive;
+        const confirmedPlayers = players.filter(p => p.status === 'confirmed');
         
         return (
             <>
@@ -280,12 +248,28 @@ export function PlayerRoster({
                         <CardDescription>{description}</CardDescription>
                     </CardHeader>
                     <CardContent>
+                        {isPracticeMatch && isManager && !isLive && (
+                             <div className="grid grid-cols-2 gap-4 mb-6">
+                                <Dialog open={isDressingRoomOpen} onOpenChange={setIsDressingRoomOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" size="lg"><Shirt className="mr-2"/>Dressing Room</Button>
+                                    </DialogTrigger>
+                                    <DressingRoom 
+                                        match={match} 
+                                        players={confirmedPlayers} 
+                                        onUpdate={onUpdate}
+                                        onClose={() => setIsDressingRoomOpen(false)} 
+                                    />
+                                </Dialog>
+                                <GameFlowManager match={match} onMatchUpdate={onUpdate} teamA={teamA} teamB={teamB} pitch={match.pitchRef ? {id: match.pitchRef} as any : null} reservation={reservation} />
+                            </div>
+                        )}
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Player</TableHead>
                                     <TableHead>Status</TableHead>
-                                    {showTeamAssignment && <TableHead>Team</TableHead>}
+                                    {isLive && <TableHead>Team</TableHead>}
                                     {showPaymentStatus && <>
                                         <TableHead>Payment</TableHead>
                                         <TableHead>Amount</TableHead>
@@ -303,24 +287,11 @@ export function PlayerRoster({
                                                 <span className="capitalize">{player.status}</span>
                                             </Badge>
                                         </TableCell>
-                                        {showTeamAssignment &&
-                                            <TableCell>
-                                                {player.status !== 'confirmed' ? <span className="text-sm text-muted-foreground">-</span> :
-                                                (
-                                                    <Select onValueChange={(value) => handleTeamChange(player.id, value as any)} value={player.team || 'unassigned'}>
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Unassigned" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                            <SelectItem value="A">Vests A</SelectItem>
-                                                            <SelectItem value="B">Vests B</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                )
-                                                }
-                                            </TableCell>
-                                        }
+                                        {isLive && <TableCell>
+                                            {player.team === 'A' && <Badge variant="secondary">Vests A</Badge>}
+                                            {player.team === 'B' && <Badge variant="default">Vests B</Badge>}
+                                        </TableCell>}
+
                                         {showPaymentStatus && (
                                             <>
                                                 <TableCell>
@@ -351,12 +322,6 @@ export function PlayerRoster({
                             </TableBody>
                         </Table>
                     </CardContent>
-                    {showTeamAssignment && (
-                        <CardFooter className="gap-2">
-                            <Button onClick={handleSaveChanges}>Save Teams</Button>
-                            <Button variant="outline" onClick={handleShuffle}><Shuffle className="mr-2 h-4 w-4"/>Shuffle Teams</Button>
-                        </CardFooter>
-                    )}
                 </Card>
             </>
         )
