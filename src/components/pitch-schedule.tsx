@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours, getDay, eachDayOfInterval, startOfWeek, endOfWeek } from "date-fns";
-import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo } from "@/types";
+import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo, TeamChallenge } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,11 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Label } from "./ui/label";
+import { getPlayerCapacity } from "@/lib/utils";
+
 
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
     const hour = i + 9;
@@ -35,15 +37,6 @@ interface SlotInfo {
   price: number;
 }
 
-
-const getPlayerCapacity = (sport: PitchSport): number => {
-    switch (sport) {
-        case 'fut5': case 'futsal': return 10;
-        case 'fut7': return 14;
-        case 'fut11': return 22;
-        default: return 0;
-    }
-};
 
 export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [currentDate, setCurrentDate] = React.useState(startOfDay(new Date()));
@@ -108,16 +101,20 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         const match = matches.find(m => isSameTime(new Date(m.date)));
         
-        if (reservation && reservation.paymentStatus === 'Paid' && match) {
+        if (reservation && (reservation.status === 'Confirmed' || reservation.status === 'Scheduled') && match) {
+             const isPaid = reservation.paymentStatus === 'Paid';
              const isPracticeMatch = !match.teamBRef && !match.invitedTeamId;
-             if (isPracticeMatch) {
-                if (user.role === 'MANAGER' && match.allowChallenges) {
-                    return { status: 'OpenForTeam', match, reservation, price: 0 };
-                }
-                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < getPlayerCapacity(pitch.sport)) {
-                    return { status: 'OpenForPlayers', match, reservation, price: 0 };
-                }
+             
+             if (isPaid && isPracticeMatch) {
+                // The slot is paid and is a practice match (one team)
+                 if (user.role === 'MANAGER' && match.allowChallenges && match.managerRef !== user.id) {
+                     return { status: 'OpenForTeam', match, reservation, price: 0 };
+                 }
+                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+                 const capacity = getPlayerCapacity(pitch.sport);
+                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && !match.teamBPlayers.includes(user.id) && totalPlayers < capacity) {
+                     return { status: 'OpenForPlayers', match, reservation, price: 0 };
+                 }
              }
              return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
@@ -166,7 +163,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     }
     
     const handleSendChallenge = async () => {
-        if (!challengeTarget || !challengingTeamId || !challengeTarget.managerRef) {
+        if (!challengeTarget || !challengingTeamId || !challengeTarget.teamARef || !challengeTarget.managerRef) {
              toast({ variant: "destructive", title: "Error", description: "Missing required information to send challenge."});
              return;
         }
@@ -175,21 +172,16 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         if (!challengingTeam) return;
 
         try {
-            // Note: In a real app, this might be a subcollection or a dedicated 'challenges' collection.
-            // For simplicity, we add it to the match document.
-            await addDoc(collection(db, 'notifications'), {
-                userId: challengeTarget.managerRef,
-                message: `The team '${challengingTeam.name}' has challenged you to a match!`,
-                link: `/dashboard/games/${challengeTarget.id}`,
-                read: false,
-                createdAt: serverTimestamp() as any,
-                type: 'Challenge',
-                payload: {
-                    matchId: challengeTarget.id,
-                    challengerTeamId: challengingTeamId,
-                    challengerTeamName: challengingTeam.name,
-                }
-            });
+            const challengeRef = doc(collection(db, "matches", challengeTarget.id, "teamChallenges"));
+            const challengeData: Omit<TeamChallenge, 'id'> = {
+                challengerTeamId: challengingTeam.id,
+                challengerTeamName: challengingTeam.name,
+                challengerManagerId: user.id,
+                status: 'pending',
+                challengedAt: serverTimestamp() as any,
+            };
+            
+            await addDoc(collection(db, 'matches', challengeTarget.id, 'teamChallenges'), challengeData);
             
             toast({ title: "Challenge Sent!", description: `Your challenge has been sent to the manager of the opponent team.` });
             setIsChallengeDialogOpen(false);
@@ -249,7 +241,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                         switch (slotInfo.status) {
                                             case 'Available':
                                                 content = (
-                                                    <Dialog>
+                                                    <Dialog open={isBookingDialogOpen && selectedSlot?.date.getTime() === day.getTime() && selectedSlot?.time === time} onOpenChange={(open) => { if (!open) setSelectedSlot(null); setIsBookingDialogOpen(open); }}>
                                                         <DialogTrigger asChild>
                                                             <Button
                                                                 variant={slotInfo.promotion ? "default" : "outline"}
@@ -257,6 +249,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                                 onClick={() => {
                                                                     setSelectedSlot({ date: day, time });
                                                                     setSelectedPromo(slotInfo.promotion || null);
+                                                                    setIsBookingDialogOpen(true);
                                                                 }}
                                                             >
                                                                 {slotInfo.promotion && (
@@ -295,7 +288,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                     >
                                                         {hasApplied ? <Send className="h-4 w-4 mb-1" /> : <UserPlus className="h-4 w-4 mb-1" />}
                                                         <span className="font-bold">{hasApplied ? 'Sent' : 'Apply'}</span>
-                                                        <span className="text-xs">{(getPlayerCapacity(pitch.sport) - (slotInfo.match?.teamAPlayers.length || 0))} slots left</span>
+                                                        <span className="text-xs">{(getPlayerCapacity(pitch.sport) - ((slotInfo.match?.teamAPlayers?.length || 0) + (slotInfo.match?.teamBPlayers?.length || 0)))} slots left</span>
                                                     </Button>
                                                 );
                                                 break;
