@@ -112,21 +112,24 @@ export default function SchedulePage() {
         
         // 2. Create the initial Payment document
         const newPaymentRef = doc(collection(db, "payments"));
-        batch.set(newPaymentRef, {
+        
+        const paymentData: any = {
             type: "booking",
             amount: reservation.totalAmount,
             status: "Pending",
             date: new Date().toISOString(),
             reservationRef: reservation.id,
-            teamRef: reservation.teamRef,
-            playerRef: reservation.playerRef,
-            managerRef: reservation.managerRef,
             ownerRef: reservation.ownerProfileId,
             pitchName: reservation.pitchName,
             teamName: reservation.actorName,
-            // Include actorId for easier querying on the user side
             actorId: actorId,
-        });
+        };
+
+        if (reservation.teamRef) paymentData.teamRef = reservation.teamRef;
+        if (reservation.playerRef) paymentData.playerRef = reservation.playerRef;
+        if (reservation.managerRef) paymentData.managerRef = reservation.managerRef;
+
+        batch.set(newPaymentRef, paymentData);
 
         // 3. Create Notification for the manager/player to pay
         const paymentNotificationRef = doc(collection(db, 'notifications'));
