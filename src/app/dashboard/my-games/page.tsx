@@ -69,7 +69,6 @@ export default function MyGamesPage() {
      setLoading(true);
      try {
         let userTeamIds: string[] = [];
-        let teamIdToNameMap = new Map<string, string>();
 
         // 1. Get User's teams
         if (user.role === 'PLAYER') {
@@ -79,15 +78,25 @@ export default function MyGamesPage() {
         } else if (user.role === 'MANAGER') {
             const managerTeamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
             const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
-            managerTeamsSnapshot.forEach(doc => {
-                userTeamIds.push(doc.id);
-                teamIdToNameMap.set(doc.id, doc.data().name);
-            })
+            userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
         }
-        
+
         // 2. Fetch all matches the user might be involved in
         let allMatchesMap = new Map<string, Match>();
 
+        // New approach: Find confirmed reservations first, then their matches
+        if (user.role === 'MANAGER') {
+            const confirmedReservationsQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id), where("status", "==", "Confirmed"));
+            const confirmedReservationsSnap = await getDocs(confirmedReservationsQuery);
+            
+            const reservationIds = confirmedReservationsSnap.docs.map(doc => doc.id);
+            if (reservationIds.length > 0) {
+                const matchesFromReservationsQuery = query(collection(db, "matches"), where("reservationRef", "in", reservationIds));
+                const matchesSnap = await getDocs(matchesFromReservationsQuery);
+                matchesSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            }
+        }
+        
         if (userTeamIds.length > 0) {
             const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
             const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
@@ -223,7 +232,14 @@ export default function MyGamesPage() {
       }
   }
 
-  const handleStartSplitPayment = async (match: Match, reservation: Reservation) => {
+  const handleStartSplitPayment = async (match: Match) => {
+    if (!match.reservationRef) return;
+    const reservation = reservations.get(match.reservationRef);
+    if (!reservation) {
+        toast({variant: "destructive", title: "Reservation details not found"});
+        return;
+    }
+
     const matchDoc = await getDoc(doc(db, "matches", match.id));
     const currentMatchData = matchDoc.data() as Match;
 
@@ -367,7 +383,7 @@ export default function MyGamesPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleStartSplitPayment(match, reservation!)}>Continue</AlertDialogAction>
+                                <AlertDialogAction onClick={() => handleStartSplitPayment(match)}>Continue</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
@@ -460,7 +476,7 @@ export default function MyGamesPage() {
              <div>
                 <h1 className="text-3xl font-bold font-headline">My Games</h1>
                 <p className="text-muted-foreground">
-                View your upcoming and past games.
+                View your upcoming games, invitations, and past matches.
                 </p>
             </div>
             <LoadingSkeleton />
