@@ -10,13 +10,18 @@ import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, 
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Users, CheckCircle, Play, Trophy, Shield, MapPin, Building, MailQuestion, UserMinus } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import { GameFlowManager, PlayerRoster, PlayerApplications, ChallengeInvitations, ManageGame, MatchReport } from "@/components/game-components";
-import { getPlayerCapacity } from "@/lib/utils";
+
+// Import individual components
+import { GameFlowManager } from "@/components/game/game-flow-manager";
+import { PlayerRoster } from "@/components/game/player-roster";
+import { PlayerApplications } from "@/components/game/player-applications";
+import { ChallengeInvitations } from "@/components/game/challenge-invitations";
+import { ManageGame } from "@/components/game/manage-game";
+import { MatchReport } from "@/components/game/match-report";
+import { MatchDetailsCard } from "@/components/game/match-details-card";
 
 
 export default function GameDetailsPage() {
@@ -161,28 +166,6 @@ export default function GameDetailsPage() {
         return 'Match Details';
     };
 
-    const confirmedPlayersCount = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-    const playerCapacity = pitch ? getPlayerCapacity(pitch.sport) : 0;
-    const missingPlayers = playerCapacity > 0 ? playerCapacity - confirmedPlayersCount : 0;
-
-
-    const getStatusInfo = () => {
-        switch (match.status) {
-            case 'PendingOpponent':
-                return { text: `Waiting players... ${missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'}`, icon: Users, color: 'text-amber-600' };
-            case 'Scheduled':
-                 return { text: 'Scheduled', icon: CheckCircle, color: 'text-blue-600' };
-            case 'InProgress':
-                 return { text: 'In Progress', icon: Play, color: 'text-green-600 animate-pulse' };
-            case 'Finished':
-                 return { text: 'Finished', icon: Trophy, color: 'text-primary' };
-            default:
-                return { text: match.status, icon: Shield, color: 'text-muted-foreground' };
-        }
-    };
-
-    const statusInfo = getStatusInfo();
-
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -194,66 +177,13 @@ export default function GameDetailsPage() {
                     </Link>
                 </Button>
             </div>
-
-            <div className="grid md:grid-cols-3 gap-6">
-                <Card className="md:col-span-2">
-                    <CardHeader>
-                        <CardTitle>{isFinished ? 'Match Summary' : 'Match Details'}</CardTitle>
-                        <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            <div className="flex items-center gap-2">
-                                <statusInfo.icon className={cn("h-4 w-4", statusInfo.color)}/>
-                                <span>Status: <span className="font-semibold">{statusInfo.text}</span></span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-muted-foreground"/>
-                                <span>Confirmed: <span className="font-semibold">{confirmedPlayersCount}</span></span>
-                            </div>
-                             <div className="flex items-center gap-2">
-                                <MailQuestion className="h-4 w-4 text-muted-foreground"/>
-                                <span>Pending: <span className="font-semibold">{invitationCounts.pending}</span></span>
-                            </div>
-                              <div className="flex items-center gap-2">
-                                <UserMinus className="h-4 w-4 text-muted-foreground"/>
-                                <span>Declined: <span className="font-semibold">{invitationCounts.declined}</span></span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {pitch && (
-                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base font-semibold">Venue Information</CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-sm space-y-3">
-                             <div className="flex items-start gap-3">
-                                <Shield className="h-4 w-4 text-muted-foreground mt-0.5"/>
-                                <div>
-                                    <p className="font-semibold">{pitch.name}</p>
-                                    <p className="text-xs text-muted-foreground">Pitch</p>
-                                </div>
-                            </div>
-                             <div className="flex items-start gap-3">
-                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5"/>
-                                 <div>
-                                    <p className="font-semibold">{pitch.address}</p>
-                                    <p className="text-xs text-muted-foreground">Address</p>
-                                </div>
-                            </div>
-                              {owner && <div className="flex items-start gap-3">
-                                <Building className="h-4 w-4 text-muted-foreground mt-0.5"/>
-                                 <div>
-                                    <p className="font-semibold">{owner.companyName}</p>
-                                    <p className="text-xs text-muted-foreground">Managed by</p>
-                                </div>
-                            </div>}
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
+            
+            <MatchDetailsCard
+                match={match}
+                pitch={pitch}
+                owner={owner}
+                invitationCounts={invitationCounts}
+            />
             
             {isFinished ? (
                  pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />
