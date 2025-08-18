@@ -340,6 +340,8 @@ export interface Notification {
     link: string;
     read: boolean;
     createdAt: Timestamp;
+    type?: 'Challenge' | 'ChallengeResponse' | 'Generic';
+    payload?: any;
 }
 
 // For UI components

@@ -11,9 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Label } from "./ui/label";
 
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
     const hour = i + 9;
@@ -48,11 +50,14 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     const [reservations, setReservations] = React.useState<Reservation[]>([]);
     const [matches, setMatches] = React.useState<Match[]>([]);
     const [promos, setPromos] = React.useState<Promo[]>([]);
-    const [userTeams, setUserTeams] = React.useState<string[]>([]);
+    const [userTeams, setUserTeams] = React.useState<Team[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selectedSlot, setSelectedSlot] = React.useState<{ date: Date, time: string} | null>(null);
     const [selectedPromo, setSelectedPromo] = React.useState<Promo | null>(null);
-    const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+    const [isBookingDialogOpen, setIsBookingDialogOpen] = React.useState(false);
+    const [isChallengeDialogOpen, setIsChallengeDialogOpen] = React.useState(false);
+    const [challengeTarget, setChallengeTarget] = React.useState<Match | null>(null);
+    const [challengingTeamId, setChallengingTeamId] = React.useState<string | undefined>(undefined);
     const [appliedMatchIds, setAppliedMatchIds] = React.useState<string[]>([]);
     const { toast } = useToast();
 
@@ -66,25 +71,26 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         setLoading(true);
         const qReservations = query(collection(db, "reservations"), where("pitchId", "==", pitch.id));
         const qMatches = query(collection(db, "matches"), where("pitchRef", "==", pitch.id));
-        const qPlayerTeams = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
         const qPromos = query(collection(db, "promos"), where("ownerProfileId", "==", pitch.ownerRef));
 
-        const unsubReservations = onSnapshot(qReservations, (snap) => setReservations(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation)));
-        const unsubMatches = onSnapshot(qMatches, (snap) => setMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match)));
-        const unsubUserTeams = onSnapshot(qPlayerTeams, (snap) => setUserTeams(snap.docs.map(doc => doc.id)));
-        const unsubPromos = onSnapshot(qPromos, (snap) => setPromos(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo)));
+        const unsubs: (()=>void)[] = [];
+        
+        unsubs.push(onSnapshot(qReservations, (snap) => setReservations(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation))));
+        unsubs.push(onSnapshot(qMatches, (snap) => setMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match))));
+        unsubs.push(onSnapshot(qPromos, (snap) => setPromos(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo))));
 
-        Promise.all([getDocs(qReservations), getDocs(qMatches), getDocs(qPlayerTeams), getDocs(qPromos)])
+        if (user.role === 'MANAGER') {
+            const qPlayerTeams = query(collection(db, "teams"), where("managerId", "==", user.id));
+            unsubs.push(onSnapshot(qPlayerTeams, (snap) => setUserTeams(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Team))));
+        }
+
+
+        Promise.all([getDocs(qReservations), getDocs(qMatches), getDocs(qPromos)])
           .then(() => setLoading(false))
           .catch(() => setLoading(false));
 
-        return () => {
-            unsubReservations();
-            unsubMatches();
-            unsubUserTeams();
-            unsubPromos();
-        };
-    }, [pitch.id, pitch.ownerRef, user.id]);
+        return () => { unsubs.forEach(unsub => unsub()); };
+    }, [pitch.id, pitch.ownerRef, user.id, user.role]);
 
     const handleDateChange = (weeks: number) => {
         setCurrentDate(prev => addDays(prev, weeks * 7));
@@ -102,13 +108,12 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         const match = matches.find(m => isSameTime(new Date(m.date)));
         
-        // Scenario 1: The slot is definitively booked (paid)
         if (reservation && reservation.paymentStatus === 'Paid' && match) {
              const isPracticeMatch = !match.teamBRef && !match.invitedTeamId;
              if (isPracticeMatch) {
-                // If it's a practice match, check if it's open for challengers
-                if (user.role === 'MANAGER') return { status: 'OpenForTeam', match, reservation, price: 0 };
-                // If it's a player, check if they can join as an individual
+                if (user.role === 'MANAGER' && match.allowChallenges) {
+                    return { status: 'OpenForTeam', match, reservation, price: 0 };
+                }
                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < getPlayerCapacity(pitch.sport)) {
                     return { status: 'OpenForPlayers', match, reservation, price: 0 };
@@ -117,7 +122,6 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
              return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
-        // Scenario 2: The slot is temporarily held (pending payment) or fully available
         const dayOfWeek = getDay(day);
         const applicablePromo = promos
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
@@ -147,11 +151,57 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     };
 
     const handleBookingSuccess = () => {
-        setIsDialogOpen(false);
+        setIsBookingDialogOpen(false);
         setSelectedSlot(null);
         setSelectedPromo(null);
     }
     
+    const handleChallengeClick = (match: Match) => {
+        if (userTeams.length === 0) {
+            toast({ variant: "destructive", title: "No Team Found", description: "You must manage at least one team to challenge another." });
+            return;
+        }
+        setChallengeTarget(match);
+        setIsChallengeDialogOpen(true);
+    }
+    
+    const handleSendChallenge = async () => {
+        if (!challengeTarget || !challengingTeamId || !challengeTarget.managerRef) {
+             toast({ variant: "destructive", title: "Error", description: "Missing required information to send challenge."});
+             return;
+        }
+        
+        const challengingTeam = userTeams.find(t => t.id === challengingTeamId);
+        if (!challengingTeam) return;
+
+        try {
+            // Note: In a real app, this might be a subcollection or a dedicated 'challenges' collection.
+            // For simplicity, we add it to the match document.
+            await addDoc(collection(db, 'notifications'), {
+                userId: challengeTarget.managerRef,
+                message: `The team '${challengingTeam.name}' has challenged you to a match!`,
+                link: `/dashboard/games/${challengeTarget.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+                type: 'Challenge',
+                payload: {
+                    matchId: challengeTarget.id,
+                    challengerTeamId: challengingTeamId,
+                    challengerTeamName: challengingTeam.name,
+                }
+            });
+            
+            toast({ title: "Challenge Sent!", description: `Your challenge has been sent to the manager of the opponent team.` });
+            setIsChallengeDialogOpen(false);
+            setChallengeTarget(null);
+            setChallengingTeamId(undefined);
+
+        } catch (error) {
+            console.error("Error sending challenge: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not send the challenge." });
+        }
+    }
+
     return (
         <Card>
             <CardHeader>
@@ -182,7 +232,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                         ))}
                     </div>
                 ) : (
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <>
                     <div className="grid grid-cols-7 gap-px bg-border overflow-hidden rounded-lg border">
                         {week.map(day => (
                             <div key={day.toString()} className="flex flex-col bg-background">
@@ -206,7 +256,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                             onClick={() => {
                                                                 setSelectedSlot({ date: day, time });
                                                                 setSelectedPromo(slotInfo.promotion || null);
-                                                                setIsDialogOpen(true);
+                                                                setIsBookingDialogOpen(true);
                                                             }}
                                                         >
                                                             {slotInfo.promotion && (
@@ -239,12 +289,11 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                     <Button
                                                         variant="outline"
                                                         className="h-16 flex-col w-full rounded-none border-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                        // onClick={() => handleApplyWithTeam(slotInfo.match!)}
-                                                        // disabled={hasAppliedToTeam}
+                                                        onClick={() => handleChallengeClick(slotInfo.match!)}
                                                     >
                                                         <ShieldPlus className="h-4 w-4 mb-1"/>
                                                         <span className="font-bold">Challenge</span>
-                                                        <span className="text-xs">vs {slotInfo.match?.teamAName || 'Team'}</span>
+                                                        <span className="text-xs">vs Team</span>
                                                     </Button>
                                                 );
                                                 break;
@@ -272,25 +321,57 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             </div>
                         ))}
                     </div>
-                     <DialogContent className="sm:max-w-[480px]">
-                        <DialogHeader>
-                            <DialogTitle className="font-headline flex items-center gap-2"> <BookMarked /> Confirm your Reservation </DialogTitle>
-                             {selectedSlot && <DialogDescription> You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedSlot.date, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot.time}</strong>. </DialogDescription>}
-                        </DialogHeader>
-                        {user && selectedSlot && (
-                            <CreateReservationForm
-                                user={user} pitch={pitch}
-                                onReservationSuccess={handleBookingSuccess}
-                                selectedDate={selectedSlot.date} selectedTime={selectedSlot.time}
-                                promotion={selectedPromo}
-                            />
-                        )}
-                    </DialogContent>
-                </Dialog>
+                     <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
+                        <DialogContent className="sm:max-w-[480px]">
+                            <DialogHeader>
+                                <DialogTitle className="font-headline flex items-center gap-2"> <BookMarked /> Confirm your Reservation </DialogTitle>
+                                {selectedSlot && <DialogDescription> You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedSlot.date, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot.time}</strong>. </DialogDescription>}
+                            </DialogHeader>
+                            {user && selectedSlot && (
+                                <CreateReservationForm
+                                    user={user} pitch={pitch}
+                                    onReservationSuccess={handleBookingSuccess}
+                                    selectedDate={selectedSlot.date} selectedTime={selectedSlot.time}
+                                    promotion={selectedPromo}
+                                />
+                            )}
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={isChallengeDialogOpen} onOpenChange={setIsChallengeDialogOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle className="font-headline">Challenge Team</DialogTitle>
+                                <DialogDescription>Select which of your teams will challenge the opponent.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                <Label htmlFor="team-select">Your Team</Label>
+                                <Select onValueChange={setChallengingTeamId} value={challengingTeamId}>
+                                    <SelectTrigger id="team-select">
+                                        <SelectValue placeholder="Select a team..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {userTeams.map(team => (
+                                            <SelectItem key={team.id} value={team.id}>
+                                                {team.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsChallengeDialogOpen(false)}>Cancel</Button>
+                                <Button onClick={handleSendChallenge} disabled={!challengingTeamId}>
+                                    <Send className="mr-2 h-4 w-4" /> Send Challenge
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </>
                 )}
             </CardContent>
         </Card>
     )
 }
-
-    
