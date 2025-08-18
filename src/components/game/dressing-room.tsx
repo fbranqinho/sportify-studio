@@ -9,19 +9,21 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import type { Match, Team, User } from "@/types";
+import type { Match, Team, User, Formation, Tactic, PlayerProfile } from "@/types";
 
-type TeamAssignment = {
-  [playerId: string]: 'A' | 'B' | 'Bench';
-};
+const tactics: Tactic[] = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
 
-type Formation = {
-  [position: string]: string | null; // playerId or null
+const formationPositionsByTactic: { [key in Tactic]: string[] } = {
+    "4-4-2": ["GK", "LB", "CB1", "CB2", "RB", "LM", "CM1", "CM2", "RM", "ST1", "ST2"],
+    "4-3-3": ["GK", "LB", "CB1", "CB2", "RB", "CM1", "CM2", "CM3", "LW", "ST", "RW"],
+    "3-5-2": ["GK", "CB1", "CB2", "CB3", "LWB", "RWB", "CM1", "CM2", "CAM", "ST1", "ST2"],
+    "4-2-3-1": ["GK", "LB", "CB1", "CB2", "RB", "CDM1", "CDM2", "LAM", "CAM", "RAM", "ST"],
+    "5-3-2": ["GK", "LWB", "LB", "CB", "RB", "RWB", "CM1", "CM2", "CM3", "ST1", "ST2"],
 };
 
 interface DressingRoomProps {
   match: Match;
-  players: User[];
+  players: (User & { profile: PlayerProfile })[];
   onUpdate: (data: Partial<Match>) => void;
   onClose: () => void;
   teamA: Team | null;
@@ -29,98 +31,117 @@ interface DressingRoomProps {
   currentUserIsManagerFor: 'A' | 'B' | 'both' | 'none';
 }
 
-const formationPositions = ["GK", "DEF1", "DEF2", "MID1", "MID2", "FWD1", "FWD2"];
-
 export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, currentUserIsManagerFor }: DressingRoomProps) {
-  const [teamAFormation, setTeamAFormation] = React.useState<Formation>({});
-  const [teamBFormation, setTeamBFormation] = React.useState<Formation>({});
+  const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || '4-4-2');
+  const [formationA, setFormationA] = React.useState<Formation>(match.teamADetails?.formation || {});
+  const [captainA, setCaptainA] = React.useState<string | undefined>(match.teamADetails?.captainId);
+  const [penaltyTakerA, setPenaltyTakerA] = React.useState<string | undefined>(match.teamADetails?.penaltyTakerId);
+  const [cornerTakerA, setCornerTakerA] = React.useState<string | undefined>(match.teamADetails?.cornerTakerId);
+  const [freeKickTakerA, setFreeKickTakerA] = React.useState<string | undefined>(match.teamADetails?.freeKickTakerId);
+
+  const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || '4-4-2');
+  const [formationB, setFormationB] = React.useState<Formation>(match.teamBDetails?.formation || {});
+
   const { toast } = useToast();
   const autoFilled = React.useRef(false);
 
   const isPracticeMatch = !teamA || !teamB;
   const canManageTeamA = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'A';
   const canManageTeamB = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'B';
-
+  
+  const getPlayersByPosition = (position: PlayerPosition) => players.filter(p => p.profile.position === position);
 
   React.useEffect(() => {
-    // Auto-fill logic for practice matches only
+    // Intelligent Auto-fill logic for practice matches only
     if (isPracticeMatch && players.length > 0 && !autoFilled.current) {
         const shuffled = [...players].sort(() => 0.5 - Math.random());
         const newFormationA: Formation = {};
         const newFormationB: Formation = {};
-
-        const playersForA = shuffled.splice(0, Math.min(shuffled.length, formationPositions.length));
-        const playersForB = shuffled.splice(0, Math.min(shuffled.length, formationPositions.length));
         
-        formationPositions.forEach((pos, index) => {
-            newFormationA[pos] = playersForA[index]?.id || null;
-            newFormationB[pos] = playersForB[index]?.id || null;
-        });
+        const playersForA = shuffled.slice(0, Math.ceil(shuffled.length / 2));
+        const playersForB = shuffled.slice(Math.ceil(shuffled.length / 2));
 
-        setTeamAFormation(newFormationA);
-        setTeamBFormation(newFormationB);
+        const positions = formationPositionsByTactic[tacticA];
+        
+        const assignPlayers = (formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[]) => {
+            let assigned = new Set<string>();
+            positions.forEach(pos => {
+                let playerToAssign: (User & { profile: PlayerProfile }) | undefined;
+                if (pos === "GK") playerToAssign = availablePlayers.find(p => p.profile.position === "Goalkeeper" && !assigned.has(p.id));
+                else if (pos.includes("B")) playerToAssign = availablePlayers.find(p => p.profile.position === "Defender" && !assigned.has(p.id));
+                else if (pos.includes("M")) playerToAssign = availablePlayers.find(p => p.profile.position === "Midfielder" && !assigned.has(p.id));
+                else if (pos.includes("ST") || pos.includes("W")) playerToAssign = availablePlayers.find(p => p.profile.position === "Forward" && !assigned.has(p.id));
+                
+                if (!playerToAssign) playerToAssign = availablePlayers.find(p => !assigned.has(p.id));
+
+                if (playerToAssign) {
+                    formation[pos] = playerToAssign.id;
+                    assigned.add(playerToAssign.id);
+                }
+            });
+        };
+        
+        assignPlayers(newFormationA, playersForA);
+        assignPlayers(newFormationB, playersForB);
+
+        setFormationA(newFormationA);
+        setFormationB(newFormationB);
         autoFilled.current = true;
     }
-  }, [players, isPracticeMatch]);
+  }, [players, isPracticeMatch, tacticA]);
 
   const handleFormationChange = (team: 'A' | 'B', position: string, playerId: string) => {
-    // Determine which formation state to update based on the team
-    const currentFormation = team === 'A' ? teamAFormation : teamBFormation;
-    const setFormation = team === 'A' ? setTeamAFormation : setTeamBFormation;
-    const otherFormation = team === 'A' ? teamBFormation : teamAFormation;
-    
-    // Create a new copy of the formation to modify
+    const currentFormation = team === 'A' ? formationA : formationB;
+    const setFormation = team === 'A' ? setFormationA : setFormationB;
+    const otherFormation = team === 'A' ? formationB : formationA;
+
     const newFormation = { ...currentFormation };
-
-    // If the selected player is already in another position in the same team, clear that old position
     for (const pos in newFormation) {
-        if (newFormation[pos] === playerId) {
-            newFormation[pos] = null;
-        }
+      if (newFormation[pos] === playerId) newFormation[pos] = null;
     }
-    
-    // Also remove from the other team if it's a practice match
-    if(isPracticeMatch) {
-       const newOtherFormation = {...otherFormation};
-        for (const pos in newOtherFormation) {
-            if (newOtherFormation[pos] === playerId) {
-                newOtherFormation[pos] = null;
-            }
-        }
-        if(team === 'A') setTeamBFormation(newOtherFormation);
-        else setTeamAFormation(newOtherFormation);
+    if (isPracticeMatch) {
+      const newOtherFormation = { ...otherFormation };
+      for (const pos in newOtherFormation) {
+        if (newOtherFormation[pos] === playerId) newOtherFormation[pos] = null;
+      }
+      if (team === 'A') setFormationB(newOtherFormation);
+      else setFormationA(newOtherFormation);
     }
-
-    // Set the player in the new position, or clear it if "empty" was selected
     newFormation[position] = playerId === "empty" ? null : playerId;
-
-    // Update the state
     setFormation(newFormation);
   };
 
-  const assignedPlayersA = new Set(Object.values(teamAFormation).filter(Boolean));
-  const assignedPlayersB = new Set(Object.values(teamBFormation).filter(Boolean));
+  const assignedPlayersA = new Set(Object.values(formationA).filter(Boolean));
+  const assignedPlayersB = new Set(Object.values(formationB).filter(Boolean));
   const assignedPlayers = new Set([...Array.from(assignedPlayersA), ...Array.from(assignedPlayersB)]);
 
-  const getAvailablePlayersForTeam = (teamId: 'A' | 'B', currentPosPlayerId: string | null): User[] => {
+  const getAvailablePlayersForTeam = (teamId: 'A' | 'B', currentPosPlayerId: string | null): (User & {profile: PlayerProfile})[] => {
       const teamPlayers = players.filter(p => {
-          if (isPracticeMatch) return true; // Any player can be in any team for practice
+          if (isPracticeMatch) return true;
           return teamId === 'A' ? match.teamAPlayers?.includes(p.id) : match.teamBPlayers?.includes(p.id);
       });
-
       return teamPlayers.filter(p => !assignedPlayers.has(p.id) || p.id === currentPosPlayerId);
   }
 
   const benchPlayers = players.filter(p => !assignedPlayers.has(p.id));
 
   const handleSaveChanges = async () => {
-    const teamAPlayers = Object.values(teamAFormation).filter((id): id is string => !!id);
-    const teamBPlayers = Object.values(teamBFormation).filter((id): id is string => !!id);
-
-    // In a real match, we only update the manager's own team
     const updateData: Partial<Match> = {};
-    if (canManageTeamA) updateData.teamAPlayers = teamAPlayers;
-    if (canManageTeamB) updateData.teamBPlayers = teamBPlayers;
+    if (canManageTeamA) {
+      updateData.teamADetails = {
+        tactic: tacticA,
+        formation: formationA,
+        captainId: captainA,
+        penaltyTakerId: penaltyTakerA,
+        cornerTakerId: cornerTakerA,
+        freeKickTakerId: freeKickTakerA
+      };
+      updateData.teamAPlayers = Object.values(formationA).filter((id): id is string => !!id);
+    }
+    if (canManageTeamB) {
+      updateData.teamBDetails = { tactic: tacticB, formation: formationB };
+      updateData.teamBPlayers = Object.values(formationB).filter((id): id is string => !!id);
+    }
 
     const matchRef = doc(db, "matches", match.id);
     try {
@@ -134,7 +155,7 @@ export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, 
     }
   };
 
-  const FieldPosition = ({ team, position, formation, availablePlayers, disabled }: { team: 'A' | 'B', position: string, formation: Formation, availablePlayers: User[], disabled: boolean }) => {
+  const FieldPosition = ({ team, position, formation, availablePlayers, disabled }: { team: 'A' | 'B', position: string, formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[], disabled: boolean }) => {
     const selectedPlayerId = formation[position] || "empty";
     const selectedPlayer = players.find(p => p.id === selectedPlayerId);
 
@@ -167,54 +188,86 @@ export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, 
     );
   };
   
-  const FormationDisplay = ({ team, formation, teamData, canManage }: { team: 'A' | 'B', formation: Formation, teamData: Team | null, canManage: boolean }) => {
-    const gridPositions: { [key: string]: string } = {
-        GK: 'col-start-2 row-start-4', DEF1: 'col-start-3 row-start-2', DEF2: 'col-start-3 row-start-6',
-        MID1: 'col-start-4 row-start-3', MID2: 'col-start-4 row-start-5', FWD1: 'col-start-5 row-start-2', FWD2: 'col-start-5 row-start-6'
-    };
-    
+  const FormationDisplay = ({ team, tactic, setTactic, formation, teamData, canManage }: { team: 'A' | 'B', tactic: Tactic, setTactic: (t: Tactic) => void, formation: Formation, teamData: Team | null, canManage: boolean }) => {
     const teamName = teamData?.name || (team === 'A' ? 'Vests A' : 'Vests B');
-    const availablePlayers = getAvailablePlayersForTeam(team, null);
+    const positions = formationPositionsByTactic[tactic];
 
     return (
-        <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30">
-            <h3 className="text-lg font-bold text-center mb-4">{teamName}</h3>
-            <div className="grid grid-cols-5 grid-rows-7 gap-y-2">
-                {formationPositions.map(pos => (
-                    <div key={pos} className={gridPositions[pos]}>
-                        <FieldPosition 
-                            team={team} 
-                            position={pos} 
-                            formation={formation} 
-                            availablePlayers={getAvailablePlayersForTeam(team, formation[pos])} 
-                            disabled={!canManage}
-                        />
-                    </div>
-                ))}
-            </div>
+      <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30 space-y-4">
+        <div className="flex justify-between items-center">
+            <h3 className="text-lg font-bold text-center">{teamName}</h3>
+            <Select value={tactic} onValueChange={(v) => setTactic(v as Tactic)} disabled={!canManage}>
+                <SelectTrigger className="w-[120px] h-8">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+            </Select>
         </div>
-    )
-  }
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-2">
+            {positions.map(pos => (
+                <FieldPosition 
+                    key={pos}
+                    team={team} 
+                    position={pos} 
+                    formation={formation} 
+                    availablePlayers={getAvailablePlayersForTeam(team, formation[pos])} 
+                    disabled={!canManage}
+                />
+            ))}
+        </div>
+      </div>
+    );
+  };
+  
+  const teamAPlayersOnField = players.filter(p => assignedPlayersA.has(p.id));
 
   return (
-    <DialogContent className="max-w-4xl">
+    <DialogContent className="max-w-6xl">
       <DialogHeader>
         <DialogTitle className="font-headline">Dressing Room</DialogTitle>
         <DialogDescription>Assign players to teams and positions for this match.</DialogDescription>
       </DialogHeader>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-        <FormationDisplay team="A" formation={teamAFormation} teamData={teamA} canManage={canManageTeamA}/>
-        <FormationDisplay team="B" formation={teamBFormation} teamData={teamB} canManage={canManageTeamB}/>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 py-4">
+        <FormationDisplay team="A" tactic={tacticA} setTactic={setTacticA} formation={formationA} teamData={teamA} canManage={canManageTeamA}/>
+        <FormationDisplay team="B" tactic={tacticB} setTactic={setTacticB} formation={formationB} teamData={teamB} canManage={canManageTeamB}/>
       </div>
-      
-      <div>
-        <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
-        <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
-            {benchPlayers.length > 0 ? benchPlayers.map(p => (
-                <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
-            )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+            <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
+            <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
+                {benchPlayers.length > 0 ? benchPlayers.map(p => (
+                    <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
+                )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+            </div>
         </div>
+
+        {canManageTeamA && (
+          <div>
+            <h4 className="font-bold mb-2">Tactical Roles</h4>
+            <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label>Captain</Label>
+                <Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Penalties</Label>
+                <Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Corners</Label>
+                <Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Free Kicks</Label>
+                <Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <DialogFooter>

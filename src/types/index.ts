@@ -188,6 +188,8 @@ export interface MatchInvitation {
 
 
 export type PitchSport = "fut7" | "fut11" | "fut5" | "futsal";
+export type Tactic = "4-4-2" | "4-3-3" | "3-5-2" | "4-2-3-1" | "5-3-2";
+
 
 export interface Pitch {
   id: string;
@@ -231,7 +233,7 @@ export interface Reservation {
 }
 
 
-export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled" | "PendingOpponent";
+export type MatchStatus = "Collecting players" | "Scheduled" | "InProgress" | "Finished" | "Cancelled" ;
 
 export type MatchEventType = "Goal" | "Assist" | "YellowCard" | "RedCard";
 
@@ -245,6 +247,18 @@ export interface MatchEvent {
   minute?: number;
 }
 
+export type Formation = {
+  [position: string]: string | null; // playerId or null
+};
+
+export interface TeamMatchDetails {
+    tactic?: Tactic;
+    captainId?: string;
+    penaltyTakerId?: string;
+    cornerTakerId?: string;
+    freeKickTakerId?: string;
+    formation?: Formation;
+}
 
 export interface Match {
     id: string;
@@ -254,6 +268,8 @@ export interface Match {
     invitedTeamId?: string | null; // ID of the team invited, used with PendingOpponent status
     teamAPlayers: string[]; // Array of User IDs
     teamBPlayers: string[]; // Array of User IDs
+    teamADetails?: TeamMatchDetails;
+    teamBDetails?: TeamMatchDetails;
     playerApplications?: string[]; // Array of user IDs who applied to play
     scoreA: number;
     scoreB: number;
