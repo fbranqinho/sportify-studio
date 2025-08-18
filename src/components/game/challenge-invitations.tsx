@@ -2,9 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Notification } from "@/types";
+import type { Match, Notification, Team } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,18 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         batch.delete(doc(db, "notifications", notification.id));
 
         if (accepted) {
+            // --- NEW LOGIC: Fetch challenger team to get players ---
+            const challengerTeamRef = doc(db, "teams", payload.challengerTeamId);
+            const challengerTeamSnap = await getDoc(challengerTeamRef);
+
+            if (!challengerTeamSnap.exists()) {
+                toast({ variant: "destructive", title: "Error", description: "Challenging team not found." });
+                return;
+            }
+            const challengerTeam = challengerTeamSnap.data() as Team;
+            // --- END NEW LOGIC ---
+
+
             batch.update(matchRef, {
                 teamBRef: payload.challengerTeamId,
                 status: "Scheduled",
@@ -86,6 +98,31 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                 type: 'ChallengeResponse'
             };
             batch.set(doc(collection(db, "notifications")), responseNotification);
+
+            // --- NEW LOGIC: Invite all players from the challenging team ---
+            if (challengerTeam.playerIds && challengerTeam.playerIds.length > 0) {
+                 for (const playerId of challengerTeam.playerIds) {
+                    const invitationRef = doc(collection(db, "matchInvitations"));
+                    batch.set(invitationRef, {
+                        matchId: match.id,
+                        teamId: challengerTeam.id,
+                        playerId: playerId,
+                        managerId: payload.challengerManagerId,
+                        status: "pending",
+                        invitedAt: serverTimestamp(),
+                    });
+
+                    const inviteNotificationRef = doc(collection(db, "notifications"));
+                    batch.set(inviteNotificationRef, {
+                        userId: playerId,
+                        message: `You've been invited to a game with ${challengerTeam.name} against ${match.teamARef ? 'another team' : 'a team'}.`,
+                        link: '/dashboard/my-games',
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    });
+                }
+            }
+            // --- END NEW LOGIC ---
 
         } else {
              const responseNotification: Omit<Notification, 'id'> = {
