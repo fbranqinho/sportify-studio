@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy, DollarSign, CreditCard, ArrowRight } from "lucide-react";
+import { Calendar, Users, Shield, MapPin, Building, Gamepad2, Check, X, Mail, History, Trophy, DollarSign, CreditCard, ArrowRight, Ban } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
@@ -264,7 +264,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
     }
 
     return (
-        <Button className="w-full mt-4" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+        <Button className="w-full mt-4" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay To Confirm</Button>
     )
 }
 
@@ -511,6 +511,19 @@ export default function MyGamesPage() {
           toast({ variant: "destructive", title: "Error", description: "Could not save your response." });
       }
   }
+  
+  const handleCancelReservation = async (reservationId: string) => {
+    try {
+        await updateDoc(doc(db, "reservations", reservationId), {
+            status: "Canceled"
+        });
+        toast({ title: "Reservation Cancelled", description: "The booking request has been withdrawn." });
+        fetchGameDetails();
+    } catch(error) {
+        console.error("Error cancelling reservation:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not cancel the reservation.' });
+    }
+  }
 
   const now = new Date();
   
@@ -521,7 +534,6 @@ export default function MyGamesPage() {
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const upcomingReservations = Array.from(reservations.values()).filter(r => r.status === 'Confirmed');
-
 
   const pastMatches = matches.filter(m => m.status === 'Finished')
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -680,7 +692,14 @@ export default function MyGamesPage() {
                             <span className="font-bold text-destructive">{reservation.totalAmount.toFixed(2)}€</span>
                         </div>
                         <p className="text-xs text-muted-foreground">The first team to pay for this time slot will secure the booking.</p>
-                        {payment && <PlayerPaymentButton payment={payment} onPaymentProcessed={fetchGameDetails} />}
+                        {payment && user && user.id === payment.actorId && (
+                           <div className="flex gap-2 pt-2">
+                             <PlayerPaymentButton payment={payment} onPaymentProcessed={fetchGameDetails} />
+                             <Button variant="outline" size="sm" onClick={() => handleCancelReservation(reservation.id)}>
+                                <Ban className="mr-2 h-4 w-4"/> Cancel
+                             </Button>
+                           </div>
+                        )}
                     </div>
             </CardContent>
         </Card>
@@ -743,7 +762,7 @@ export default function MyGamesPage() {
 
       {/* Upcoming Games Section */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold font-headline">Pending Confirmation ({upcomingReservations.length})</h2>
+        <h2 className="text-2xl font-bold font-headline">Reservations to Pay ({upcomingReservations.length})</h2>
         {upcomingReservations.length > 0 ? (
             <ReservationList reservations={upcomingReservations} />
         ) : (
