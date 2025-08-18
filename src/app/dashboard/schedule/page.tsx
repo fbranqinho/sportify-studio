@@ -107,45 +107,60 @@ export default function SchedulePage() {
         const actorId = reservation.managerRef || reservation.playerRef;
         if (!actorId) throw new Error("Reservation is missing a manager or player reference.");
         
-        // 1. Update Reservation status to Confirmed (awaiting payment)
-        batch.update(reservationRef, { status: "Confirmed", paymentStatus: "Pending" });
+        // 1. Update Reservation status to Confirmed (awaiting payment initiation by manager)
+        batch.update(reservationRef, { status: "Confirmed" });
         
-        // 2. Create the initial Payment document
-        const newPaymentRef = doc(collection(db, "payments"));
-        
-        const paymentData: any = {
-            type: "booking",
-            amount: reservation.totalAmount,
-            status: "Pending",
-            date: new Date().toISOString(),
+        // 2. Create the Match document immediately
+        const newMatchRef = doc(collection(db, "matches"));
+        const matchData: Omit<Match, 'id'> = {
+            date: reservation.date,
+            teamARef: reservation.teamRef || null,
+            teamBRef: null,
+            teamAPlayers: [],
+            teamBPlayers: [],
+            scoreA: 0,
+            scoreB: 0,
+            pitchRef: reservation.pitchId,
+            status: reservation.teamRef ? "PendingOpponent" : "Scheduled",
+            attendance: 0,
+            refereeId: null,
+            managerRef: reservation.managerRef || null,
+            allowExternalPlayers: true,
             reservationRef: reservation.id,
-            ownerRef: reservation.ownerProfileId,
-            pitchName: reservation.pitchName,
-            teamName: reservation.actorName,
-            actorId: actorId,
         };
-
-        if (reservation.teamRef) paymentData.teamRef = reservation.teamRef;
-        if (reservation.playerRef) paymentData.playerRef = reservation.playerRef;
-        if (reservation.managerRef) paymentData.managerRef = reservation.managerRef;
-
-        batch.set(newPaymentRef, paymentData);
-
-        // 3. Create Notification for the manager/player to pay
-        const paymentNotificationRef = doc(collection(db, 'notifications'));
-        batch.set(paymentNotificationRef, {
+        batch.set(newMatchRef, matchData);
+        
+        // 3. Create Notification for the manager/player about the approval
+        const approvalNotificationRef = doc(collection(db, 'notifications'));
+        batch.set(approvalNotificationRef, {
             userId: actorId,
-            message: `Your booking for ${reservation.pitchName} is approved! Please complete the payment of ${reservation.totalAmount.toFixed(2)}€ to secure the slot.`,
+            message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players and payments.`,
             link: '/dashboard/my-games',
             read: false,
             createdAt: serverTimestamp() as any,
         });
+
+        // 4. If it's a team booking, invite players to the newly created match
+        if (reservation.teamRef && reservation.managerRef) {
+            const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
+            if (teamDoc.exists()) {
+                const team = teamDoc.data() as Team;
+                if (team.playerIds?.length > 0) {
+                    for (const playerId of team.playerIds) {
+                        const invitationRef = doc(collection(db, "matchInvitations"));
+                        batch.set(invitationRef, { matchId: newMatchRef.id, teamId: team.id, playerId: playerId, managerId: reservation.managerRef, status: "pending", invitedAt: serverTimestamp() });
+                        const inviteNotificationRef = doc(collection(db, 'notifications'));
+                        batch.set(inviteNotificationRef, { userId: playerId, message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
+                    }
+                }
+            }
+        }
         
         await batch.commit(); 
         
         toast({
           title: "Reservation Approved!",
-          description: `A payment request has been sent to ${reservation.actorName}. The slot is reserved for the first to pay.`,
+          description: `A notification has been sent to ${reservation.actorName}. They can now proceed with organizing the game.`,
         });
 
       } catch (error) {
