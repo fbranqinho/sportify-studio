@@ -28,217 +28,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-
-const StartSplitPaymentButton = ({ reservation, onPaymentProcessed }: { reservation: Reservation, onPaymentProcessed: () => void }) => {
-    const { toast } = useToast();
-    const [isProcessing, setIsProcessing] = React.useState(false);
-    const [associatedMatch, setAssociatedMatch] = React.useState<Match | null>(null);
-
-    React.useEffect(() => {
-        const fetchMatch = async () => {
-            if (reservation.id) {
-                const matchQuery = query(collection(db, "matches"), where("reservationRef", "==", reservation.id));
-                const matchSnap = await getDocs(matchQuery);
-                if (!matchSnap.empty) {
-                    const matchDoc = matchSnap.docs[0];
-                    setAssociatedMatch({ id: matchDoc.id, ...matchDoc.data() } as Match);
-                }
-            }
-        };
-        fetchMatch();
-    }, [reservation.id]);
-
-    const handleSplitPayment = async () => {
-        setIsProcessing(true);
-        if (!associatedMatch) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Associated match not found.' });
-            setIsProcessing(false);
-            return;
-        }
-
-        const confirmedPlayers = [...new Set([...(associatedMatch.teamAPlayers || []), ...(associatedMatch.teamBPlayers || [])])];
-        if (confirmedPlayers.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No confirmed players to split the payment with.' });
-            setIsProcessing(false);
-            return;
-        }
-
-        const batch = writeBatch(db);
-        const reservationRef = doc(db, "reservations", reservation.id);
-    
-        try {
-            const amountPerPlayer = reservation.totalAmount / confirmedPlayers.length;
-
-            batch.update(reservationRef, { paymentStatus: "Split" });
-    
-            for (const playerId of confirmedPlayers) {
-                const newPaymentRef = doc(collection(db, "payments"));
-                batch.set(newPaymentRef, {
-                    type: "booking_split",
-                    amount: amountPerPlayer,
-                    status: "Pending",
-                    date: new Date().toISOString(),
-                    reservationRef: reservation.id,
-                    teamRef: reservation.teamRef,
-                    playerRef: playerId,
-                    ownerRef: reservation.ownerProfileId,
-                    pitchName: reservation.pitchName,
-                    teamName: reservation.actorName,
-                });
-
-                const notificationRef = doc(collection(db, 'notifications'));
-                batch.set(notificationRef, {
-                    userId: playerId,
-                    message: `Your share of ${amountPerPlayer.toFixed(2)}€ for the game at ${reservation.pitchName} is due.`,
-                    link: '/dashboard/payments',
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                });
-            }
-
-            await batch.commit();
-
-            toast({ title: "Payment Split!", description: `Each of the ${confirmedPlayers.length} confirmed players has been notified.` });
-            onPaymentProcessed();
-    
-        } catch (error: any) {
-            console.error("Error splitting payment:", error);
-            toast({ variant: "destructive", title: "Error", description: `Could not split payment: ${error.message}` });
-        } finally {
-            setIsProcessing(false);
-        }
-    }
-    
-    if (!associatedMatch) return <Skeleton className="h-10 w-full" />;
-
-    const confirmedPlayersCount = (associatedMatch.teamAPlayers?.length || 0) + (associatedMatch.teamBPlayers?.length || 0);
-    const amountPerPlayer = confirmedPlayersCount > 0 ? (reservation.totalAmount / confirmedPlayersCount).toFixed(2) : '0.00';
-
-    return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button className="w-full" disabled={isProcessing || confirmedPlayersCount === 0}>
-                    <CreditCard className="mr-2"/> 
-                    {isProcessing ? "Processing..." : "Split Payment"}
-                </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This will send a payment request of <strong>{amountPerPlayer}€</strong> to each of the <strong>{confirmedPlayersCount}</strong> confirmed players for this game. This cannot be undone.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleSplitPayment}>Continue</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    )
-}
-
-const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
-    const { toast } = useToast();
-
-    const handlePayNow = async () => {
-        if (!payment.reservationRef) {
-            toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
-            return;
-        }
-        
-        const reservationRef = doc(db, "reservations", payment.reservationRef);
-        const reservationDoc = await getDoc(reservationRef);
-        if (!reservationDoc.exists()) throw new Error("Reservation not found.");
-        const reservation = reservationDoc.data() as Reservation;
-
-        // --- Critical Check: Ensure the slot is still available ---
-        const conflictingReservationsQuery = query(
-            collection(db, "reservations"),
-            where("pitchId", "==", reservation.pitchId),
-            where("date", "==", reservation.date),
-            where("status", "==", "Scheduled")
-        );
-        const conflictingSnap = await getDocs(conflictingReservationsQuery);
-        if (!conflictingSnap.empty) {
-            toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
-            // Cancel this now-obsolete reservation
-            await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
-            onPaymentProcessed();
-            return;
-        }
-
-        const batch = writeBatch(db);
-        const paymentRef = doc(db, "payments", payment.id);
-        
-        try {
-            // --- 1. Update Payment ---
-            batch.update(paymentRef, { status: "Paid" });
-            
-            // Check if this payment completes the total amount
-            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', payment.reservationRef));
-            const paymentsSnap = await getDocs(paymentsQuery);
-            let totalPaid = payment.amount; // Start with the current payment
-            paymentsSnap.forEach(doc => {
-                if (doc.id !== payment.id && doc.data().status === 'Paid') {
-                    totalPaid += doc.data().amount;
-                }
-            });
-
-            if (totalPaid >= reservation.totalAmount) {
-                 // --- 2. Update Reservation and Match status to confirm ---
-                batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-                
-                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-                const matchSnap = await getDocs(matchQuery);
-                if (!matchSnap.empty) {
-                    batch.update(matchSnap.docs[0].ref, { status: 'Scheduled' });
-                }
-                
-                // --- 3. Notify the Owner ---
-                const ownerNotificationRef = doc(collection(db, "notifications"));
-                batch.set(ownerNotificationRef, {
-                    ownerProfileId: reservation.ownerProfileId,
-                    message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
-                    link: `/dashboard/schedule`,
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                });
-                
-                // --- 4. Cancel conflicting reservations ---
-                const otherReservationsQuery = query(
-                    collection(db, "reservations"),
-                    where("pitchId", "==", reservation.pitchId),
-                    where("date", "==", reservation.date),
-                    where("id", "!=", reservation.id) // Exclude the current reservation
-                );
-                const otherReservationsSnap = await getDocs(otherReservationsQuery);
-                otherReservationsSnap.forEach(otherResDoc => {
-                    batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
-                    const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
-                    if(managerId) {
-                        const cancellationNotificationRef = doc(collection(db, 'notifications'));
-                        batch.set(cancellationNotificationRef, { userId: managerId, message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
-                    }
-                });
-            }
-
-            await batch.commit();
-        
-            toast({ title: "Payment Successful!", description: totalPaid >= reservation.totalAmount ? "Your game is confirmed!" : "Your share is paid." });
-            onPaymentProcessed();
-        } catch (error: any) {
-            console.error("Error processing payment:", error);
-            toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
-        }
-    }
-
-    return (
-        <Button className="w-full mt-4" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay {payment.amount.toFixed(2)}€</Button>
-    )
-}
-
-
 export default function MyGamesPage() {
   const { user } = useUser();
   const { toast } = useToast();
@@ -249,8 +38,6 @@ export default function MyGamesPage() {
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
-  const [payments, setPayments] = React.useState<Map<string, Payment>>(new Map());
-  const [splitPaymentCounts, setSplitPaymentCounts] = React.useState<Map<string, {paid: number, total: number}>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Helper to fetch details for a list of IDs from a given collection
@@ -353,21 +140,6 @@ export default function MyGamesPage() {
             if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
             if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
         });
-        
-        // Fetch reservations for the user even if no match is created yet
-        const confirmedReservationsQuery = query(
-            collection(db, 'reservations'), 
-            where('actorId', '==', user.id), 
-            where('status', 'in', ['Confirmed', 'Split'])
-        );
-        const confirmedResSnap = await getDocs(confirmedReservationsQuery);
-        confirmedResSnap.forEach(resDoc => {
-            const res = resDoc.data() as Reservation;
-            if (res.pitchId) pitchIdsToFetch.add(res.pitchId);
-            if (res.teamRef) teamIdsToFetch.add(res.teamRef);
-            reservationIdsToFetch.add(resDoc.id);
-        });
-
 
         if (teamIdsToFetch.size > 0) {
             const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
@@ -390,28 +162,6 @@ export default function MyGamesPage() {
         if (reservationIdsToFetch.size > 0) {
             const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
             setReservations(reservationsMap);
-
-            const paymentCounts = new Map<string, { paid: number, total: number }>();
-            const userPayments = new Map<string, Payment>();
-
-            for (const resId of Array.from(reservationsMap.keys())) {
-                const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", resId), where("status", "==", "Pending"));
-                const paymentsSnap = await getDocs(paymentsQuery);
-
-                const total = paymentsSnap.size;
-                const paidSnap = await getDocs(query(collection(db, "payments"), where("reservationRef", "==", resId), where("status", "==", "Paid")));
-                const paid = paidSnap.size;
-                paymentCounts.set(resId, { paid, total });
-
-                paymentsSnap.forEach(doc => {
-                    const payment = { id: doc.id, ...doc.data() } as Payment;
-                    if (payment.playerRef === user.id) {
-                       userPayments.set(resId, payment);
-                    }
-                });
-            }
-            setSplitPaymentCounts(paymentCounts);
-            setPayments(userPayments);
         }
 
      } catch (error) {
@@ -473,19 +223,6 @@ export default function MyGamesPage() {
       }
   }
   
-  const handleCancelReservation = async (reservationId: string) => {
-    try {
-        await updateDoc(doc(db, "reservations", reservationId), {
-            status: "Canceled"
-        });
-        toast({ title: "Reservation Cancelled", description: "The booking request has been withdrawn." });
-        fetchGameDetails();
-    } catch(error) {
-        console.error("Error cancelling reservation:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not cancel the reservation.' });
-    }
-  }
-
   const now = new Date();
   
   const upcomingMatches = matches.filter(m => {
@@ -493,8 +230,6 @@ export default function MyGamesPage() {
     const isNotFinishedOrCancelled = m.status !== 'Finished' && m.status !== 'Cancelled';
     return isFuture && isNotFinishedOrCancelled;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  const upcomingReservations = Array.from(reservations.values()).filter(r => r.status === 'Confirmed' && !r.paymentStatus);
 
   const pastMatches = matches.filter(m => m.status === 'Finished')
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -506,11 +241,8 @@ export default function MyGamesPage() {
     const pitch = match.pitchRef ? pitches.get(match.pitchRef) : null;
     const owner = pitch ? owners.get(pitch.ownerRef) : null;
     const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
-    const payment = reservation ? payments.get(reservation.id) : null;
-    const paymentCount = reservation ? splitPaymentCounts.get(reservation.id) : null;
 
     const isFinished = match.status === "Finished";
-    const isManager = user?.id === teamA?.managerId;
     const isPlayer = user?.role === 'PLAYER';
 
     // Invitation checks
@@ -605,66 +337,16 @@ export default function MyGamesPage() {
                         <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
                     </div>
                  )}
-                 {paymentCount && (
+                 {reservation?.paymentStatus && reservation.paymentStatus !== 'Paid' && (
                     <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-primary" />
-                        <span>Payments: <span className="font-semibold">{paymentCount.paid} / {paymentCount.total}</span></span>
+                        <span>Payment Status: <span className="font-semibold">{reservation.paymentStatus}</span></span>
                     </div>
                  )}
             </CardContent>
              <CardFooter className="flex-col items-start gap-4">
                 {buttonContent}
-                {isManager && reservation?.status === 'Confirmed' && reservation.paymentStatus !== 'Split' && (
-                     <StartSplitPaymentButton reservation={reservation} onPaymentProcessed={fetchGameDetails} />
-                )}
-                 {payment && (
-                    <PlayerPaymentButton payment={payment} onPaymentProcessed={fetchGameDetails} />
-                 )}
             </CardFooter>
-        </Card>
-    )
-  }
-
-  const ReservationCard = ({ reservation }: { reservation: Reservation }) => {
-    const team = reservation.teamRef ? teams.get(reservation.teamRef) : null;
-    const pitch = reservation.pitchId ? pitches.get(reservation.pitchId) : null;
-    const owner = pitch ? owners.get(pitch.ownerRef) : null;
-    
-    return (
-        <Card className="border-amber-500/50">
-            <CardHeader>
-                <CardTitle className="font-headline flex justify-between items-center">
-                    <span>{team?.name || 'Your Booking'} at {pitch?.name}</span>
-                </CardTitle>
-                <CardDescription className="flex items-center gap-2 pt-1">
-                    <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-                 <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-amber-600" />
-                    <span>Status: <span className="font-semibold">Awaiting Payment to Confirm</span></span>
-                 </div>
-                 {owner && (
-                    <div className="flex items-center gap-2">
-                        <Building className="h-4 w-4 text-primary" />
-                        <span>Managed by: <span className="font-semibold">{owner.companyName}</span></span>
-                    </div>
-                 )}
-                 <div className="border-t pt-3 mt-3 space-y-2">
-                         <div className="flex justify-between items-center text-base">
-                            <span className="font-semibold text-destructive">Payment Required</span>
-                            <span className="font-bold text-destructive">{reservation.totalAmount.toFixed(2)}€</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">The first team to pay for this time slot will secure the booking.</p>
-                        <div className="flex gap-2 pt-2">
-                          <StartSplitPaymentButton reservation={reservation} onPaymentProcessed={fetchGameDetails} />
-                          <Button variant="outline" size="sm" onClick={() => handleCancelReservation(reservation.id)}>
-                             <Ban className="mr-2 h-4 w-4"/> Cancel
-                          </Button>
-                        </div>
-                    </div>
-            </CardContent>
         </Card>
     )
   }
@@ -674,13 +356,6 @@ export default function MyGamesPage() {
       {matches.map(m => <MatchCard key={m.id} match={m} />)}
      </div>
   )
-  
-  const ReservationList = ({ reservations }: { reservations: Reservation[] }) => (
-     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-      {reservations.map(r => <ReservationCard key={r.id} reservation={r} />)}
-     </div>
-  )
-
 
   const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
     <Card className="flex flex-col items-center justify-center p-12 text-center mt-4 border-dashed">
@@ -717,22 +392,13 @@ export default function MyGamesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold font-headline">My Games & Bookings</h1>
+        <h1 className="text-3xl font-bold font-headline">My Games</h1>
         <p className="text-muted-foreground">
-          View your upcoming bookings, games, and past matches.
+          View your upcoming games and past matches.
         </p>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold font-headline">Reservas por Pagar ({upcomingReservations.length})</h2>
-        {upcomingReservations.length > 0 ? (
-            <ReservationList reservations={upcomingReservations} />
-        ) : (
-            <p className="text-sm text-muted-foreground pt-2">You have no bookings awaiting payment.</p>
-        )}
-      </div>
-
-      <div className="border-t pt-8 space-y-4">
         <h2 className="text-2xl font-bold font-headline">Upcoming Games ({upcomingMatches.length})</h2>
         {upcomingMatches.length > 0 ? (
             <MatchList matches={upcomingMatches} />
