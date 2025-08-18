@@ -18,32 +18,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 
 
-const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment, onPaymentProcessed: () => void }) => {
+const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { payment: Payment, reservation: Reservation | null, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
 
     const handlePayNow = async () => {
-        if (!payment.reservationRef) {
-            toast({ variant: "destructive", title: "Error", description: "This payment is not linked to a reservation." });
+        if (!reservation || !reservation.pitchId || !reservation.date) {
+            toast({ variant: "destructive", title: "Error", description: "This payment is missing critical reservation details." });
             return;
         }
-
-        const reservationRef = doc(db, "reservations", payment.reservationRef);
-        const reservationDoc = await getDoc(reservationRef);
-        if (!reservationDoc.exists()) throw new Error("Reservation not found.");
-        const reservation = reservationDoc.data() as Reservation;
         
-        if (!reservation.pitchId || !reservation.date) {
-             toast({ variant: "destructive", title: "Error", description: "Reservation details are incomplete. Cannot check for conflicts." });
-             return;
-        }
-
+        const reservationRef = doc(db, "reservations", reservation.id);
 
         // --- Critical Check: Ensure the slot is still available ---
         const conflictingReservationsQuery = query(
             collection(db, "reservations"),
             where("pitchId", "==", reservation.pitchId),
             where("date", "==", reservation.date),
-            where("status", "in", ["Scheduled", "Confirmed"])
+            where("status", "in", ["Scheduled", "Confirmed"]) // Look for other confirmed/paid reservations
         );
         const conflictingSnap = await getDocs(conflictingReservationsQuery);
         // Filter out the current user's reservation to see if there are OTHERS
@@ -66,7 +57,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             batch.update(paymentRef, { status: "Paid" });
             
             // --- Check if this payment completes the total amount ---
-            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', payment.reservationRef));
+            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id));
             const paymentsSnap = await getDocs(paymentsQuery);
             let totalPaid = payment.amount; // Start with the current payment
             paymentsSnap.forEach(doc => {
@@ -125,7 +116,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
     }
 
     return (
-        <Button size="sm" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay To Confirm</Button>
+        <Button size="sm" onClick={handlePayNow} disabled={!reservation}><CreditCard className="mr-2"/> Pay To Confirm</Button>
     )
 }
 
@@ -360,7 +351,7 @@ export default function PaymentsPage() {
                                 {showActions && (
                                     <TableCell className="text-right">
                                         {p.status === 'Pending' && user?.id === p.playerRef && (
-                                            <PlayerPaymentButton payment={p} onPaymentProcessed={fetchData} />
+                                            <PlayerPaymentButton payment={p} reservation={reservation} onPaymentProcessed={fetchData} />
                                         )}
                                         {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'booking_split' && (
                                             <ManagerRemindButton payment={p} />
@@ -431,9 +422,3 @@ export default function PaymentsPage() {
     </div>
   );
 }
-
-    
-
-    
-
-
