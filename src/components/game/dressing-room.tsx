@@ -333,5 +333,3 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     </DialogContent>
   );
 }
-
-    
