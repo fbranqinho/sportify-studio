@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -100,25 +100,26 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         
-        if (reservation && reservation.status === 'Pending') {
-            // Treat as available if reservation is pending
-        } else if (reservation) {
+        if (reservation && (reservation.status === 'Confirmed' || reservation.status === 'Scheduled')) {
             const match = matches.find(m => m.reservationRef === reservation.id);
+            const isMyGame = reservation.actorId === user.id;
+
+            if (isMyGame) {
+                return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+            }
+
             if (match) {
-                 if (match.status === 'PendingOpponent') {
+                 if (match.status === 'PendingOpponent' && match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
+                     return { status: 'OpenForTeam', match, reservation, price: 0 };
+                 }
+                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id)) {
                      const totalPlayers = (match.teamAPlayers?.length || 0);
                      const capacity = getPlayerCapacity(pitch.sport);
-
-                     if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
-                         return { status: 'OpenForTeam', match, reservation, price: 0 };
-                     }
-                     if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < capacity) {
-                         return { status: 'OpenForPlayers', match, reservation, price: 0 };
+                     if (totalPlayers < capacity) {
+                        return { status: 'OpenForPlayers', match, reservation, price: 0 };
                      }
                  }
-                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
-            // Reservation exists but no match? Treat as booked to be safe.
             return { status: 'Booked', reservation, price: reservation.totalAmount };
         }
         
