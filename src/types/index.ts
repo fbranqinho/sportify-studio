@@ -263,6 +263,7 @@ export interface Match {
     refereeId: string | null;
     managerRef: string | null;
     allowExternalPlayers?: boolean;
+    allowChallenges?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
     finishTime?: Timestamp | null;

@@ -373,6 +373,18 @@ function ManageGame({ match, onMatchUpdate, reservation }: { match: Match; onMat
             toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
         }
     }
+
+    const handleToggleAllowChallenges = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowChallenges: checked });
+            onMatchUpdate({ allowChallenges: checked });
+            toast({ title: "Settings updated", description: `Other teams can ${checked ? 'now' : 'no longer'} challenge you for this game.`});
+        } catch (error) {
+            console.error("Error updating match settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
+        }
+    }
     
     const handleDeleteGame = async () => {
         const batch = writeBatch(db);
@@ -452,6 +464,21 @@ function ManageGame({ match, onMatchUpdate, reservation }: { match: Match; onMat
                         id="allow-external"
                         checked={!!match.allowExternalPlayers}
                         onCheckedChange={handleToggleExternalPlayers}
+                    />
+                </div>
+                <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-challenges" className="text-base font-semibold">
+                            Accept Challenge from other teams
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Allow other teams to challenge you for this game slot.
+                        </p>
+                    </div>
+                    <Switch
+                        id="allow-challenges"
+                        checked={!!match.allowChallenges}
+                        onCheckedChange={handleToggleAllowChallenges}
                     />
                 </div>
                  {!isPaid && (
