@@ -109,7 +109,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             }
 
             if (match) {
-                 if (match.status === 'PendingOpponent' && match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
+                 if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
                      return { status: 'OpenForTeam', match, reservation, price: 0 };
                  }
                  if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id)) {
