@@ -31,6 +31,12 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
         const reservationDoc = await getDoc(reservationRef);
         if (!reservationDoc.exists()) throw new Error("Reservation not found.");
         const reservation = reservationDoc.data() as Reservation;
+        
+        if (!reservation.pitchId || !reservation.date) {
+             toast({ variant: "destructive", title: "Error", description: "Reservation details are incomplete. Cannot check for conflicts." });
+             return;
+        }
+
 
         // --- Critical Check: Ensure the slot is still available ---
         const conflictingReservationsQuery = query(
@@ -429,4 +435,5 @@ export default function PaymentsPage() {
     
 
     
+
 
