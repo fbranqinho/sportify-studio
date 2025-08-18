@@ -4,9 +4,9 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Payment, Notification, PaymentStatus, Reservation, User, Team } from "@/types";
+import type { Payment, Notification, PaymentStatus, Reservation, User, Team, Match } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,65 +27,105 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             return;
         }
 
+        const reservationRef = doc(db, "reservations", payment.reservationRef);
+        const reservationDoc = await getDoc(reservationRef);
+        if (!reservationDoc.exists()) throw new Error("Reservation not found.");
+        const reservation = reservationDoc.data() as Reservation;
+
+        // --- Critical Check: Ensure the slot is still available ---
+        const conflictingReservationsQuery = query(
+            collection(db, "reservations"),
+            where("pitchId", "==", reservation.pitchId),
+            where("date", "==", reservation.date),
+            where("status", "==", "Scheduled")
+        );
+        const conflictingSnap = await getDocs(conflictingReservationsQuery);
+        if (!conflictingSnap.empty) {
+            toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
+            // Cancel this now-obsolete reservation
+            await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
+            onPaymentProcessed();
+            return;
+        }
+
+
         const batch = writeBatch(db);
         const paymentRef = doc(db, "payments", payment.id);
         
-        batch.update(paymentRef, { status: "Paid" });
-        
         try {
-            await batch.commit();
-
-            const reservationRef = doc(db, "reservations", payment.reservationRef);
+             // --- 1. Update Payment and Reservation to Paid/Scheduled ---
+            batch.update(paymentRef, { status: "Paid" });
+            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
             
-            const reservationDoc = await getDoc(reservationRef);
-            if (!reservationDoc.exists()) return;
-
-            const reservation = {id: reservationDoc.id, ...reservationDoc.data()} as Reservation;
-
-            const paymentsQuery = query(
-                collection(db, "payments"), 
-                where("reservationRef", "==", payment.reservationRef),
-            );
+            // --- 2. Create the Match ---
+            const newMatchRef = doc(collection(db, "matches"));
+            const matchData: Omit<Match, 'id'> = {
+                date: reservation.date,
+                teamARef: reservation.teamRef || null,
+                teamBRef: null,
+                teamAPlayers: [],
+                teamBPlayers: [],
+                scoreA: 0,
+                scoreB: 0,
+                pitchRef: reservation.pitchId,
+                status: reservation.teamRef ? "PendingOpponent" : "Scheduled",
+                attendance: 0,
+                refereeId: null,
+                managerRef: reservation.managerRef || null,
+                allowExternalPlayers: true,
+                reservationRef: reservation.id,
+            };
+            batch.set(newMatchRef, matchData);
             
-            const paymentsSnap = await getDocs(paymentsQuery);
-            const totalPaid = paymentsSnap.docs
-                .filter(doc => doc.id === payment.id || doc.data().status === 'Paid') // Include current payment
-                .reduce((sum, doc) => sum + doc.data().amount, 0);
+            // --- 3. Notify the Owner ---
+            const ownerNotificationRef = doc(collection(db, "notifications"));
+            batch.set(ownerNotificationRef, {
+                ownerProfileId: reservation.ownerProfileId,
+                message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
+                link: `/dashboard/schedule`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+            });
 
-            if (totalPaid >= reservation.totalAmount) {
-                const finalBatch = writeBatch(db);
-                finalBatch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
-                
-                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-                const matchSnap = await getDocs(matchQuery);
-                if(!matchSnap.empty) {
-                    const matchRef = matchSnap.docs[0].ref;
-                    finalBatch.update(matchRef, { status: 'Scheduled' });
+            // --- 4. If it's a team booking, invite players ---
+            if (reservation.teamRef && reservation.managerRef) {
+                const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
+                if (teamDoc.exists()) {
+                    const team = teamDoc.data() as Team;
+                    if (team.playerIds?.length > 0) {
+                        for (const playerId of team.playerIds) {
+                            const invitationRef = doc(collection(db, "matchInvitations"));
+                            batch.set(invitationRef, { matchId: newMatchRef.id, teamId: team.id, playerId: playerId, managerId: reservation.managerRef, status: "pending", invitedAt: serverTimestamp() });
+                            const inviteNotificationRef = doc(collection(db, 'notifications'));
+                            batch.set(inviteNotificationRef, { userId: playerId, message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
+                        }
+                    }
                 }
-
-                const ownerNotificationRef = doc(collection(db, "notifications"));
-                const notification: Omit<Notification, 'id'> = {
-                    ownerProfileId: reservation.ownerProfileId,
-                    message: `Payment received for booking at ${reservation.pitchName}. The game is confirmed.`,
-                    link: `/dashboard/schedule`,
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                };
-                finalBatch.set(ownerNotificationRef, notification);
-                await finalBatch.commit();
-            
-                toast({
-                    title: "Final Payment Received!",
-                    description: "The reservation is now confirmed and scheduled.",
-                });
-            } else {
-                 const remainingToPay = paymentsSnap.docs.filter(p => p.data().status === 'Pending' && p.id !== payment.id).length;
-                 toast({
-                    title: "Payment Successful!",
-                    description: `Your payment has been registered. Waiting for ${remainingToPay > 0 ? `${remainingToPay} other players` : 'other payments'}.`,
-                });
             }
+            
+            // --- 5. Cancel conflicting reservations ---
+            const otherReservationsQuery = query(
+                collection(db, "reservations"),
+                where("pitchId", "==", reservation.pitchId),
+                where("date", "==", reservation.date),
+                where("status", "==", "Confirmed")
+            );
+            const otherReservationsSnap = await getDocs(otherReservationsQuery);
+            otherReservationsSnap.forEach(otherResDoc => {
+                batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
+                const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
+                if(managerId) {
+                    const cancellationNotificationRef = doc(collection(db, 'notifications'));
+                    batch.set(cancellationNotificationRef, { userId: managerId, message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
+                }
+            });
+
+
+            await batch.commit();
+        
+            toast({ title: "Game Confirmed!", description: "Your payment was successful and the game is now scheduled." });
             onPaymentProcessed();
+            
         } catch (error: any) {
             console.error("Error processing payment:", error);
             toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
@@ -93,7 +133,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
     }
 
     return (
-        <Button size="sm" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay Your Share</Button>
+        <Button size="sm" onClick={handlePayNow}><CreditCard className="mr-2"/> Pay To Confirm</Button>
     )
 }
 
@@ -155,7 +195,7 @@ export default function PaymentsPage() {
                 .filter(doc => doc.data().status === 'Paid')
                 .reduce((sum, doc) => sum + doc.data().amount, 0);
             
-            if (totalPaid >= res.totalAmount) {
+            if (totalPaid >= res.totalAmount && res.paymentStatus !== 'Paid') {
                 const resRef = doc(db, "reservations", res.id);
                 consistencyBatch.update(resRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
@@ -191,23 +231,12 @@ export default function PaymentsPage() {
 
     setLoading(true);
 
-    let roleField: string;
+    let roleField: 'actorId' | 'ownerRef' | 'teamRef' ;
     let initialQuery;
 
-    if (user.role === 'PLAYER') {
-        roleField = 'playerRef';
+    if (user.role === 'PLAYER' || user.role === 'MANAGER') {
+        roleField = 'actorId';
         initialQuery = query(collection(db, "payments"), where(roleField, "==", user.id));
-    } else if (user.role === 'MANAGER') {
-        const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
-        const teamsSnap = await getDocs(teamsQuery);
-        const teamIds = teamsSnap.docs.map(d => d.id);
-        if (teamIds.length > 0) {
-            initialQuery = query(collection(db, "payments"), where("teamRef", "in", teamIds));
-        } else {
-             setAllPayments([]);
-             setLoading(false);
-             return;
-        }
     } else if (user.role === 'OWNER') {
         const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
         const ownerProfileSnap = await getDocs(ownerProfileQuery);
@@ -229,7 +258,7 @@ export default function PaymentsPage() {
         setAllPayments(paymentsData);
 
         const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
-        const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean))];
+        const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean)), ...new Set(paymentsData.map(p => p.managerRef).filter(Boolean))];
 
         const reservationsMap = new Map<string, Reservation>();
         if (reservationIds.length > 0) {
@@ -240,7 +269,7 @@ export default function PaymentsPage() {
             });
             setReservations(reservationsMap);
 
-             // Run consistency check only for managers for now
+            // Run consistency check only for managers for now
             if (user.role === 'MANAGER') {
                const updated = await runConsistencyCheck(reservationsMap);
                if (updated) {
@@ -251,7 +280,7 @@ export default function PaymentsPage() {
         }
         
         if (playerIds.length > 0) {
-            const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
+            const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds.filter(Boolean)));
             const usersSnap = await getDocs(usersQuery);
             const usersMap = new Map<string, User>();
             usersSnap.forEach(doc => {
@@ -279,7 +308,7 @@ export default function PaymentsPage() {
         const lowerCaseSearch = searchTerm.toLowerCase();
         const teamMatch = p.teamName?.toLowerCase().includes(lowerCaseSearch);
         const pitchMatch = p.pitchName?.toLowerCase().includes(lowerCaseSearch);
-        const playerMatch = user.role === 'MANAGER' && p.playerRef && playerUsers.get(p.playerRef)?.name.toLowerCase().includes(lowerCaseSearch);
+        const playerMatch = user.role !== 'PLAYER' && p.actorId && playerUsers.get(p.actorId)?.name.toLowerCase().includes(lowerCaseSearch);
         return teamMatch || pitchMatch || playerMatch;
     }).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   }, [allPayments, searchTerm, user.role, playerUsers]);
@@ -304,8 +333,7 @@ export default function PaymentsPage() {
                 <TableHeader>
                     <TableRow>
                         {user.role !== 'PLAYER' && <TableHead>Player/Manager</TableHead>}
-                        <TableHead>Team</TableHead>
-                        <TableHead>Pitch</TableHead>
+                        <TableHead>Description</TableHead>
                         <TableHead className="w-[150px]">Game Date</TableHead>
                         <TableHead className="w-[150px]">Payment Date</TableHead>
                         <TableHead className="w-[120px] text-center">Status</TableHead>
@@ -316,20 +344,20 @@ export default function PaymentsPage() {
                 <TableBody>
                     {payments.length > 0 ? payments.map((p) => {
                         const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
-                        const actorId = p.playerRef || p.managerRef;
-                        const actorName = actorId ? playerUsers.get(actorId)?.name : "N/A";
+                        const actorName = p.actorId ? playerUsers.get(p.actorId)?.name : "N/A";
+                        const description = p.type === 'booking' ? `Booking at ${p.pitchName}` : `Share for ${p.teamName} at ${p.pitchName}`;
+                        
                         return (
                             <TableRow key={p.id}>
                                 {user.role !== 'PLAYER' && <TableCell className="font-medium">{actorName}</TableCell>}
-                                <TableCell className="font-medium">{p.teamName || '-'}</TableCell>
-                                <TableCell>{p.pitchName || '-'}</TableCell>
+                                <TableCell className="font-medium">{description}</TableCell>
                                 <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
                                 <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
                                 <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
                                 <TableCell className="text-right font-mono">{p.amount.toFixed(2)}€</TableCell>
                                 {showActions && (
                                     <TableCell className="text-right">
-                                        {p.status === 'Pending' && user?.role === 'PLAYER' && (
+                                        {p.status === 'Pending' && user?.id === p.actorId && (
                                             <PlayerPaymentButton payment={p} onPaymentProcessed={fetchData} />
                                         )}
                                         {p.status === 'Pending' && user?.role === 'MANAGER' && p.type === 'booking_split' && (
@@ -341,7 +369,7 @@ export default function PaymentsPage() {
                         )
                     }) : (
                         <TableRow>
-                            <TableCell colSpan={user.role !== 'PLAYER' ? 8 : (showActions ? 7 : 6)} className="h-24 text-center">
+                            <TableCell colSpan={user.role !== 'PLAYER' ? 7 : (showActions ? 6 : 5)} className="h-24 text-center">
                                 No payments match your criteria.
                             </TableCell>
                         </TableRow>

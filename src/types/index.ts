@@ -295,6 +295,7 @@ export type PaymentStatus = "Pending" | "Paid" | "Cancelled" | "Refunded";
 
 export interface Payment {
   id:string;
+  actorId?: string; // User ID of the person who has to pay (manager or player)
   playerRef?: string; // PlayerProfile ID
   ownerRef?: string; // OwnerProfile ID
   managerRef?: string; // ManagerProfile ID

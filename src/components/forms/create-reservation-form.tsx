@@ -92,7 +92,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
     try {
         const [hour, minute] = selectedTime.split(':').map(Number);
         const bookingDate = new Date(selectedDate);
-        bookingDate.setHours(hour, minute);
+        bookingDate.setHours(hour, minute, 0, 0);
         
         const batch = writeBatch(db);
         
@@ -100,7 +100,8 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
         const newReservationRef = doc(collection(db, "reservations"));
         const reservationData: any = {
             date: bookingDate.toISOString(),
-            status: "Pending",
+            status: "Pending", // Initial status is always Pending
+            paymentStatus: "Pending", // Default payment status
             pitchId: pitch.id,
             pitchName: pitch.name,
             ownerProfileId: pitch.ownerRef,
@@ -138,7 +139,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
 
         toast({
             title: "Reservation Requested!",
-            description: `Your request to book ${pitch.name} has been sent to the owner.`,
+            description: `Your request to book ${pitch.name} has been sent to the owner for approval.`,
         });
 
         form.reset();
@@ -205,7 +206,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
             {promotion && (
                 <p className="text-xs font-semibold text-primary mt-1">{promotion.name} (-{promotion.discountPercent}%) applied!</p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">Note: For now, all bookings are for a default 1-hour slot. Payment will be handled later.</p>
+            <p className="text-xs text-muted-foreground mt-2">The owner must approve your request before payment. All bookings are for 1-hour slots.</p>
         </div>
 
 
