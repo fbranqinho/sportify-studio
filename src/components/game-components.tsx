@@ -519,61 +519,72 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
 }
 
 export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpdate: () => void }) {
-    const [challenges, setChallenges] = React.useState<TeamChallenge[]>([]);
+    const [challenges, setChallenges] = React.useState<Notification[]>([]);
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
+    const { user } = useUser();
 
     React.useEffect(() => {
+        if (!user) return;
         const fetchChallenges = async () => {
             setLoading(true);
-            const challengesQuery = query(collection(db, "matches", match.id, "teamChallenges"));
+            const challengesQuery = query(
+                collection(db, "notifications"),
+                where("userId", "==", user.id),
+                where("type", "==", "Challenge"),
+                where("payload.matchId", "==", match.id)
+            );
             const snapshot = await getDocs(challengesQuery);
-            const challengesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamChallenge));
+            const challengesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
             setChallenges(challengesData);
             setLoading(false);
         };
         fetchChallenges();
-    }, [match.id]);
+    }, [match.id, user]);
 
-    const handleResponse = async (challenge: TeamChallenge, accepted: boolean) => {
+    const handleResponse = async (notification: Notification, accepted: boolean) => {
+        const { payload } = notification;
+        if (!payload) return;
+        
         const batch = writeBatch(db);
-        const matchRef = doc(db, "matches", match.id);
-        const challengeRef = doc(db, "matches", match.id, "teamChallenges", challenge.id);
+        const matchRef = doc(db, "matches", payload.matchId);
+        
+        // Delete the original challenge notification
+        batch.delete(doc(db, "notifications", notification.id));
 
         if (accepted) {
             batch.update(matchRef, {
-                teamBRef: challenge.challengerTeamId,
-                status: "Scheduled"
+                teamBRef: payload.challengerTeamId,
+                status: "Scheduled",
+                allowChallenges: false, // Turn off challenges once accepted
             });
             
-            const notificationMsg = `Your challenge to play against ${match.teamARef} was accepted!`;
-            const notification: Omit<Notification, 'id'> = {
-                userId: challenge.challengerManagerId,
-                message: notificationMsg,
+            const responseNotification: Omit<Notification, 'id'> = {
+                userId: payload.challengerManagerId,
+                message: `Your challenge to play against ${match.teamARef} was accepted!`,
                 link: `/dashboard/games/${match.id}`,
                 read: false,
                 createdAt: serverTimestamp() as any,
+                type: 'ChallengeResponse'
             };
-            batch.set(doc(collection(db, "notifications")), notification);
+            batch.set(doc(collection(db, "notifications")), responseNotification);
+
         } else {
-             const notificationMsg = `Your challenge to play against ${match.teamARef} was not accepted.`;
-             const notification: Omit<Notification, 'id'> = {
-                userId: challenge.challengerManagerId,
-                message: notificationMsg,
+             const responseNotification: Omit<Notification, 'id'> = {
+                userId: payload.challengerManagerId,
+                message: `Your challenge to play against ${match.teamARef} was not accepted.`,
                 link: `/dashboard/my-games`,
                 read: false,
                 createdAt: serverTimestamp() as any,
+                type: 'ChallengeResponse'
             };
-            batch.set(doc(collection(db, "notifications")), notification);
+            batch.set(doc(collection(db, "notifications")), responseNotification);
         }
-
-        // Delete the challenge regardless of response
-        batch.delete(challengeRef);
 
         try {
             await batch.commit();
             toast({ title: `Challenge ${accepted ? 'Accepted' : 'Declined'}` });
-            onUpdate(); // Re-fetch all data
+            onUpdate();
         } catch (error) {
             console.error("Error responding to challenge:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not process challenge response." });
@@ -609,7 +620,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                     <TableBody>
                         {challenges.map(challenge => (
                             <TableRow key={challenge.id}>
-                                <TableCell className="font-medium">{challenge.challengerTeamName}</TableCell>
+                                <TableCell className="font-medium">{challenge.payload?.challengerTeamName}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button size="sm" variant="outline" onClick={() => handleResponse(challenge, true)}>
                                         <CheckCircle className="mr-2 h-4 w-4 text-green-600"/> Accept
@@ -1218,7 +1229,7 @@ export function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: {
 
     return (
         <div className="space-y-6">
-            <MvpVoting match={match} user={user} onMvpUpdated={onMvpUpdate} />
+            <MvpVoting match={match} user={user} onMvpUpdate={onMvpUpdate} />
              {match.events && match.events.length > 0 && (
                  <Card>
                     <CardHeader>

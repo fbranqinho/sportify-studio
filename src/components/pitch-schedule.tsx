@@ -101,12 +101,10 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         const match = matches.find(m => isSameTime(new Date(m.date)));
         
-        if (reservation && (reservation.status === 'Confirmed' || reservation.status === 'Scheduled') && match) {
-             const isPaid = reservation.paymentStatus === 'Paid';
+        if (reservation && (reservation.paymentStatus === 'Paid' || reservation.paymentStatus === 'Split') && match) {
              const isPracticeMatch = !match.teamBRef && !match.invitedTeamId;
              
-             if (isPaid && isPracticeMatch) {
-                // The slot is paid and is a practice match (one team)
+             if (isPracticeMatch) {
                  if (user.role === 'MANAGER' && match.allowChallenges && match.managerRef !== user.id) {
                      return { status: 'OpenForTeam', match, reservation, price: 0 };
                  }
@@ -163,7 +161,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
     }
     
     const handleSendChallenge = async () => {
-        if (!challengeTarget || !challengingTeamId || !challengeTarget.teamARef || !challengeTarget.managerRef) {
+        if (!challengeTarget || !challengingTeamId || !challengeTarget.managerRef) {
              toast({ variant: "destructive", title: "Error", description: "Missing required information to send challenge."});
              return;
         }
@@ -172,16 +170,22 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         if (!challengingTeam) return;
 
         try {
-            const challengeRef = doc(collection(db, "matches", challengeTarget.id, "teamChallenges"));
-            const challengeData: Omit<TeamChallenge, 'id'> = {
-                challengerTeamId: challengingTeam.id,
-                challengerTeamName: challengingTeam.name,
-                challengerManagerId: user.id,
-                status: 'pending',
-                challengedAt: serverTimestamp() as any,
+            const notification: Omit<Notification, 'id'> = {
+                userId: challengeTarget.managerRef,
+                message: `The team '${challengingTeam.name}' has challenged you to a match!`,
+                link: `/dashboard/games/${challengeTarget.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+                type: 'Challenge',
+                payload: {
+                    matchId: challengeTarget.id,
+                    challengerTeamId: challengingTeam.id,
+                    challengerTeamName: challengingTeam.name,
+                    challengerManagerId: user.id,
+                }
             };
             
-            await addDoc(collection(db, 'matches', challengeTarget.id, 'teamChallenges'), challengeData);
+            await addDoc(collection(db, 'notifications'), notification);
             
             toast({ title: "Challenge Sent!", description: `Your challenge has been sent to the manager of the opponent team.` });
             setIsChallengeDialogOpen(false);
