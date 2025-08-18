@@ -26,7 +26,7 @@ interface DressingRoomProps {
   onClose: () => void;
   teamA: Team | null;
   teamB: Team | null;
-  currentUserIsManagerFor: 'A' | 'B' | 'both' | 'none';
+  currentUserIsManagerFor: 'A' | 'B' | 'none';
 }
 
 export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUserIsManagerFor }: DressingRoomProps) {
@@ -42,13 +42,17 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
 
   const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || '3-2-1');
   const [formationB, setFormationB] = React.useState<Formation>(match.teamBDetails?.formation || {});
+  const [captainB, setCaptainB] = React.useState<string | undefined>(match.teamBDetails?.captainId);
+  const [penaltyTakerB, setPenaltyTakerB] = React.useState<string | undefined>(match.teamBDetails?.penaltyTakerId);
+  const [cornerTakerB, setCornerTakerB] = React.useState<string | undefined>(match.teamBDetails?.cornerTakerId);
+  const [freeKickTakerB, setFreeKickTakerB] = React.useState<string | undefined>(match.teamBDetails?.freeKickTakerId);
 
   const { toast } = useToast();
   const autoFilled = React.useRef(false);
   
   const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
-  const canManageTeamA = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'A';
-  const canManageTeamB = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'B';
+  const canManageTeamA = currentUserIsManagerFor === 'A' || isPracticeMatch;
+  const canManageTeamB = currentUserIsManagerFor === 'B' || isPracticeMatch;
 
   React.useEffect(() => {
     const fetchPlayers = async () => {
@@ -81,7 +85,6 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   }, [match.teamAPlayers, match.teamBPlayers]);
 
   React.useEffect(() => {
-    // Intelligent Auto-fill logic for practice matches only
     if (isPracticeMatch && players.length > 0 && !autoFilled.current) {
         const shuffled = [...players].sort(() => 0.5 - Math.random());
         const newFormationA: Formation = {};
@@ -142,17 +145,28 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
 
   const assignedPlayersA = new Set(Object.values(formationA).filter(Boolean));
   const assignedPlayersB = new Set(Object.values(formationB).filter(Boolean));
-  const assignedPlayers = new Set([...Array.from(assignedPlayersA), ...Array.from(assignedPlayersB)]);
-
+  
   const getAvailablePlayersForTeam = (teamId: 'A' | 'B', currentPosPlayerId: string | null): (User & {profile: PlayerProfile})[] => {
-      const teamPlayers = players.filter(p => {
-          if (isPracticeMatch) return true;
-          return teamId === 'A' ? match.teamAPlayers?.includes(p.id) : match.teamBPlayers?.includes(p.id);
+      let teamPlayers;
+      if (isPracticeMatch) {
+          teamPlayers = players;
+      } else {
+          teamPlayers = players.filter(p => (teamId === 'A' ? match.teamAPlayers?.includes(p.id) : match.teamBPlayers?.includes(p.id)));
+      }
+
+      const assignedInOtherTeam = teamId === 'A' ? assignedPlayersB : assignedPlayersA;
+      return teamPlayers.filter(p => {
+          const isAssigned = (teamId === 'A' ? assignedPlayersA : assignedPlayersB).has(p.id);
+          const isAssignedOther = assignedInOtherTeam.has(p.id);
+          return (!isAssigned && !isAssignedOther) || p.id === currentPosPlayerId;
       });
-      return teamPlayers.filter(p => !assignedPlayers.has(p.id) || p.id === currentPosPlayerId);
   }
 
-  const benchPlayers = players.filter(p => !assignedPlayers.has(p.id));
+  const getBench = () => {
+      const allAssigned = new Set([...Array.from(assignedPlayersA), ...Array.from(assignedPlayersB)]);
+      return players.filter(p => !allAssigned.has(p.id));
+  }
+  const benchPlayers = getBench();
 
   const handleSaveChanges = async () => {
     const updateData: Partial<Match> = {};
@@ -165,11 +179,18 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
         cornerTakerId: cornerTakerA,
         freeKickTakerId: freeKickTakerA
       };
-      updateData.teamAPlayers = Object.values(formationA).filter((id): id is string => !!id);
+      if (isPracticeMatch) updateData.teamAPlayers = Object.values(formationA).filter((id): id is string => !!id);
     }
     if (canManageTeamB) {
-      updateData.teamBDetails = { tactic: tacticB, formation: formationB };
-      updateData.teamBPlayers = Object.values(formationB).filter((id): id is string => !!id);
+      updateData.teamBDetails = { 
+          tactic: tacticB, 
+          formation: formationB,
+          captainId: captainB,
+          penaltyTakerId: penaltyTakerB,
+          cornerTakerId: cornerTakerB,
+          freeKickTakerId: freeKickTakerB
+      };
+      if (isPracticeMatch) updateData.teamBPlayers = Object.values(formationB).filter((id): id is string => !!id);
     }
 
     const matchRef = doc(db, "matches", match.id);
@@ -184,9 +205,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     }
   };
 
-  const FieldPosition = ({ team, position, formation, availablePlayers, disabled }: { team: 'A' | 'B', position: string, formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[], disabled: boolean }) => {
+  const FieldPosition = ({ team, position, formation, disabled }: { team: 'A' | 'B', position: string, formation: Formation, disabled: boolean }) => {
     const selectedPlayerId = formation[position] || "empty";
     const selectedPlayer = players.find(p => p.id === selectedPlayerId);
+    const availablePlayers = getAvailablePlayersForTeam(team, selectedPlayerId);
 
     if (disabled) {
         return (
@@ -240,8 +262,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                     key={pos}
                     team={team} 
                     position={pos} 
-                    formation={formation} 
-                    availablePlayers={getAvailablePlayersForTeam(team, formation[pos])} 
+                    formation={formation}
                     disabled={!canManage}
                 />
             ))}
@@ -251,6 +272,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   };
   
   const teamAPlayersOnField = players.filter(p => assignedPlayersA.has(p.id));
+  const teamBPlayersOnField = players.filter(p => assignedPlayersB.has(p.id));
 
   return (
     <DialogContent className="max-w-6xl">
@@ -276,33 +298,33 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                     </div>
                 </div>
 
-                {canManageTeamA && (
-                <div>
-                    <h4 className="font-bold mb-2">Tactical Roles</h4>
-                    <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                        <Label>Captain</Label>
-                        <Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+                <div className="space-y-4">
+                  {canManageTeamA && (
+                  <div>
+                      <h4 className="font-bold mb-2">Tactical Roles: {teamA?.name || "Team A"}</h4>
+                      <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-2"><Label>Captain</Label><Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Corners</Label><Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Free Kicks</Label><Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                      </div>
+                  </div>
+                  )}
+                  {canManageTeamB && !isPracticeMatch && (
+                    <div>
+                      <h4 className="font-bold mb-2">Tactical Roles: {teamB?.name || "Team B"}</h4>
+                      <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-2"><Label>Captain</Label><Select value={captainB} onValueChange={setCaptainB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerB} onValueChange={setPenaltyTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Corners</Label><Select value={cornerTakerB} onValueChange={setCornerTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Free Kicks</Label><Select value={freeKickTakerB} onValueChange={setFreeKickTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Penalties</Label>
-                        <Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Corners</Label>
-                        <Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Free Kicks</Label>
-                        <Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    </div>
+                  )}
                 </div>
-                )}
             </div>
         </>
       )}
-
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -311,3 +333,5 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     </DialogContent>
   );
 }
+
+    

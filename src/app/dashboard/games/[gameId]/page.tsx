@@ -128,7 +128,6 @@ export default function GameDetailsPage() {
     
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
-        // A smarter refresh: only re-fetch if a fundamental state has changed
         if (data.status || data.teamAPlayers !== undefined || data.teamBPlayers !== undefined || data.events !== undefined) {
             fetchGameDetails();
         }
@@ -161,7 +160,7 @@ export default function GameDetailsPage() {
                 status: "InProgress",
                 startTime: serverTimestamp(),
             });
-            onMatchUpdate({ status: "InProgress" });
+            handleMatchUpdate({ status: "InProgress" });
             toast({ title: "Game Started!", description: "The game is now live." });
             router.push(`/live-game/${match.id}`);
         } catch (error) {
@@ -222,7 +221,6 @@ export default function GameDetailsPage() {
                 invitationCounts={invitationCounts}
             />
 
-            {/* --- Primary Actions --- */}
             {isManager && !isFinished && !isLive && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <Dialog open={isDressingRoomOpen} onOpenChange={setIsDressingRoomOpen}>
@@ -231,7 +229,6 @@ export default function GameDetailsPage() {
                         </DialogTrigger>
                         <DressingRoom 
                             match={match} 
-                            players={[]} // Player data will be fetched inside the component now
                             onUpdate={handleMatchUpdate}
                             onClose={() => setIsDressingRoomOpen(false)}
                             teamA={teamA}
