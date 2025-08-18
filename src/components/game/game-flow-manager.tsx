@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp, arrayUnion } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Pitch, PlayerProfile, Reservation } from "@/types";
 import { useToast } from "@/hooks/use-toast";
