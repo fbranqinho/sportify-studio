@@ -174,7 +174,20 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
         try {
             // --- 1. Update Payment and Reservation to Paid/Scheduled ---
             batch.update(paymentRef, { status: "Paid" });
-            batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+            
+            // Check if this payment completes the total amount
+            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', payment.reservationRef));
+            const paymentsSnap = await getDocs(paymentsQuery);
+            let totalPaid = payment.amount; // Start with the current payment
+            paymentsSnap.forEach(doc => {
+                if (doc.id !== payment.id && doc.data().status === 'Paid') {
+                    totalPaid += doc.data().amount;
+                }
+            });
+
+            if (totalPaid >= reservation.totalAmount) {
+                batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+            }
             
             // --- 2. Create the Match ---
             const newMatchRef = doc(collection(db, "matches"));
@@ -510,11 +523,8 @@ export default function MyGamesPage() {
   const upcomingReservations = Array.from(reservations.values()).filter(r => r.status === 'Confirmed');
 
 
-  const pastMatches = matches.filter(m => {
-       const isFinishedOrCancelled = m.status === 'Finished' || m.status === 'Cancelled';
-       const isPast = new Date(m.date) < now && (m.status !== 'Finished' && m.status !== 'Cancelled');
-       return isFinishedOrCancelled || isPast;
-  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const pastMatches = matches.filter(m => m.status === 'Finished')
+    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
 
   const MatchCard = ({ match }: { match: Match }) => {
