@@ -69,6 +69,8 @@ export default function MyGamesPage() {
      setLoading(true);
      try {
         let userTeamIds: string[] = [];
+        const reservationsMap = new Map<string, Reservation>();
+        const matchesMap = new Map<string, Match>();
 
         // 1. Get User's teams
         if (user.role === 'PLAYER') {
@@ -80,32 +82,39 @@ export default function MyGamesPage() {
             const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
             userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
         }
-
-        // 2. Fetch all matches the user might be involved in
-        let allMatchesMap = new Map<string, Match>();
-
-        // New approach: Find confirmed reservations first, then their matches
+        
+        // 2. Fetch reservations relevant to the user/manager
         if (user.role === 'MANAGER') {
-            const confirmedReservationsQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id), where("status", "==", "Confirmed"));
-            const confirmedReservationsSnap = await getDocs(confirmedReservationsQuery);
-            
-            const reservationIds = confirmedReservationsSnap.docs.map(doc => doc.id);
-            if (reservationIds.length > 0) {
-                const matchesFromReservationsQuery = query(collection(db, "matches"), where("reservationRef", "in", reservationIds));
-                const matchesSnap = await getDocs(matchesFromReservationsQuery);
-                matchesSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            }
+            const managerResQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id));
+            const managerResSnap = await getDocs(managerResQuery);
+            managerResSnap.forEach(doc => reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation));
         }
         
+        if (userTeamIds.length > 0) {
+            const teamResQuery = query(collection(db, "reservations"), where("teamRef", "in", userTeamIds));
+            const teamResSnap = await getDocs(teamResQuery);
+            teamResSnap.forEach(doc => reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation));
+        }
+
+        const reservationIds = Array.from(reservationsMap.keys());
+        if (reservationIds.length > 0) {
+            const matchesFromResQuery = query(collection(db, "matches"), where("reservationRef", "in", reservationIds));
+            const matchesFromResSnap = await getDocs(matchesFromResQuery);
+            matchesFromResSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+        }
+        setReservations(reservationsMap);
+
+
+        // 3. Fetch all other matches the user might be involved in
         if (userTeamIds.length > 0) {
             const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
             const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
             const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
             const [matchesASnap, matchesBSnap, teamInvSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery), getDocs(teamInvQuery)]);
             
-            matchesASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            matchesBSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            teamInvSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            matchesASnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            matchesBSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            teamInvSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
              const teamInvites = new Map(teamInvSnap.docs.map(doc => [doc.id, {id: doc.id, ...doc.data()} as Match]));
             setTeamMatchInvitations(teamInvites);
         }
@@ -118,36 +127,30 @@ export default function MyGamesPage() {
 
             if (matchIdsFromInvs.length > 0) {
                 const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
-                matchesFromInvsMap.forEach((match, id) => allMatchesMap.set(id, match));
+                matchesFromInvsMap.forEach((match, id) => matchesMap.set(id, match));
             }
-             const validInvs = new Map(invs.filter(inv => allMatchesMap.has(inv.matchId)).map(inv => [inv.matchId, inv]));
+             const validInvs = new Map(invs.filter(inv => matchesMap.has(inv.matchId)).map(inv => [inv.matchId, inv]));
              setInvitations(validInvs);
-        }
-        
-        // Also fetch matches where player is directly confirmed
-         if (user.role === 'PLAYER') {
+            
             const confirmedAQuery = query(collection(db, "matches"), where("teamAPlayers", "array-contains", user.id));
             const confirmedBQuery = query(collection(db, "matches"), where("teamBPlayers", "array-contains", user.id));
             const [confirmedASnap, confirmedBSnap] = await Promise.all([getDocs(confirmedAQuery), getDocs(confirmedBQuery)]);
-            confirmedASnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            confirmedBSnap.forEach(doc => allMatchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            confirmedASnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+            confirmedBSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
         }
 
-
-        const allMatches = Array.from(allMatchesMap.values());
+        const allMatches = Array.from(matchesMap.values());
         setMatches(allMatches);
         
-        // 3. Fetch all secondary details (teams, pitches, reservations)
+        // 4. Fetch all secondary details (teams, pitches, owners)
         const teamIdsToFetch = new Set<string>();
         const pitchIdsToFetch = new Set<string>();
-        const reservationIdsToFetch = new Set<string>();
         
         allMatches.forEach((match: Match) => {
             if (match.teamARef) teamIdsToFetch.add(match.teamARef);
             if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
             if (match.invitedTeamId) teamIdsToFetch.add(match.invitedTeamId);
             if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
-            if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
         });
 
         if (teamIdsToFetch.size > 0) {
@@ -166,11 +169,6 @@ export default function MyGamesPage() {
                 const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
                 setOwners(ownersMap);
             }
-        }
-
-        if (reservationIdsToFetch.size > 0) {
-            const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
-            setReservations(reservationsMap);
         }
 
      } catch (error) {
