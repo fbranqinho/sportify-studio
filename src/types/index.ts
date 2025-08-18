@@ -301,17 +301,17 @@ export interface Payment {
   managerRef?: string; // ManagerProfile ID
   matchRef?: string; // Match ID
   competitionRef?: string; // Competition ID
-  teamRef?: string; // Team ID
-  reservationRef?: string; // Reservation ID
+  teamRef: string; // Team ID
+  reservationRef: string; // Reservation ID
   type: PaymentType;
   amount: number;
-  date?: string; // ISO 8601 string
+  date: string; // ISO 8601 string
   expirationDate?: string; // ISO 8601 string
   status: PaymentStatus;
   notes?: string;
   reminder?: boolean;
-  pitchName?: string;
-  teamName?: string;
+  pitchName: string;
+  teamName: string;
 }
 
 export interface Promo {

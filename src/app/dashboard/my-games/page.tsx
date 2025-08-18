@@ -6,7 +6,7 @@ import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, Timestamp, getDocs, DocumentData, writeBatch, doc, updateDoc, arrayUnion, getDoc, documentId, addDoc, serverTimestamp } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Match, Team, MatchInvitation, Pitch, OwnerProfile, Notification, Reservation, Payment } from "@/types";
+import type { Match, Team, MatchInvitation, Pitch, OwnerProfile, Notification, Reservation, Payment, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -222,6 +222,56 @@ export default function MyGamesPage() {
           toast({ variant: "destructive", title: "Error", description: "Could not save your response." });
       }
   }
+
+  const handleStartSplitPayment = async (match: Match, reservation: Reservation) => {
+    const confirmedPlayers = match.teamAPlayers || [];
+    if (confirmedPlayers.length === 0) {
+        toast({ variant: "destructive", title: "No Players", description: "Cannot start payment without confirmed players." });
+        return;
+    }
+
+    const pricePerPlayer = reservation.totalAmount / confirmedPlayers.length;
+    const batch = writeBatch(db);
+    const teamName = teams.get(match.teamARef!)?.name || 'Your Team';
+
+    confirmedPlayers.forEach(playerId => {
+        const paymentRef = doc(collection(db, "payments"));
+        const paymentData: Omit<Payment, 'id'> = {
+            playerRef: playerId,
+            teamRef: match.teamARef!,
+            reservationRef: reservation.id,
+            type: 'booking_split',
+            amount: pricePerPlayer,
+            status: 'Pending',
+            date: new Date().toISOString(),
+            pitchName: reservation.pitchName,
+            teamName: teamName,
+        };
+        batch.set(paymentRef, paymentData);
+
+        const notificationRef = doc(collection(db, "notifications"));
+        const notificationData: Omit<Notification, 'id'> = {
+            userId: playerId,
+            message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
+            link: '/dashboard/payments',
+            read: false,
+            createdAt: serverTimestamp() as any,
+        };
+        batch.set(notificationRef, notificationData);
+    });
+
+    const reservationRef = doc(db, "reservations", reservation.id);
+    batch.update(reservationRef, { paymentStatus: "Split" });
+
+    try {
+        await batch.commit();
+        toast({ title: "Payment Initiated", description: `Each of the ${confirmedPlayers.length} players has been notified.`});
+        fetchGameDetails();
+    } catch(error) {
+        console.error("Error starting split payment: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not initiate payments." });
+    }
+  };
   
   const now = new Date();
   
@@ -244,6 +294,7 @@ export default function MyGamesPage() {
 
     const isFinished = match.status === "Finished";
     const isPlayer = user?.role === 'PLAYER';
+    const isManager = user?.role === 'MANAGER' && user.id === match.managerRef;
 
     // Invitation checks
     const playerInvitation = isPlayer ? invitations.get(match.id) : null;
@@ -263,6 +314,7 @@ export default function MyGamesPage() {
       return 'Match Details';
     }
     
+    const showStartPaymentButton = isManager && reservation?.status === 'Confirmed' && reservation.paymentStatus === 'Pending';
     let buttonContent;
     if (playerInvitation) {
         buttonContent = (
@@ -294,12 +346,19 @@ export default function MyGamesPage() {
         );
     } else {
         buttonContent = (
-            <Button variant="outline" className="w-full" asChild>
-                <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
-                    <span>{isFinished ? "View Report" : "Manage Game"}</span>
-                    <ArrowRight className="h-4 w-4" />
-                </Link>
-            </Button>
+             <div className="flex flex-col w-full gap-2">
+                 {showStartPaymentButton && (
+                    <Button className="w-full" onClick={() => handleStartSplitPayment(match, reservation!)}>
+                        <DollarSign className="mr-2 h-4 w-4"/> Initiate Payment
+                    </Button>
+                )}
+                <Button variant="outline" className="w-full" asChild>
+                    <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
+                        <span>{isFinished ? "View Report" : "Manage Game"}</span>
+                        <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </Button>
+             </div>
         );
     }
 
@@ -337,7 +396,7 @@ export default function MyGamesPage() {
                         <span>Players: <span className="font-semibold">{confirmedPlayers} / {playerCapacity}</span> ({missingPlayers > 0 ? `${missingPlayers} missing` : 'Full'})</span>
                     </div>
                  )}
-                 {reservation?.paymentStatus && reservation.paymentStatus !== 'Paid' && (
+                 {reservation?.paymentStatus && (
                     <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-primary" />
                         <span>Payment Status: <span className="font-semibold">{reservation.paymentStatus}</span></span>
@@ -394,7 +453,7 @@ export default function MyGamesPage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">My Games</h1>
         <p className="text-muted-foreground">
-          View your upcoming games and past matches.
+          View your upcoming games, invitations, and past matches.
         </p>
       </div>
 
@@ -426,7 +485,3 @@ export default function MyGamesPage() {
     </div>
   );
 }
-
-
-
-    
