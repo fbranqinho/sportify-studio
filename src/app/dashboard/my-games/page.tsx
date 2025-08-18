@@ -474,7 +474,7 @@ export default function MyGamesPage() {
              <div>
                 <h1 className="text-3xl font-bold font-headline">My Games</h1>
                 <p className="text-muted-foreground">
-                View your upcoming games, invitations, and past matches.
+                View your upcoming games and invitations.
                 </p>
             </div>
             <LoadingSkeleton />
@@ -487,7 +487,7 @@ export default function MyGamesPage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">My Games</h1>
         <p className="text-muted-foreground">
-          View your upcoming games, invitations, and past matches.
+          View your upcoming games and invitations.
         </p>
       </div>
 

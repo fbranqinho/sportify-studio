@@ -37,7 +37,7 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             collection(db, "reservations"),
             where("pitchId", "==", reservation.pitchId),
             where("date", "==", reservation.date),
-            where("status", "in", ["Scheduled", "Confirmed"]) // Check for both states
+            where("status", "in", ["Scheduled", "Confirmed"])
         );
         const conflictingSnap = await getDocs(conflictingReservationsQuery);
         // Filter out the current user's reservation to see if there are OTHERS
@@ -429,3 +429,4 @@ export default function PaymentsPage() {
     
 
     
+
