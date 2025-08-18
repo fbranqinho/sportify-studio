@@ -14,7 +14,17 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck } from "lucide-react";
 import { format } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function SchedulePage() {
   const { user } = useUser();
@@ -134,7 +144,7 @@ export default function SchedulePage() {
         const approvalNotificationRef = doc(collection(db, 'notifications'));
         batch.set(approvalNotificationRef, {
             userId: actorId,
-            message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players and payments.`,
+            message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players.`,
             link: '/dashboard/my-games',
             read: false,
             createdAt: serverTimestamp() as any,
@@ -144,11 +154,18 @@ export default function SchedulePage() {
         if (reservation.teamRef && reservation.managerRef) {
             const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
             if (teamDoc.exists()) {
-                const team = teamDoc.data() as Team;
+                const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
                 if (team.playerIds?.length > 0) {
                     for (const playerId of team.playerIds) {
                         const invitationRef = doc(collection(db, "matchInvitations"));
-                        batch.set(invitationRef, { matchId: newMatchRef.id, teamId: team.id, playerId: playerId, managerId: reservation.managerRef, status: "pending", invitedAt: serverTimestamp() });
+                        batch.set(invitationRef, { 
+                            matchId: newMatchRef.id, 
+                            teamId: team.id,
+                            playerId: playerId, 
+                            managerId: reservation.managerRef, 
+                            status: "pending", 
+                            invitedAt: serverTimestamp() 
+                        });
                         const inviteNotificationRef = doc(collection(db, 'notifications'));
                         batch.set(inviteNotificationRef, { userId: playerId, message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
                     }
@@ -160,7 +177,7 @@ export default function SchedulePage() {
         
         toast({
           title: "Reservation Approved!",
-          description: `A notification has been sent to ${reservation.actorName}. They can now proceed with organizing the game.`,
+          description: `A notification has been sent to ${reservation.actorName}. They can now manage the game.`,
         });
 
       } catch (error) {
@@ -190,36 +207,81 @@ export default function SchedulePage() {
     }
   }
 
-  const ReservationCard = ({ reservation }: { reservation: Reservation }) => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-headline">{reservation.pitchName}</CardTitle>
-        <CardDescription className="flex items-center gap-2 pt-1">
-          <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-primary" />
-            <span>Booked by: <span className="font-semibold">{reservation.actorName} ({reservation.actorRole})</span></span>
-        </div>
-        <div className="flex items-center gap-2">
-            {getStatusIcon(reservation.status)}
-            <span>Status: <span className="font-semibold">{reservation.status}</span></span>
-        </div>
-      </CardContent>
-      {user?.role === 'OWNER' && reservation.status === 'Pending' && (
-        <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => handleUpdateStatus(reservation, 'Confirmed')}>
-             <CheckCircle className="mr-2 h-4 w-4" /> Approve
-          </Button>
-          <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation, 'Canceled')}>
-             <XCircle className="mr-2 h-4 w-4" /> Reject
-          </Button>
-        </CardFooter>
-      )}
-    </Card>
-  )
+  const ReservationCard = ({ reservation }: { reservation: Reservation }) => {
+    
+    const handleCancel = async () => {
+        const batch = writeBatch(db);
+        const reservationRef = doc(db, "reservations", reservation.id);
+        batch.update(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
+
+        // If there's an associated match, cancel it too.
+        if (reservation.status === 'Confirmed') {
+            const matchQuery = query(collection(db, "matches"), where("reservationRef", "==", reservation.id));
+            const matchSnap = await getDocs(matchQuery);
+            if (!matchSnap.empty) {
+                const matchRef = matchSnap.docs[0].ref;
+                batch.update(matchRef, { status: 'Cancelled' });
+            }
+        }
+        
+        await batch.commit();
+        toast({ title: "Reservation Cancelled", description: "This reservation has been cancelled." });
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline">{reservation.pitchName}</CardTitle>
+                <CardDescription className="flex items-center gap-2 pt-1">
+                <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" />
+                    <span>Booked by: <span className="font-semibold">{reservation.actorName} ({reservation.actorRole})</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {getStatusIcon(reservation.status)}
+                    <span>Status: <span className="font-semibold">{reservation.status}</span></span>
+                </div>
+            </CardContent>
+            {user?.role === 'OWNER' && reservation.status === 'Pending' && (
+                <CardFooter className="gap-2">
+                <Button size="sm" onClick={() => handleUpdateStatus(reservation, 'Confirmed')}>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation, 'Canceled')}>
+                    <XCircle className="mr-2 h-4 w-4" /> Reject
+                </Button>
+                </CardFooter>
+            )}
+             {user?.id === reservation.actorId && reservation.status === 'Confirmed' && (
+                 <CardFooter>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button size="sm" variant="destructive" className="w-full">
+                                <Ban className="mr-2 h-4 w-4" /> Cancel Reservation
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will cancel your approved reservation and associated game. This action cannot be undone.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Back</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleCancel}>Yes, Cancel Reservation</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </CardFooter>
+            )}
+        </Card>
+    );
+}
 
   const ReservationList = ({ reservations }: { reservations: Reservation[] }) => (
      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
@@ -328,9 +390,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-
-
-
-
-    
