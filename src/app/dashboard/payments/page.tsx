@@ -37,10 +37,13 @@ const PlayerPaymentButton = ({ payment, onPaymentProcessed }: { payment: Payment
             collection(db, "reservations"),
             where("pitchId", "==", reservation.pitchId),
             where("date", "==", reservation.date),
-            where("status", "==", "Scheduled")
+            where("status", "in", ["Scheduled", "Confirmed"]) // Check for both states
         );
         const conflictingSnap = await getDocs(conflictingReservationsQuery);
-        if (!conflictingSnap.empty) {
+        // Filter out the current user's reservation to see if there are OTHERS
+        const otherTeamsConfirmed = conflictingSnap.docs.some(d => d.id !== reservation.id);
+        
+        if (otherTeamsConfirmed) {
             toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
             // Cancel this now-obsolete reservation
             await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
