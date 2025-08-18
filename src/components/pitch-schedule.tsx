@@ -249,25 +249,40 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                         switch (slotInfo.status) {
                                             case 'Available':
                                                 content = (
-                                                    <DialogTrigger asChild>
-                                                        <Button
-                                                            variant={slotInfo.promotion ? "default" : "outline"}
-                                                            className="h-16 flex-col w-full rounded-none border-0"
-                                                            onClick={() => {
-                                                                setSelectedSlot({ date: day, time });
-                                                                setSelectedPromo(slotInfo.promotion || null);
-                                                                setIsBookingDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            {slotInfo.promotion && (
-                                                                <div className="flex items-center gap-2 text-xs font-bold text-destructive">
-                                                                     <span className="line-through">{(pitch.basePrice || 0).toFixed(2)}€</span>
-                                                                     <Badge variant="destructive" className="gap-1"><Tag className="h-3 w-3"/>{slotInfo.promotion.discountPercent}%</Badge>
-                                                                </div>
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button
+                                                                variant={slotInfo.promotion ? "default" : "outline"}
+                                                                className="h-16 flex-col w-full rounded-none border-0"
+                                                                onClick={() => {
+                                                                    setSelectedSlot({ date: day, time });
+                                                                    setSelectedPromo(slotInfo.promotion || null);
+                                                                }}
+                                                            >
+                                                                {slotInfo.promotion && (
+                                                                    <div className="flex items-center gap-2 text-xs font-bold text-destructive">
+                                                                        <span className="line-through">{(pitch.basePrice || 0).toFixed(2)}€</span>
+                                                                        <Badge variant="destructive" className="gap-1"><Tag className="h-3 w-3"/>{slotInfo.promotion.discountPercent}%</Badge>
+                                                                    </div>
+                                                                )}
+                                                                <span className="font-bold text-lg">{slotInfo.price.toFixed(2)}€</span>
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="sm:max-w-[480px]">
+                                                            <DialogHeader>
+                                                                <DialogTitle className="font-headline flex items-center gap-2"> <BookMarked /> Confirm your Reservation </DialogTitle>
+                                                                {selectedSlot && <DialogDescription> You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedSlot.date, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot.time}</strong>. </DialogDescription>}
+                                                            </DialogHeader>
+                                                            {user && selectedSlot && (
+                                                                <CreateReservationForm
+                                                                    user={user} pitch={pitch}
+                                                                    onReservationSuccess={handleBookingSuccess}
+                                                                    selectedDate={selectedSlot.date} selectedTime={selectedSlot.time}
+                                                                    promotion={selectedPromo}
+                                                                />
                                                             )}
-                                                            <span className="font-bold text-lg">{slotInfo.price.toFixed(2)}€</span>
-                                                        </Button>
-                                                    </DialogTrigger>
+                                                        </DialogContent>
+                                                    </Dialog>
                                                 );
                                                 break;
                                             case 'OpenForPlayers':
@@ -321,23 +336,6 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                             </div>
                         ))}
                     </div>
-                     <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
-                        <DialogContent className="sm:max-w-[480px]">
-                            <DialogHeader>
-                                <DialogTitle className="font-headline flex items-center gap-2"> <BookMarked /> Confirm your Reservation </DialogTitle>
-                                {selectedSlot && <DialogDescription> You are booking <strong>{pitch.name}</strong> for <strong>{format(selectedSlot.date, "eeee, MMMM dd")}</strong> at <strong>{selectedSlot.time}</strong>. </DialogDescription>}
-                            </DialogHeader>
-                            {user && selectedSlot && (
-                                <CreateReservationForm
-                                    user={user} pitch={pitch}
-                                    onReservationSuccess={handleBookingSuccess}
-                                    selectedDate={selectedSlot.date} selectedTime={selectedSlot.time}
-                                    promotion={selectedPromo}
-                                />
-                            )}
-                        </DialogContent>
-                    </Dialog>
-
                     <Dialog open={isChallengeDialogOpen} onOpenChange={setIsChallengeDialogOpen}>
                         <DialogContent>
                             <DialogHeader>
