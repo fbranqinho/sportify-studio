@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Match, Team, User, Formation, Tactic, PlayerProfile } from "@/types";
+import { cn } from "@/lib/utils";
 
 const tactics: Tactic[] = ["3-2-1", "2-3-1", "3-1-2", "2-2-2"];
 
@@ -18,6 +19,41 @@ const formationPositionsByTactic: { [key in Tactic]: string[] } = {
     "2-3-1": ["GK", "CB1", "CB2", "LM", "CM", "RM", "ST"],
     "3-1-2": ["GK", "CB1", "CB2", "CB3", "CDM", "ST1", "ST2"],
     "2-2-2": ["GK", "LB", "RB", "CM1", "CM2", "ST1", "ST2"],
+};
+
+const positionStyles: { [key: string]: string } = {
+  // Team A (Top)
+  "A-GK": "top-[5%] left-1/2 -translate-x-1/2",
+  "A-CB1": "top-[20%] left-1/4 -translate-x-1/2",
+  "A-CB2": "top-[20%] left-1/2 -translate-x-1/2",
+  "A-CB3": "top-[20%] left-3/4 -translate-x-1/2",
+  "A-LB": "top-[20%] left-[15%]",
+  "A-RB": "top-[20%] right-[15%]",
+  "A-CM1": "top-[38%] left-1/4 -translate-x-1/2",
+  "A-CM2": "top-[38%] left-3/4 -translate-x-1/2",
+  "A-LM": "top-[35%] left-[15%]",
+  "A-CM": "top-[35%] left-1/2 -translate-x-1/2",
+  "A-RM": "top-[35%] right-[15%]",
+  "A-CDM": "top-[30%] left-1/2 -translate-x-1/2",
+  "A-ST": "top-[38%] left-1/2 -translate-x-1/2",
+  "A-ST1": "top-[38%] left-1/4 -translate-x-1/2",
+  "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
+  // Team B (Bottom)
+  "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2",
+  "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2",
+  "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2",
+  "B-CB3": "bottom-[20%] left-3/4 -translate-x-1/2",
+  "B-LB": "bottom-[20%] left-[15%]",
+  "B-RB": "bottom-[20%] right-[15%]",
+  "B-CM1": "bottom-[38%] left-1/4 -translate-x-1/2",
+  "B-CM2": "bottom-[38%] left-3/4 -translate-x-1/2",
+  "B-LM": "bottom-[35%] left-[15%]",
+  "B-CM": "bottom-[35%] left-1/2 -translate-x-1/2",
+  "B-RM": "bottom-[35%] right-[15%]",
+  "B-CDM": "bottom-[30%] left-1/2 -translate-x-1/2",
+  "B-ST": "bottom-[38%] left-1/2 -translate-x-1/2",
+  "B-ST1": "bottom-[38%] left-1/4 -translate-x-1/2",
+  "B-ST2": "bottom-[38%] left-3/4 -translate-x-1/2",
 };
 
 interface DressingRoomProps {
@@ -93,10 +129,9 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
         const playersForA = shuffled.slice(0, Math.ceil(shuffled.length / 2));
         const playersForB = shuffled.slice(Math.ceil(shuffled.length / 2));
 
-        const positions = formationPositionsByTactic[tacticA];
-        
-        const assignPlayers = (formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[]) => {
+        const assignPlayers = (formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[], tactic: Tactic) => {
             let assigned = new Set<string>();
+            const positions = formationPositionsByTactic[tactic];
             positions.forEach(pos => {
                 let playerToAssign: (User & { profile: PlayerProfile }) | undefined;
                 if (pos === "GK") playerToAssign = availablePlayers.find(p => p.profile.position === "Goalkeeper" && !assigned.has(p.id));
@@ -113,14 +148,14 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
             });
         };
         
-        assignPlayers(newFormationA, playersForA);
-        assignPlayers(newFormationB, playersForB);
+        assignPlayers(newFormationA, playersForA, tacticA);
+        assignPlayers(newFormationB, playersForB, tacticB);
 
         setFormationA(newFormationA);
         setFormationB(newFormationB);
         autoFilled.current = true;
     }
-  }, [players, isPracticeMatch, tacticA]);
+  }, [players, isPracticeMatch, tacticA, tacticB]);
 
   const handleFormationChange = (team: 'A' | 'B', position: string, playerId: string) => {
     const currentFormation = team === 'A' ? formationA : formationB;
@@ -210,11 +245,14 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     const selectedPlayer = players.find(p => p.id === selectedPlayerId);
     const availablePlayers = getAvailablePlayersForTeam(team, selectedPlayerId);
 
+    const baseStyle = "absolute z-10 w-32 flex flex-col items-center gap-1";
+    const positionStyle = positionStyles[`${team}-${position}`];
+
     if (disabled) {
         return (
-             <div className="flex flex-col items-center">
+             <div className={cn(baseStyle, positionStyle)}>
                 <Label htmlFor={`${team}-${position}`} className="text-xs font-bold text-muted-foreground">{position}</Label>
-                <div className="w-[120px] h-8 mt-1 flex items-center justify-center bg-muted/50 rounded-md text-sm text-muted-foreground px-2 truncate">
+                <div className="w-full h-8 mt-1 flex items-center justify-center bg-muted/50 rounded-md text-sm text-muted-foreground px-2 truncate">
                     {selectedPlayer?.name || '-'}
                 </div>
             </div>
@@ -222,10 +260,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     }
 
     return (
-        <div className="flex flex-col items-center">
-            <Label htmlFor={`${team}-${position}`} className="text-xs font-bold">{position}</Label>
+        <div className={cn(baseStyle, positionStyle)}>
+            <Label htmlFor={`${team}-${position}`} className="text-xs font-bold text-white shadow-black [text-shadow:1px_1px_2px_var(--tw-shadow-color)]">{position}</Label>
             <Select value={selectedPlayerId} onValueChange={(value) => handleFormationChange(team, position, value)}>
-                <SelectTrigger id={`${team}-${position}`} className="w-[120px] h-8 mt-1">
+                <SelectTrigger id={`${team}-${position}`} className="w-full h-8">
                     <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
@@ -244,8 +282,8 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     const positions = formationPositionsByTactic[tactic];
 
     return (
-      <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30 space-y-4">
-        <div className="flex justify-between items-center">
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-4">
             <h3 className="text-lg font-bold text-center">{teamName}</h3>
             <Select value={tactic} onValueChange={(v) => setTactic(v as Tactic)} disabled={!canManage}>
                 <SelectTrigger className="w-[120px] h-8">
@@ -256,10 +294,17 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                 </SelectContent>
             </Select>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-2">
+        <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30 min-h-[400px] relative">
+            {/* Field Markings */}
+            <div className="absolute top-1/2 left-0 w-full h-px bg-white/30"></div>
+            <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white/30 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="absolute top-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-b-xl -translate-x-1/2 border-t-0"></div>
+            <div className="absolute bottom-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-t-xl -translate-x-1/2 border-b-0"></div>
+
+            {/* Players */}
             {positions.map(pos => (
                 <FieldPosition 
-                    key={pos}
+                    key={`${team}-${pos}`}
                     team={team} 
                     position={pos} 
                     formation={formation}
@@ -275,7 +320,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   const teamBPlayersOnField = players.filter(p => assignedPlayersB.has(p.id));
 
   return (
-    <DialogContent className="max-w-6xl">
+    <DialogContent className="max-w-4xl">
       <DialogHeader>
         <DialogTitle className="font-headline">Dressing Room</DialogTitle>
         <DialogDescription>Assign players to teams and positions for this match.</DialogDescription>
@@ -283,7 +328,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
       
       {loading ? <p>Loading players...</p> : (
         <>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 py-4">
+            <div className="grid grid-cols-1 gap-6 py-4">
                 <FormationDisplay team="A" tactic={tacticA} setTactic={setTacticA} formation={formationA} teamData={teamA} canManage={canManageTeamA}/>
                 <FormationDisplay team="B" tactic={tacticB} setTactic={setTacticB} formation={formationB} teamData={teamB} canManage={canManageTeamB}/>
             </div>
@@ -301,7 +346,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                 <div className="space-y-4">
                   {canManageTeamA && (
                   <div>
-                      <h4 className="font-bold mb-2">Tactical Roles: {teamA?.name || "Team A"}</h4>
+                      <h4 className="font-bold mb-2">Tactical Roles: {teamA?.name || "Vests A"}</h4>
                       <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2"><Label>Captain</Label><Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
                         <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
@@ -312,7 +357,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                   )}
                   {canManageTeamB && !isPracticeMatch && (
                     <div>
-                      <h4 className="font-bold mb-2">Tactical Roles: {teamB?.name || "Team B"}</h4>
+                      <h4 className="font-bold mb-2">Tactical Roles: {teamB?.name || "Vests B"}</h4>
                       <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2"><Label>Captain</Label><Select value={captainB} onValueChange={setCaptainB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
                         <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerB} onValueChange={setPenaltyTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
