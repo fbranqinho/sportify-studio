@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
@@ -26,12 +26,13 @@ interface PitchScheduleProps {
 }
 
 interface SlotInfo {
-  status: 'Available' | 'Pending' | 'Booked' | 'Open' | 'Past';
+  status: 'Available' | 'Pending' | 'Booked' | 'OpenForPlayers' | 'OpenForTeam' | 'Past';
   match?: Match;
   reservation?: Reservation;
   promotion?: Promo;
   price: number;
 }
+
 
 const getPlayerCapacity = (sport: PitchSport): number => {
     switch (sport) {
@@ -97,21 +98,26 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice || 0 };
 
         const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
-
-        const match = matches.find(m => isSameTime(new Date(m.date)));
-        if (match) {
-            if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && !match.teamBPlayers.includes(user.id)) {
-                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                if (totalPlayers < getPlayerCapacity(pitch.sport)) return { status: 'Open', match, price: 0 };
-            }
-            return { status: 'Booked', match, price: pitch.basePrice || 0 };
-        }
-
+        
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
-        if (reservation) {
-            return { status: reservation.status === 'Pending' ? 'Pending' : 'Booked', reservation, price: pitch.basePrice || 0 };
+        const match = matches.find(m => isSameTime(new Date(m.date)));
+        
+        // Scenario 1: The slot is definitively booked (paid)
+        if (reservation && reservation.paymentStatus === 'Paid' && match) {
+             const isPracticeMatch = !match.teamBRef && !match.invitedTeamId;
+             if (isPracticeMatch) {
+                // If it's a practice match, check if it's open for challengers
+                if (user.role === 'MANAGER') return { status: 'OpenForTeam', match, reservation, price: 0 };
+                // If it's a player, check if they can join as an individual
+                const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+                if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < getPlayerCapacity(pitch.sport)) {
+                    return { status: 'OpenForPlayers', match, reservation, price: 0 };
+                }
+             }
+             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
+        // Scenario 2: The slot is temporarily held (pending payment) or fully available
         const dayOfWeek = getDay(day);
         const applicablePromo = promos
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
@@ -214,7 +220,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                     </DialogTrigger>
                                                 );
                                                 break;
-                                            case 'Open':
+                                            case 'OpenForPlayers':
                                                 content = (
                                                     <Button
                                                         variant={hasApplied ? "secondary" : "outline"}
@@ -228,20 +234,35 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                     </Button>
                                                 );
                                                 break;
-                                            case 'Pending':
+                                            case 'OpenForTeam':
+                                                 content = (
+                                                    <Button
+                                                        variant="outline"
+                                                        className="h-16 flex-col w-full rounded-none border-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        // onClick={() => handleApplyWithTeam(slotInfo.match!)}
+                                                        // disabled={hasAppliedToTeam}
+                                                    >
+                                                        <ShieldPlus className="h-4 w-4 mb-1"/>
+                                                        <span className="font-bold">Challenge</span>
+                                                        <span className="text-xs">vs {slotInfo.match?.teamAName || 'Team'}</span>
+                                                    </Button>
+                                                );
+                                                break;
                                             case 'Booked':
                                             case 'Past':
                                                 content = (
                                                     <Button variant="secondary" disabled className="h-16 flex-col w-full rounded-none border-0">
                                                         <span className="font-semibold">{time}</span>
                                                         <div className="text-xs flex items-center gap-1">
-                                                            {slotInfo.status === 'Pending' && <Clock className="h-3 w-3" />}
                                                             {slotInfo.status === 'Booked' && <Ban className="h-3 w-3" />}
                                                             {slotInfo.status === 'Past' && <Info className="h-3 w-3" />}
                                                             <span>{slotInfo.status}</span>
                                                         </div>
                                                     </Button>
                                                 );
+                                                break;
+                                            default:
+                                                content = <Skeleton className="h-16"/>;
                                                 break;
                                         }
                                         
@@ -271,7 +292,5 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
-
-    
 
     
