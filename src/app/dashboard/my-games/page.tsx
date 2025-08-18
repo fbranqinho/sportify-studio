@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge";
 
 export default function MyGamesPage() {
   const { user } = useUser();
@@ -109,7 +110,7 @@ export default function MyGamesPage() {
         if (userTeamIds.length > 0) {
             const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
             const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-            const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "PendingOpponent"));
+            const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "Collecting players"));
             const [matchesASnap, matchesBSnap, teamInvSnap] = await Promise.all([getDocs(matchesAQuery), getDocs(matchesBQuery), getDocs(teamInvQuery)]);
             
             matchesASnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
@@ -190,7 +191,7 @@ export default function MyGamesPage() {
      const invitationRef = doc(db, "matchInvitations", invitation.id);
      
      try {
-        batch.update(invitationRef, { status: accepted ? "accepted" : "declined" });
+        batch.update(invitationRef, { status: accepted ? 'accepted' : 'declined' });
 
         if (accepted) {
             const matchRef = doc(db, "matches", invitation.matchId);
@@ -218,7 +219,7 @@ export default function MyGamesPage() {
               toast({ title: "Match Accepted!", description: "The match is now scheduled."});
           } else {
               await updateDoc(matchRef, {
-                  status: "PendingOpponent", 
+                  status: "Collecting players", 
                   invitedTeamId: null,
               });
               toast({ title: "Match Declined", description: "The match invitation has been declined."});
@@ -310,6 +311,7 @@ export default function MyGamesPage() {
     const reservation = match.reservationRef ? reservations.get(match.reservationRef) : null;
 
     const isFinished = match.status === "Finished";
+    const isLive = match.status === "InProgress";
     const isPlayer = user?.role === 'PLAYER';
     const isManager = user?.role === 'MANAGER' && user.id === match.managerRef;
 
@@ -387,8 +389,8 @@ export default function MyGamesPage() {
                     </AlertDialog>
                 )}
                 <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
-                        <span>{isFinished ? "View Report" : "Manage Game"}</span>
+                    <Link href={isLive ? `/live-game/${match.id}` : `/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
+                        <span>{isFinished ? "View Report" : isLive ? "View Live" : "Manage Game"}</span>
                         <ArrowRight className="h-4 w-4" />
                     </Link>
                 </Button>
@@ -403,6 +405,9 @@ export default function MyGamesPage() {
                     <span>{getMatchTitle()}</span>
                     {isFinished && (
                         <span className="text-2xl font-bold">{match.scoreA} - {match.scoreB}</span>
+                    )}
+                    {isLive && (
+                        <Badge variant="destructive" className="animate-pulse">LIVE</Badge>
                     )}
                 </CardTitle>
                 <CardDescription className="flex items-center gap-2 pt-1">

@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, Timestamp, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Pitch, PlayerProfile, Reservation } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -15,9 +15,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Play, Flag, Trophy, Lock } from "lucide-react";
 import { cn, getGameDuration, getPlayerCapacity } from "@/lib/utils";
 import { EventTimeline } from "./event-timeline";
+import { useRouter } from "next/navigation";
 
 export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservation }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null, reservation: Reservation | null }) {
     const { toast } = useToast();
+    const router = useRouter();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
     const [scoreA, setScoreA] = React.useState(match.scoreA);
     const [scoreB, setScoreB] = React.useState(match.scoreB);
@@ -54,6 +56,7 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
 
             onMatchUpdate(updateData);
             toast({ title: "Game Started!", description: "The game is now live." });
+            router.push(`/live-game/${match.id}`);
         } catch (error) {
             console.error("Error starting game:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not start the game." });
@@ -135,11 +138,24 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
             }
 
             if (match.teamARef && match.teamBRef) {
-                const teamARef = doc(db, "teams", match.teamARef);
-                const teamBRef = doc(db, "teams", match.teamBRef);
+                const teamARefDoc = await getDoc(doc(db, "teams", match.teamARef));
+                const teamBRefDoc = await getDoc(doc(db, "teams", match.teamBRef));
+                
+                if (teamARefDoc.exists()) {
+                    const teamAData = teamARefDoc.data() as Team;
+                    const newRecentForm = [...(teamAData.recentForm || [])];
+                    newRecentForm.push(teamAResult);
+                     if (newRecentForm.length > 5) newRecentForm.shift();
+                    batch.update(teamARefDoc.ref, { wins: increment(teamAResult === 'W' ? 1 : 0), losses: increment(teamAResult === 'L' ? 1 : 0), draws: increment(teamAResult === 'D' ? 1 : 0), recentForm: newRecentForm });
+                }
 
-                batch.update(teamARef, { wins: increment(teamAResult === 'W' ? 1 : 0), losses: increment(teamAResult === 'L' ? 1 : 0), draws: increment(teamAResult === 'D' ? 1 : 0), recentForm: arrayUnion(teamAResult) });
-                batch.update(teamBRef, { wins: increment(teamBResult === 'W' ? 1 : 0), losses: increment(teamBResult === 'L' ? 1 : 0), draws: increment(teamBResult === 'D' ? 1 : 0), recentForm: arrayUnion(teamBResult) });
+                if (teamBRefDoc.exists()) {
+                    const teamBData = teamBRefDoc.data() as Team;
+                    const newRecentForm = [...(teamBData.recentForm || [])];
+                    newRecentForm.push(teamBResult);
+                     if (newRecentForm.length > 5) newRecentForm.shift();
+                    batch.update(teamBRefDoc.ref, { wins: increment(teamBResult === 'W' ? 1 : 0), losses: increment(teamBResult === 'L' ? 1 : 0), draws: increment(teamBResult === 'D' ? 1 : 0), recentForm: newRecentForm });
+                }
             }
 
             await batch.commit();
@@ -166,7 +182,7 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
     const allowPostGamePay = pitch?.allowPostGamePayments;
     const minPlayers = getPlayerCapacity(pitch?.sport);
     const hasEnoughPlayers = ((match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0)) >= minPlayers;
-    const canStartGame = (match.status === 'Scheduled' || match.status === 'PendingOpponent') && (isPaid || !!allowPostGamePay) && hasEnoughPlayers;
+    const canStartGame = (match.status === 'Scheduled' || match.status === 'Collecting players') && (isPaid || !!allowPostGamePay) && hasEnoughPlayers;
     
     let disabledTooltipContent = "";
     if (!isPaid && !allowPostGamePay) {
@@ -183,7 +199,7 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
             </CardHeader>
             <CardContent className="space-y-4">
                  <div className="flex items-center justify-center gap-4">
-                    {(match.status === 'Scheduled' || match.status === 'PendingOpponent') && (
+                    {(match.status === 'Scheduled' || match.status === 'Collecting players') && (
                          <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>

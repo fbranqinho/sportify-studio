@@ -157,7 +157,7 @@ export default function GameDetailsPage() {
     const getMatchTitle = () => {
         const teamAName = teamA?.name || 'Team A';
         if (isFinished) return `${teamA?.name || 'Team A'} ${match.scoreA} - ${match.scoreB} ${teamB?.name || 'Team B'}`;
-        if (teamA && !teamB && !match.invitedTeamId && (match.status === 'PendingOpponent' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
+        if (teamA && !teamB && !match.invitedTeamId && (match.status === 'Collecting players' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         if (teamA && match.invitedTeamId && !teamB) {
              const invitedTeam = teamB; 
@@ -207,4 +207,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
