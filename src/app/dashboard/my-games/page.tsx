@@ -189,17 +189,39 @@ export default function MyGamesPage() {
      if (!user) return;
      const batch = writeBatch(db);
      const invitationRef = doc(db, "matchInvitations", invitation.id);
+     const matchRef = doc(db, "matches", invitation.matchId);
      
      try {
         batch.update(invitationRef, { status: accepted ? 'accepted' : 'declined' });
 
         if (accepted) {
-            const matchRef = doc(db, "matches", invitation.matchId);
-            batch.update(matchRef, { teamAPlayers: arrayUnion(user.id) });
+            const teamSide = invitation.teamId === match.teamARef ? 'teamAPlayers' : 'teamBPlayers';
+            batch.update(matchRef, { [teamSide]: arrayUnion(user.id) });
         }
         
         await batch.commit();
-        toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}` });
+
+        if(accepted) {
+            const updatedMatchSnap = await getDoc(matchRef);
+            if (updatedMatchSnap.exists()) {
+                const updatedMatchData = updatedMatchSnap.data() as Match;
+                const pitchSnap = await getDoc(doc(db, "pitches", updatedMatchData.pitchRef));
+                const pitchData = pitchSnap.data() as Pitch;
+
+                const minPlayers = getPlayerCapacity(pitchData?.sport);
+                const currentPlayers = (updatedMatchData.teamAPlayers?.length || 0) + (updatedMatchData.teamBPlayers?.length || 0);
+
+                if (currentPlayers >= minPlayers) {
+                    await updateDoc(matchRef, { status: 'Scheduled' });
+                    toast({ title: "Team is ready!", description: "Minimum player count reached. The game is now scheduled." });
+                } else {
+                     toast({ title: `Invitation ${accepted ? 'Accepted' : 'Declined'}` });
+                }
+            }
+        } else {
+            toast({ title: `Invitation Declined` });
+        }
+        
         fetchGameDetails(); // Re-fetch all data to update the UI correctly
      } catch (error: any) {
         console.error("Error responding to invitation:", error);

@@ -2,9 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, arrayRemove, arrayUnion, documentId } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, arrayRemove, arrayUnion, documentId, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, User, Notification } from "@/types";
+import type { Match, User, Notification, Pitch } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle, XCircle, Inbox } from "lucide-react";
 import { format } from "date-fns";
+import { getPlayerCapacity } from "@/lib/utils";
 
 export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () => void }) {
     const [applicants, setApplicants] = React.useState<User[]>([]);
@@ -68,8 +69,28 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
 
         try {
             await batch.commit();
-            toast({ title: `Application ${accepted ? 'Accepted' : 'Declined'}`, description: `The player has been notified.` });
+
+            // --- NEW: Check if the match is now full and update its status ---
+            if (accepted) {
+                const updatedMatchSnap = await getDoc(matchRef);
+                const updatedMatchData = updatedMatchSnap.data() as Match;
+                const pitchSnap = await getDoc(doc(db, "pitches", updatedMatchData.pitchRef));
+                const pitchData = pitchSnap.data() as Pitch;
+
+                const minPlayers = getPlayerCapacity(pitchData?.sport);
+                const currentPlayers = (updatedMatchData.teamAPlayers?.length || 0) + (updatedMatchData.teamBPlayers?.length || 0);
+
+                if (currentPlayers >= minPlayers) {
+                    await updateDoc(matchRef, { status: 'Scheduled' });
+                    toast({ title: "Team is ready!", description: "Minimum player count reached. The game is now scheduled." });
+                } else {
+                    toast({ title: `Application ${accepted ? 'Accepted' : 'Declined'}`, description: `The player has been notified.` });
+                }
+            } else {
+                 toast({ title: "Application Declined", description: `The player has been notified.` });
+            }
             onUpdate();
+
         } catch (error) {
             console.error("Error responding to application:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not process the application." });

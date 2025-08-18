@@ -21,8 +21,8 @@ export function MatchDetailsCard({ match, pitch, owner, invitationCounts }: Matc
 
     const getStatusInfo = () => {
         switch (match.status) {
-            case 'PendingOpponent':
-                return { text: 'Awaiting Opponent/Players', icon: Users, color: 'text-amber-600' };
+            case 'Collecting players':
+                return { text: 'Collecting Players', icon: Users, color: 'text-amber-600' };
             case 'Scheduled':
                  return { text: 'Scheduled', icon: CheckCircle, color: 'text-blue-600' };
             case 'InProgress':
