@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,6 @@ export function PlayerRoster({
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
     const [isEventDialogOpen, setIsEventDialogOpen] = React.useState(false);
-    const [isDressingRoomOpen, setIsDressingRoomOpen] = React.useState(false);
     const [currentEvent, setCurrentEvent] = React.useState<EventState | null>(null);
     const [eventMinute, setEventMinute] = React.useState<number | "">("");
 
@@ -237,27 +236,9 @@ export function PlayerRoster({
     const showDressingRoomButton = isManager && (isPracticeMatch || isScheduledMatch) && !isLive;
 
     // A scheduled match for a manager, showing their team vs opponent
-    if (isScheduledMatch) {
+    if (isScheduledMatch && !isPracticeMatch) {
         return (
             <div className="space-y-6">
-                 {showDressingRoomButton && (
-                    <div className="flex justify-center">
-                        <Dialog open={isDressingRoomOpen} onOpenChange={setIsDressingRoomOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="lg"><Shirt className="mr-2"/>Dressing Room</Button>
-                            </DialogTrigger>
-                            <DressingRoom 
-                                match={match} 
-                                players={players.filter(p => p.status === 'confirmed')} 
-                                onUpdate={onUpdate}
-                                onClose={() => setIsDressingRoomOpen(false)}
-                                teamA={teamA}
-                                teamB={teamB}
-                                currentUserIsManagerFor={currentUserIsManagerFor}
-                            />
-                        </Dialog>
-                    </div>
-                )}
                 <div className="grid md:grid-cols-2 gap-6">
                     <Card>
                         <CardHeader>
@@ -384,24 +365,6 @@ export function PlayerRoster({
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
-                 {showDressingRoomButton && (
-                    <div className="flex justify-center mb-6">
-                        <Dialog open={isDressingRoomOpen} onOpenChange={setIsDressingRoomOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="lg"><Shirt className="mr-2"/>Dressing Room</Button>
-                            </DialogTrigger>
-                            <DressingRoom 
-                                match={match} 
-                                players={confirmedPlayers} 
-                                onUpdate={onUpdate}
-                                onClose={() => setIsDressingRoomOpen(false)}
-                                teamA={teamA}
-                                teamB={teamB}
-                                currentUserIsManagerFor={currentUserIsManagerFor}
-                            />
-                        </Dialog>
-                    </div>
-                )}
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -487,3 +450,5 @@ export function PlayerRoster({
         </Card>
     );
 }
+
+    

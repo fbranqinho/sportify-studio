@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import type { Match, Reservation, Payment } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -113,7 +113,8 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Game Management</CardTitle>
+                <CardTitle>Game Settings</CardTitle>
+                 <CardDescription>Manage advanced options for this game.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                  <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
@@ -182,3 +183,5 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
         </Card>
     )
 }
+
+    

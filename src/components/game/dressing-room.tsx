@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, documentId, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,7 +31,10 @@ interface DressingRoomProps {
   currentUserIsManagerFor: 'A' | 'B' | 'both' | 'none';
 }
 
-export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, currentUserIsManagerFor }: DressingRoomProps) {
+export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUserIsManagerFor }: DressingRoomProps) {
+  const [players, setPlayers] = React.useState<(User & { profile: PlayerProfile })[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  
   const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || '4-4-2');
   const [formationA, setFormationA] = React.useState<Formation>(match.teamADetails?.formation || {});
   const [captainA, setCaptainA] = React.useState<string | undefined>(match.teamADetails?.captainId);
@@ -44,12 +47,40 @@ export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, 
 
   const { toast } = useToast();
   const autoFilled = React.useRef(false);
-
-  const isPracticeMatch = !teamA || !teamB;
+  
+  const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
   const canManageTeamA = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'A';
   const canManageTeamB = currentUserIsManagerFor === 'both' || currentUserIsManagerFor === 'B';
-  
-  const getPlayersByPosition = (position: PlayerPosition) => players.filter(p => p.profile.position === position);
+
+  React.useEffect(() => {
+    const fetchPlayers = async () => {
+        setLoading(true);
+        const playerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
+        if (playerIds.length === 0) {
+            setPlayers([]);
+            setLoading(false);
+            return;
+        }
+
+        const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
+        const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerIds));
+
+        const [usersSnap, profilesSnap] = await Promise.all([getDocs(usersQuery), getDocs(profilesSnap)]);
+
+        const usersMap = new Map(usersSnap.docs.map(doc => [doc.id, doc.data() as User]));
+        const profilesMap = new Map(profilesSnap.docs.map(doc => [doc.data().userRef, doc.data() as PlayerProfile]));
+
+        const combinedData = playerIds.map(id => {
+            const user = usersMap.get(id);
+            const profile = profilesMap.get(id);
+            return user && profile ? { ...user, profile } : null;
+        }).filter((p): p is User & { profile: PlayerProfile } => p !== null);
+        
+        setPlayers(combinedData);
+        setLoading(false);
+    };
+    fetchPlayers();
+  }, [match.teamAPlayers, match.teamBPlayers]);
 
   React.useEffect(() => {
     // Intelligent Auto-fill logic for practice matches only
@@ -230,50 +261,57 @@ export function DressingRoom({ match, players, onUpdate, onClose, teamA, teamB, 
         <DialogDescription>Assign players to teams and positions for this match.</DialogDescription>
       </DialogHeader>
       
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 py-4">
-        <FormationDisplay team="A" tactic={tacticA} setTactic={setTacticA} formation={formationA} teamData={teamA} canManage={canManageTeamA}/>
-        <FormationDisplay team="B" tactic={tacticB} setTactic={setTacticB} formation={formationB} teamData={teamB} canManage={canManageTeamB}/>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-            <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
-            <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
-                {benchPlayers.length > 0 ? benchPlayers.map(p => (
-                    <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
-                )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+      {loading ? <p>Loading players...</p> : (
+        <>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 py-4">
+                <FormationDisplay team="A" tactic={tacticA} setTactic={setTacticA} formation={formationA} teamData={teamA} canManage={canManageTeamA}/>
+                <FormationDisplay team="B" tactic={tacticB} setTactic={setTacticB} formation={formationB} teamData={teamB} canManage={canManageTeamB}/>
             </div>
-        </div>
 
-        {canManageTeamA && (
-          <div>
-            <h4 className="font-bold mb-2">Tactical Roles</h4>
-            <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Captain</Label>
-                <Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Penalties</Label>
-                <Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Corners</Label>
-                <Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Free Kicks</Label>
-                <Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
+                    <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
+                        {benchPlayers.length > 0 ? benchPlayers.map(p => (
+                            <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
+                        )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+                    </div>
+                </div>
+
+                {canManageTeamA && (
+                <div>
+                    <h4 className="font-bold mb-2">Tactical Roles</h4>
+                    <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                        <Label>Captain</Label>
+                        <Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Penalties</Label>
+                        <Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Corners</Label>
+                        <Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Free Kicks</Label>
+                        <Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    </div>
+                </div>
+                )}
             </div>
-          </div>
-        )}
-      </div>
+        </>
+      )}
+
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSaveChanges}>Save Teams</Button>
+        <Button onClick={handleSaveChanges} disabled={loading}>Save Teams</Button>
       </DialogFooter>
     </DialogContent>
   );
 }
+
+    
