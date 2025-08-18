@@ -224,7 +224,10 @@ export default function MyGamesPage() {
   }
 
   const handleStartSplitPayment = async (match: Match, reservation: Reservation) => {
-    const confirmedPlayers = match.teamAPlayers || [];
+    const matchDoc = await getDoc(doc(db, "matches", match.id));
+    const currentMatchData = matchDoc.data() as Match;
+
+    const confirmedPlayers = currentMatchData.teamAPlayers || [];
     if (confirmedPlayers.length === 0) {
         toast({ variant: "destructive", title: "No Players", description: "Cannot start payment without confirmed players." });
         return;
@@ -314,7 +317,8 @@ export default function MyGamesPage() {
       return 'Match Details';
     }
     
-    const showStartPaymentButton = isManager && reservation?.status === 'Confirmed' && reservation.paymentStatus === 'Pending';
+    const showStartPaymentButton = isManager && reservation?.status === 'Confirmed' && reservation?.paymentStatus === 'Pending';
+    
     let buttonContent;
     if (playerInvitation) {
         buttonContent = (
@@ -348,9 +352,25 @@ export default function MyGamesPage() {
         buttonContent = (
              <div className="flex flex-col w-full gap-2">
                  {showStartPaymentButton && (
-                    <Button className="w-full" onClick={() => handleStartSplitPayment(match, reservation!)}>
-                        <DollarSign className="mr-2 h-4 w-4"/> Initiate Payment
-                    </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button className="w-full">
+                                <DollarSign className="mr-2 h-4 w-4"/> Initiate Payment
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Initiate Split Payment?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will create a pending payment for each of the <strong>{confirmedPlayers}</strong> confirmed players. They will be notified. Are you sure?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleStartSplitPayment(match, reservation!)}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
                 <Button variant="outline" className="w-full" asChild>
                     <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
