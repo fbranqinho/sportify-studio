@@ -11,19 +11,17 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Match, Team, User, Formation, Tactic, PlayerProfile } from "@/types";
 
-const tactics: Tactic[] = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
+const tactics: Tactic[] = ["3-2-1", "2-3-1", "3-1-2", "2-2-2"];
 
 const formationPositionsByTactic: { [key in Tactic]: string[] } = {
-    "4-4-2": ["GK", "LB", "CB1", "CB2", "RB", "LM", "CM1", "CM2", "RM", "ST1", "ST2"],
-    "4-3-3": ["GK", "LB", "CB1", "CB2", "RB", "CM1", "CM2", "CM3", "LW", "ST", "RW"],
-    "3-5-2": ["GK", "CB1", "CB2", "CB3", "LWB", "RWB", "CM1", "CM2", "CAM", "ST1", "ST2"],
-    "4-2-3-1": ["GK", "LB", "CB1", "CB2", "RB", "CDM1", "CDM2", "LAM", "CAM", "RAM", "ST"],
-    "5-3-2": ["GK", "LWB", "LB", "CB", "RB", "RWB", "CM1", "CM2", "CM3", "ST1", "ST2"],
+    "3-2-1": ["GK", "CB1", "CB2", "CB3", "CM1", "CM2", "ST"],
+    "2-3-1": ["GK", "CB1", "CB2", "LM", "CM", "RM", "ST"],
+    "3-1-2": ["GK", "CB1", "CB2", "CB3", "CDM", "ST1", "ST2"],
+    "2-2-2": ["GK", "LB", "RB", "CM1", "CM2", "ST1", "ST2"],
 };
 
 interface DressingRoomProps {
   match: Match;
-  players: (User & { profile: PlayerProfile })[];
   onUpdate: (data: Partial<Match>) => void;
   onClose: () => void;
   teamA: Team | null;
@@ -35,14 +33,14 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   const [players, setPlayers] = React.useState<(User & { profile: PlayerProfile })[]>([]);
   const [loading, setLoading] = React.useState(true);
   
-  const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || '4-4-2');
+  const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || '3-2-1');
   const [formationA, setFormationA] = React.useState<Formation>(match.teamADetails?.formation || {});
   const [captainA, setCaptainA] = React.useState<string | undefined>(match.teamADetails?.captainId);
   const [penaltyTakerA, setPenaltyTakerA] = React.useState<string | undefined>(match.teamADetails?.penaltyTakerId);
   const [cornerTakerA, setCornerTakerA] = React.useState<string | undefined>(match.teamADetails?.cornerTakerId);
   const [freeKickTakerA, setFreeKickTakerA] = React.useState<string | undefined>(match.teamADetails?.freeKickTakerId);
 
-  const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || '4-4-2');
+  const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || '3-2-1');
   const [formationB, setFormationB] = React.useState<Formation>(match.teamBDetails?.formation || {});
 
   const { toast } = useToast();
