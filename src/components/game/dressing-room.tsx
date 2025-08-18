@@ -65,7 +65,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
         const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
         const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerIds));
 
-        const [usersSnap, profilesSnap] = await Promise.all([getDocs(usersQuery), getDocs(profilesSnap)]);
+        const [usersSnap, profilesSnap] = await Promise.all([getDocs(usersQuery), getDocs(profilesQuery)]);
 
         const usersMap = new Map(usersSnap.docs.map(doc => [doc.id, doc.data() as User]));
         const profilesMap = new Map(profilesSnap.docs.map(doc => [doc.data().userRef, doc.data() as PlayerProfile]));
@@ -313,5 +313,3 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     </DialogContent>
   );
 }
-
-    
