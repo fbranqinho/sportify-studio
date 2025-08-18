@@ -270,6 +270,16 @@ export interface Match {
     mvpPlayerId?: string | null;
 }
 
+export interface TeamChallenge {
+  id: string;
+  challengerTeamId: string;
+  challengerTeamName: string;
+  challengerManagerId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  challengedAt: Timestamp;
+}
+
+
 export interface MvpVote {
   id: string;
   voterId: string;

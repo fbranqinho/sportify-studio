@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, arrayUnion, arrayRemove, writeBatch, documentId, increment, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation, Payment, PaymentStatus } from "@/types";
+import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, MatchEventType, MatchInvitation, InvitationStatus, PitchSport, PlayerProfile, Reservation, Payment, PaymentStatus, TeamChallenge } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock, Star, CreditCard, Send } from "lucide-react";
+import { ChevronLeft, Search, UserPlus, X, Trash2, Building, MapPin, Shield, Users, CheckCircle, XCircle, Inbox, Play, Flag, Trophy, Clock, Shuffle, Goal, Square, CirclePlus, MailQuestion, UserCheck, UserX, UserMinus, DollarSign, Lock, Star, CreditCard, Send, Swords } from "lucide-react";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -517,6 +517,116 @@ function ManageGame({ match, onMatchUpdate, reservation }: { match: Match; onMat
         </Card>
     )
 }
+
+function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpdate: () => void }) {
+    const [challenges, setChallenges] = React.useState<TeamChallenge[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const { toast } = useToast();
+
+    React.useEffect(() => {
+        const fetchChallenges = async () => {
+            setLoading(true);
+            const challengesQuery = query(collection(db, "matches", match.id, "teamChallenges"));
+            const snapshot = await getDocs(challengesQuery);
+            const challengesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamChallenge));
+            setChallenges(challengesData);
+            setLoading(false);
+        };
+        fetchChallenges();
+    }, [match.id]);
+
+    const handleResponse = async (challenge: TeamChallenge, accepted: boolean) => {
+        const batch = writeBatch(db);
+        const matchRef = doc(db, "matches", match.id);
+        const challengeRef = doc(db, "matches", match.id, "teamChallenges", challenge.id);
+
+        if (accepted) {
+            batch.update(matchRef, {
+                teamBRef: challenge.challengerTeamId,
+                status: "Scheduled"
+            });
+            
+            const notificationMsg = `Your challenge to play against ${match.teamARef} was accepted!`;
+            const notification: Omit<Notification, 'id'> = {
+                userId: challenge.challengerManagerId,
+                message: notificationMsg,
+                link: `/dashboard/games/${match.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            batch.set(doc(collection(db, "notifications")), notification);
+        } else {
+             const notificationMsg = `Your challenge to play against ${match.teamARef} was not accepted.`;
+             const notification: Omit<Notification, 'id'> = {
+                userId: challenge.challengerManagerId,
+                message: notificationMsg,
+                link: `/dashboard/my-games`,
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            batch.set(doc(collection(db, "notifications")), notification);
+        }
+
+        // Delete the challenge regardless of response
+        batch.delete(challengeRef);
+
+        try {
+            await batch.commit();
+            toast({ title: `Challenge ${accepted ? 'Accepted' : 'Declined'}` });
+            onUpdate(); // Re-fetch all data
+        } catch (error) {
+            console.error("Error responding to challenge:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not process challenge response." });
+        }
+    };
+    
+    if (!match.allowChallenges || match.teamBRef) {
+        return null;
+    }
+
+    if (loading) {
+        return <Card><CardHeader><CardTitle>Team Challenges</CardTitle></CardHeader><CardContent><Skeleton className="h-10 w-full" /></CardContent></Card>;
+    }
+    
+    if (challenges.length === 0) {
+        return null; // Don't show the card if there are no challenges
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><Swords /> Team Challenges ({challenges.length})</CardTitle>
+                <CardDescription>Other teams want to play against you in this slot. Accept a challenge to schedule the match.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Challenging Team</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {challenges.map(challenge => (
+                            <TableRow key={challenge.id}>
+                                <TableCell className="font-medium">{challenge.challengerTeamName}</TableCell>
+                                <TableCell className="text-right space-x-2">
+                                    <Button size="sm" variant="outline" onClick={() => handleResponse(challenge, true)}>
+                                        <CheckCircle className="mr-2 h-4 w-4 text-green-600"/> Accept
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleResponse(challenge, false)}>
+                                            <XCircle className="mr-2 h-4 w-4 text-red-600"/> Decline
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
 
 function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate: () => void }) {
     const [applicants, setApplicants] = React.useState<User[]>([]);
@@ -1387,13 +1497,10 @@ export default function GameDetailsPage() {
                     {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
                     <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} reservation={reservation}/>
                     {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
+                    {isManager && <ChallengeInvitations match={match} onUpdate={fetchGameDetails} />}
                     {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} />}
                 </>
             )}
         </div>
     );
 }
-
-    
-
-    
