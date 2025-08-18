@@ -192,6 +192,13 @@ export default function MyGamesPage() {
      const matchRef = doc(db, "matches", invitation.matchId);
      
      try {
+        const matchSnap = await getDoc(matchRef);
+        if (!matchSnap.exists()) {
+            toast({ variant: "destructive", title: "Error", description: "Associated match not found." });
+            return;
+        }
+        const match = matchSnap.data() as Match;
+
         batch.update(invitationRef, { status: accepted ? 'accepted' : 'declined' });
 
         if (accepted) {
