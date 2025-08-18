@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Notification } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -47,8 +47,20 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
 
     const handleResponse = async (notification: Notification, accepted: boolean) => {
         const { payload } = notification;
+
+        // Enhanced check to handle and remove corrupted data
         if (!payload || !payload.matchId || !payload.challengerTeamId || !payload.challengerManagerId) {
-            toast({variant: "destructive", title: "Invalid challenge data"});
+            try {
+                await deleteDoc(doc(db, "notifications", notification.id));
+                toast({
+                    title: "Invalid Challenge Removed",
+                    description: "A corrupted challenge notification has been deleted.",
+                });
+                onUpdate(); // Refresh the parent component to update the UI
+            } catch (error) {
+                 console.error("Error deleting invalid notification:", error);
+                 toast({ variant: "destructive", title: "Error", description: "Could not remove the invalid challenge data." });
+            }
             return;
         }
         
@@ -126,7 +138,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                     <TableBody>
                         {challenges.map(challenge => (
                             <TableRow key={challenge.id}>
-                                <TableCell className="font-medium">{challenge.payload?.challengerTeamName}</TableCell>
+                                <TableCell className="font-medium">{challenge.payload?.challengerTeamName || "Unknown Team"}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button size="sm" variant="outline" onClick={() => handleResponse(challenge, true)}>
                                         <CheckCircle className="mr-2 h-4 w-4 text-green-600"/> Accept
