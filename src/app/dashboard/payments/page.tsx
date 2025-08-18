@@ -33,12 +33,16 @@ const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { pay
         const conflictingReservationsQuery = query(
             collection(db, "reservations"),
             where("pitchId", "==", reservation.pitchId),
-            where("date", "==", reservation.date),
-            where("status", "in", ["Scheduled", "Confirmed"]) // Look for other confirmed/paid reservations
+            where("date", "==", reservation.date)
         );
+
         const conflictingSnap = await getDocs(conflictingReservationsQuery);
-        // Filter out the current user's reservation to see if there are OTHERS
-        const otherTeamsConfirmed = conflictingSnap.docs.some(d => d.id !== reservation.id);
+
+        const otherTeamsConfirmed = conflictingSnap.docs.some(d => {
+            const data = d.data() as Reservation;
+            // A slot is taken if another reservation (not this one) is already paid for
+            return d.id !== reservation.id && (data.status === 'Scheduled' || data.paymentStatus === 'Paid');
+        });
         
         if (otherTeamsConfirmed) {
             toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
@@ -87,19 +91,14 @@ const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { pay
                 });
                 
                 // --- 4. Cancel conflicting reservations ---
-                const otherReservationsQuery = query(
-                    collection(db, "reservations"),
-                    where("pitchId", "==", reservation.pitchId),
-                    where("date", "==", reservation.date),
-                    where("id", "!=", reservation.id) // Exclude the current reservation
-                );
-                const otherReservationsSnap = await getDocs(otherReservationsQuery);
-                otherReservationsSnap.forEach(otherResDoc => {
-                    batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
-                    const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
-                    if(managerId) {
-                        const cancellationNotificationRef = doc(collection(db, 'notifications'));
-                        batch.set(cancellationNotificationRef, { userId: managerId, message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
+                conflictingSnap.docs.forEach(otherResDoc => {
+                    if(otherResDoc.id !== reservation.id) {
+                        batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
+                        const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
+                        if(managerId) {
+                            const cancellationNotificationRef = doc(collection(db, 'notifications'));
+                            batch.set(cancellationNotificationRef, { userId: managerId, message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
+                        }
                     }
                 });
             }
