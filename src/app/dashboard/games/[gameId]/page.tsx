@@ -357,9 +357,10 @@ function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservatio
     );
 }
 
-function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void}) {
+function ManageGame({ match, onMatchUpdate, reservation }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; }) {
     const { toast } = useToast();
     const router = useRouter();
+    const isPaid = reservation?.paymentStatus === 'Paid';
 
     const handleToggleExternalPlayers = async (checked: boolean) => {
         const matchRef = doc(db, "matches", match.id);
@@ -453,36 +454,38 @@ function ManageGame({ match, onMatchUpdate }: { match: Match, onMatchUpdate: (da
                         onCheckedChange={handleToggleExternalPlayers}
                     />
                 </div>
-                 <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
-                            Delete Game
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                           This will permanently delete the game and its associated field reservation. This action cannot be undone.
-                        </p>
+                 {!isPaid && (
+                    <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
+                                Delete Game
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                            This will permanently delete the game and its associated field reservation. This action cannot be undone.
+                            </p>
+                        </div>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive">
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the game
+                                    and its associated reservation, and refund/cancel any related payments.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the game
-                                and its associated reservation, and refund/cancel any related payments.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </div>
+                 )}
             </CardContent>
         </Card>
     )
@@ -1357,7 +1360,7 @@ export default function GameDetailsPage() {
                     {isManager && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}
                     <PlayerRoster match={match} isManager={isManager} onUpdate={handleMatchUpdate} onEventAdded={handleEventAdded} reservation={reservation}/>
                     {isManager && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
-                    {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} />}
+                    {isManager && match.status !== "InProgress" && match.status !== "Finished" && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} />}
                 </>
             )}
         </div>
