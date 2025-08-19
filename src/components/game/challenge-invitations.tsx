@@ -25,16 +25,19 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const fetchChallenges = async () => {
             setLoading(true);
             try {
-                // Corrected query with the missing 'type' filter
+                // Corrected query: Fetch all challenges for the user and then filter by matchId in the client.
                 const challengesQuery = query(
                     collection(db, "notifications"),
                     where("userId", "==", user.id),
-                    where("type", "==", "Challenge"),
-                    where("payload.matchId", "==", match.id)
+                    where("type", "==", "Challenge")
                 );
                 const snapshot = await getDocs(challengesQuery);
-                const challengesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-                setChallenges(challengesData);
+                const allChallenges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+                
+                // Filter for the current match
+                const matchChallenges = allChallenges.filter(c => c.payload?.matchId === match.id);
+
+                setChallenges(matchChallenges);
             } catch (e) {
                 console.error("Error fetching challenges (check index)", e);
                 toast({ variant: "destructive", title: "Query Error", description: "Could not fetch challenges. The database might need a specific index."});
@@ -182,5 +185,3 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         </Card>
     );
 }
-
-    
