@@ -32,7 +32,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
     if (match.teamAName && match.teamBName && match.teamBName !== 'TBD') {
         return `${match.teamAName} vs ${match.teamBName}`;
     }
-    return `${match.teamAName} (Practice / Open)`;
+    return `${match.teamAName} (Open for challenges)`;
   }
 
   return (

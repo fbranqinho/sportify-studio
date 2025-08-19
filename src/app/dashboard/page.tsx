@@ -80,8 +80,8 @@ export default function DashboardPage() {
                     
                     let upcomingGames = 0;
                     if (teamIds.length > 0) {
-                        const gamesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
-                        const gamesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
+                        const gamesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "Collecting players"]));
+                        const gamesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "Collecting players"]));
                         const [gamesASnap, gamesBSnap] = await Promise.all([getDocs(gamesAQuery), getDocs(gamesBQuery)]);
                         
                         const now = new Date();
@@ -108,8 +108,8 @@ export default function DashboardPage() {
                     let pendingPayments = 0;
                     
                     if (teamIds.length > 0) {
-                        const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
-                        const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "PendingOpponent"]));
+                        const matchesAQuery = query(collection(db, "matches"), where("teamARef", "in", teamIds), where("status", "in", ["Scheduled", "Collecting players"]));
+                        const matchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", teamIds), where("status", "in", ["Scheduled", "Collecting players"]));
                         const reservationsQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id), where("paymentStatus", "==", "Pending"));
                         
                         const [matchesASnap, matchesBSnap, reservationsSnap] = await Promise.all([

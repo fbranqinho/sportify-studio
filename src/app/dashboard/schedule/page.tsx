@@ -132,7 +132,7 @@ export default function SchedulePage() {
             scoreA: 0,
             scoreB: 0,
             pitchRef: reservation.pitchId,
-            status: reservation.teamRef ? "PendingOpponent" : "Scheduled",
+            status: reservation.teamRef ? "Collecting players" : "Scheduled",
             attendance: 0,
             refereeId: null,
             managerRef: reservation.managerRef || null,
