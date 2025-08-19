@@ -62,29 +62,35 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
         if (match.status === 'Finished' || match.status === 'Cancelled') {
           return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
-      
-        const isPracticeMatch = !!match.teamARef && !match.teamBRef;
-
-        // Opportunity to Challenge
-        if (
-          isPracticeMatch &&
-          match.allowChallenges &&
-          user.role === 'MANAGER' &&
-          match.managerRef !== user.id
-        ) {
-          return { status: 'OpenForTeam', match, reservation, price: 0 };
-        }
         
-        // Opportunity to Apply as Player
-        const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-        const capacity = getPlayerCapacity(pitch.sport);
-        if (
-          isPracticeMatch &&
-          match.allowExternalPlayers &&
-          user.role === 'PLAYER' &&
-          totalPlayers < capacity
-        ) {
-          return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
+        // If the reservation is NOT paid, it might be open for actions
+        if (reservation.paymentStatus !== 'Paid') {
+          const isPracticeMatch = !!match.teamARef && !match.teamBRef;
+
+          // Opportunity to Challenge
+          if (
+            isPracticeMatch &&
+            match.allowChallenges &&
+            user.role === 'MANAGER' &&
+            match.managerRef !== user.id
+          ) {
+            return { status: 'OpenForTeam', match, reservation, price: 0 };
+          }
+          
+          // Opportunity to Apply as Player
+          const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+          const capacity = getPlayerCapacity(pitch.sport);
+          if (
+            isPracticeMatch &&
+            match.allowExternalPlayers &&
+            user.role === 'PLAYER' &&
+            totalPlayers < capacity
+          ) {
+            return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
+          }
+
+           // If no other action is available but it's not paid, it's pending payment/players.
+           return { status: 'Pending', reservation, match, price: reservation.totalAmount };
         }
       }
       
@@ -93,8 +99,8 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
           return { status: 'Booked', match, reservation, price: reservation.totalAmount };
       }
 
-      // 3c. If none of the above, it's booked but potentially awaiting payment, etc. Treat as booked.
-      return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+      // 3c. Fallback if a reservation exists but none of the above conditions are met.
+      return { status: 'Pending', match, reservation, price: reservation.totalAmount };
     }
     
     // 4. Handle available slots.
