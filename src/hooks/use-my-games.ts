@@ -231,64 +231,82 @@ export function useMyGames(user: User | null) {
       }
   }
 
-  const handleStartSplitPayment = async (match: Match) => {
-    if (!match.reservationRef) return;
-    const reservation = reservations.get(match.reservationRef);
-    if (!reservation) {
-        toast({variant: "destructive", title: "Reservation details not found"});
-        return;
-    }
+    const handleStartSplitPayment = async (reservation: Reservation) => {
+        if (!reservation) {
+            toast({variant: "destructive", title: "Reservation details not found"});
+            return;
+        }
 
-    const matchDoc = await getDoc(doc(db, "matches", match.id));
-    const currentMatchData = matchDoc.data() as Match;
+        const matchDoc = await getDocs(query(collection(db, 'matches'), where('reservationRef', '==', reservation.id)));
+        if(matchDoc.empty){
+            toast({variant: "destructive", title: "Match details not found"});
+            return;
+        }
+        const currentMatchData = matchDoc.docs[0].data() as Match;
 
-    const confirmedPlayers = currentMatchData.teamAPlayers || [];
-    if (confirmedPlayers.length === 0) {
-        toast({ variant: "destructive", title: "No Players", description: "Cannot start payment without confirmed players." });
-        return;
-    }
+        const confirmedPlayers = currentMatchData.teamAPlayers || [];
+        if (confirmedPlayers.length === 0) {
+            toast({ variant: "destructive", title: "No Players", description: "Cannot start payment without confirmed players." });
+            return;
+        }
 
-    const pricePerPlayer = reservation.totalAmount / confirmedPlayers.length;
-    const batch = writeBatch(db);
-    const teamName = teams.get(match.teamARef!)?.name || 'Your Team';
+        const pricePerPlayer = reservation.totalAmount / confirmedPlayers.length;
+        const batch = writeBatch(db);
+        const teamName = teams.get(currentMatchData.teamARef!)?.name || 'Your Team';
 
-    confirmedPlayers.forEach(playerId => {
-        const paymentRef = doc(collection(db, "payments"));
-        const paymentData: Omit<Payment, 'id'> = {
-            playerRef: playerId,
-            teamRef: match.teamARef!,
+        // First, create a payment document for the manager for the initial booking fee
+        const managerPaymentRef = doc(collection(db, "payments"));
+        const managerPaymentData: Omit<Payment, 'id'> = {
+            managerRef: reservation.actorId,
             reservationRef: reservation.id,
-            type: 'booking_split',
-            amount: pricePerPlayer,
-            status: 'Pending',
+            type: 'booking',
+            amount: reservation.totalAmount,
+            status: 'Paid', // Mark manager's payment as paid since they initiate
             date: new Date().toISOString(),
             pitchName: reservation.pitchName,
             teamName: teamName,
+            teamRef: currentMatchData.teamARef!,
         };
-        batch.set(paymentRef, paymentData);
+        batch.set(managerPaymentRef, managerPaymentData);
 
-        const notificationRef = doc(collection(db, "notifications"));
-        const notificationData: Omit<Notification, 'id'> = {
-            userId: playerId,
-            message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
-            link: '/dashboard/payments',
-            read: false,
-            createdAt: serverTimestamp() as any,
-        };
-        batch.set(notificationRef, notificationData);
-    });
 
-    const reservationRef = doc(db, "reservations", reservation.id);
-    batch.update(reservationRef, { paymentStatus: "Split" });
+        confirmedPlayers.forEach(playerId => {
+            const paymentRef = doc(collection(db, "payments"));
+            const paymentData: Omit<Payment, 'id'> = {
+                playerRef: playerId,
+                teamRef: currentMatchData.teamARef!,
+                reservationRef: reservation.id,
+                type: 'booking_split',
+                amount: pricePerPlayer,
+                status: 'Pending',
+                date: new Date().toISOString(),
+                pitchName: reservation.pitchName,
+                teamName: teamName,
+            };
+            batch.set(paymentRef, paymentData);
 
-    try {
-        await batch.commit();
-        toast({ title: "Payment Initiated", description: `Each of the ${confirmedPlayers.length} players has been notified.`});
-        fetchGameDetails();
-    } catch(error) {
-        console.error("Error starting split payment: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not initiate payments." });
-    }
+            const notificationRef = doc(collection(db, "notifications"));
+            const notificationData: Omit<Notification, 'id'> = {
+                userId: playerId,
+                message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
+                link: '/dashboard/payments',
+                read: false,
+                createdAt: serverTimestamp() as any,
+            };
+            batch.set(notificationRef, notificationData);
+        });
+
+        const reservationRef = doc(db, "reservations", reservation.id);
+        batch.update(reservationRef, { paymentStatus: "Split" });
+
+        try {
+            await batch.commit();
+            toast({ title: "Payment Initiated", description: `Each of the ${confirmedPlayers.length} players has been notified.`});
+            fetchGameDetails();
+        } catch(error) {
+            console.error("Error starting split payment: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not initiate payments." });
+        }
   };
   
   const now = new Date();

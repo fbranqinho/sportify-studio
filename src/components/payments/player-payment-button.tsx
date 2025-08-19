@@ -12,51 +12,62 @@ import { format } from "date-fns";
 
 export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { payment: Payment, reservation: Reservation | null, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
+    const [isProcessing, setIsProcessing] = React.useState(false);
 
     const handlePayNow = async () => {
+        setIsProcessing(true);
         if (!reservation || !reservation.pitchId || !reservation.date) {
             toast({ variant: "destructive", title: "Error", description: "This payment is missing critical reservation details." });
+            setIsProcessing(false);
             return;
         }
         
         const reservationRef = doc(db, "reservations", reservation.id);
 
-        const conflictingReservationsQuery = query(
-            collection(db, "reservations"),
-            where("pitchId", "==", reservation.pitchId),
-            where("date", "==", reservation.date)
-        );
-
-        const conflictingSnap = await getDocs(conflictingReservationsQuery);
-
-        const otherTeamsConfirmed = conflictingSnap.docs.some(d => {
-            const data = d.data() as Reservation;
-            return d.id !== reservation.id && (data.status === 'Scheduled' || data.paymentStatus === 'Paid');
-        });
-        
-        if (otherTeamsConfirmed) {
-            toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
-            await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
-            onPaymentProcessed();
-            return;
-        }
-
-        const batch = writeBatch(db);
-        const paymentRef = doc(db, "payments", payment.id);
-        
         try {
+            const conflictingReservationsQuery = query(
+                collection(db, "reservations"),
+                where("pitchId", "==", reservation.pitchId),
+                where("date", "==", reservation.date)
+            );
+
+            const conflictingSnap = await getDocs(conflictingReservationsQuery);
+
+            const otherTeamsConfirmed = conflictingSnap.docs.some(d => {
+                const data = d.data() as Reservation;
+                return d.id !== reservation.id && (data.status === 'Scheduled' || data.paymentStatus === 'Paid');
+            });
+            
+            if (otherTeamsConfirmed) {
+                toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
+                await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
+                onPaymentProcessed();
+                setIsProcessing(false);
+                return;
+            }
+
+            const batch = writeBatch(db);
+            const paymentRef = doc(db, "payments", payment.id);
+            
             batch.update(paymentRef, { status: "Paid" });
             
             const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id));
             const paymentsSnap = await getDocs(paymentsQuery);
             let totalPaid = payment.amount;
+            let allPlayersPaid = true;
+            
             paymentsSnap.forEach(doc => {
-                if (doc.id !== payment.id && doc.data().status === 'Paid') {
-                    totalPaid += doc.data().amount;
+                const p = doc.data() as Payment;
+                if (doc.id !== payment.id) {
+                     if (p.status === 'Paid') {
+                        totalPaid += p.amount;
+                    } else if (p.type === 'booking_split') {
+                        allPlayersPaid = false;
+                    }
                 }
             });
 
-            if (totalPaid >= reservation.totalAmount) {
+            if (allPlayersPaid) {
                 batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
                 
                 const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
@@ -99,16 +110,18 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
 
             await batch.commit();
         
-            toast({ title: "Payment Successful!", description: totalPaid >= reservation.totalAmount ? "Your game is confirmed!" : "Your share is paid." });
+            toast({ title: "Payment Successful!", description: allPlayersPaid ? "Your game is confirmed!" : "Your share is paid." });
             onPaymentProcessed();
             
         } catch (error: any) {
             console.error("Error processing payment:", error);
             toast({ variant: "destructive", title: "Error", description: `Could not process payment: ${error.message}` });
+        } finally {
+            setIsProcessing(false);
         }
     }
 
     return (
-        <Button size="sm" onClick={handlePayNow} disabled={!reservation}><CreditCard className="mr-2"/> Pay To Confirm</Button>
+        <Button size="sm" onClick={handlePayNow} disabled={!reservation || isProcessing}><CreditCard className="mr-2"/>{isProcessing ? 'Processing...' : 'Pay To Confirm'}</Button>
     )
 }

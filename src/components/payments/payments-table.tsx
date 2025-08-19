@@ -10,6 +10,8 @@ import { DollarSign, CheckCircle, Clock, History, Ban, CreditCard, Send, CircleS
 import { format } from "date-fns";
 import { PlayerPaymentButton } from "./player-payment-button";
 import { ManagerRemindButton } from "./manager-remind-button";
+import { useMyGames } from "@/hooks/use-my-games";
+import { useUser } from "@/hooks/use-user";
 
 interface PaymentsTableProps {
   payments: Payment[];
@@ -31,6 +33,9 @@ const getStatusBadge = (status: PaymentStatus) => {
 }
 
 export function PaymentsTable({ payments, showActions, userRole, playerUsers, reservations, onActionProcessed }: PaymentsTableProps) {
+    const { user } = useUser();
+    const myGamesHook = useMyGames(user); // We need this for the handler
+
     return (
         <Table>
             <TableHeader>
@@ -48,11 +53,15 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                 {payments.length > 0 ? payments.map((p) => {
                     const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
                     const actorName = p.playerRef ? playerUsers.get(p.playerRef)?.name : "N/A";
-                    const description = p.type === 'booking' ? `Booking at ${p.pitchName}` : `Share for ${p.teamName} at ${p.pitchName}`;
+                    const description = p.type === 'booking' 
+                        ? `Initial fee for ${p.pitchName}` 
+                        : (p.type === 'booking_split' ? `Share for ${p.teamName} at ${p.pitchName}` : `Payment for ${p.teamName}`);
                     
+                    const isInitialBookingPayment = p.type === 'booking';
+
                     return (
                         <TableRow key={p.id}>
-                            {userRole !== 'PLAYER' && <TableCell className="font-medium">{actorName}</TableCell>}
+                            {userRole !== 'PLAYER' && <TableCell className="font-medium">{p.type === 'booking' ? 'Your Booking' : actorName}</TableCell>}
                             <TableCell className="font-medium">{description}</TableCell>
                             <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
                             <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
@@ -65,6 +74,11 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                                     )}
                                     {p.status === 'Pending' && userRole === 'MANAGER' && p.type === 'booking_split' && (
                                         <ManagerRemindButton payment={p} />
+                                    )}
+                                     {p.status === 'Pending' && userRole === 'MANAGER' && isInitialBookingPayment && reservation && (
+                                        <Button size="sm" onClick={() => myGamesHook.handleStartSplitPayment(reservation)}>
+                                            <DollarSign className="mr-2 h-4 w-4"/> Initiate Split
+                                        </Button>
                                     )}
                                 </TableCell>
                             )}
@@ -81,4 +95,3 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
         </Table>
     )
 }
-
