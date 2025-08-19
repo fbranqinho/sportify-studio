@@ -5,7 +5,7 @@ import * as React from "react";
 import { doc, updateDoc, collection, query, where, documentId, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
-import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +22,7 @@ const formationPositionsByTactic: { [key in Tactic]: string[] } = {
 };
 
 const positionStyles: { [key: string]: string } = {
-  // Team A (Top)
+  // Team A (Top) - Positions are from the top of the container
   "A-GK": "top-[5%] left-1/2 -translate-x-1/2",
   "A-CB1": "top-[20%] left-1/4 -translate-x-1/2",
   "A-CB2": "top-[20%] left-1/2 -translate-x-1/2",
@@ -38,7 +38,7 @@ const positionStyles: { [key: string]: string } = {
   "A-ST": "top-[38%] left-1/2 -translate-x-1/2",
   "A-ST1": "top-[38%] left-1/4 -translate-x-1/2",
   "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
-  // Team B (Bottom)
+  // Team B (Bottom) - Positions are from the bottom of the container
   "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2",
   "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2",
   "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2",
@@ -277,104 +277,98 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
     );
   };
   
-  const FormationDisplay = ({ team, tactic, setTactic, formation, teamData, canManage }: { team: 'A' | 'B', tactic: Tactic, setTactic: (t: Tactic) => void, formation: Formation, teamData: Team | null, canManage: boolean }) => {
-    const teamName = teamData?.name || (team === 'A' ? 'Vests A' : 'Vests B');
-    const positions = formationPositionsByTactic[tactic];
-
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center px-4">
-            <h3 className="text-lg font-bold text-center">{teamName}</h3>
-            <Select value={tactic} onValueChange={(v) => setTactic(v as Tactic)} disabled={!canManage}>
-                <SelectTrigger className="w-[120px] h-8">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    {tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-            </Select>
-        </div>
-        <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30 min-h-[400px] relative">
-            {/* Field Markings */}
-            <div className="absolute top-1/2 left-0 w-full h-px bg-white/30"></div>
-            <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white/30 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-            <div className="absolute top-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-b-xl -translate-x-1/2 border-t-0"></div>
-            <div className="absolute bottom-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-t-xl -translate-x-1/2 border-b-0"></div>
-
-            {/* Players */}
-            {positions.map(pos => (
-                <FieldPosition 
-                    key={`${team}-${pos}`}
-                    team={team} 
-                    position={pos} 
-                    formation={formation}
-                    disabled={!canManage}
-                />
-            ))}
-        </div>
-      </div>
-    );
-  };
-  
   const teamAPlayersOnField = players.filter(p => assignedPlayersA.has(p.id));
   const teamBPlayersOnField = players.filter(p => assignedPlayersB.has(p.id));
 
   return (
     <DialogContent className="max-w-4xl">
-      <DialogHeader>
-        <DialogTitle className="font-headline">Dressing Room</DialogTitle>
-        <DialogDescription>Assign players to teams and positions for this match.</DialogDescription>
-      </DialogHeader>
+        <DialogHeader>
+            <DialogTitle className="font-headline">Dressing Room</DialogTitle>
+            <DialogDescription>Assign players to teams and positions for this match.</DialogDescription>
+        </DialogHeader>
       
-      {loading ? <p>Loading players...</p> : (
-        <>
-            <div className="grid grid-cols-1 gap-6 py-4">
-                <FormationDisplay team="A" tactic={tacticA} setTactic={setTacticA} formation={formationA} teamData={teamA} canManage={canManageTeamA}/>
-                <FormationDisplay team="B" tactic={tacticB} setTactic={setTacticB} formation={formationB} teamData={teamB} canManage={canManageTeamB}/>
-            </div>
+        <div className="max-h-[70vh] overflow-y-auto pr-4">
+            {loading ? <p>Loading players...</p> : (
+                <div className="space-y-6">
+                    {/* The Field */}
+                    <div className="bg-green-600/20 p-4 rounded-lg border-2 border-dashed border-green-700/30 min-h-[500px] relative">
+                        {/* Field Markings */}
+                        <div className="absolute top-1/2 left-0 w-full h-px bg-white/30"></div>
+                        <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white/30 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                        <div className="absolute top-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-b-xl -translate-x-1/2 border-t-0"></div>
+                        <div className="absolute bottom-0 left-1/2 w-48 h-24 border-2 border-white/30 rounded-t-xl -translate-x-1/2 border-b-0"></div>
+                        
+                        {/* Team A Formation */}
+                        {formationPositionsByTactic[tacticA].map(pos => (
+                            <FieldPosition key={`A-${pos}`} team="A" position={pos} formation={formationA} disabled={!canManageTeamA} />
+                        ))}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
-                    <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
-                        {benchPlayers.length > 0 ? benchPlayers.map(p => (
-                            <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
-                        )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+                        {/* Team B Formation */}
+                        {formationPositionsByTactic[tacticB].map(pos => (
+                            <FieldPosition key={`B-${pos}`} team="B" position={pos} formation={formationB} disabled={!canManageTeamB} />
+                        ))}
                     </div>
-                </div>
 
-                <div className="space-y-4">
-                  {canManageTeamA && (
-                  <div>
-                      <h4 className="font-bold mb-2">Tactical Roles: {teamA?.name || "Vests A"}</h4>
-                      <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-2"><Label>Captain</Label><Select value={captainA} onValueChange={setCaptainA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Corners</Label><Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Free Kicks</Label><Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                      </div>
-                  </div>
-                  )}
-                  {canManageTeamB && !isPracticeMatch && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         {/* Team A Controls */}
+                         <div className="space-y-4">
+                            <div className="flex justify-between items-center px-4">
+                                <h3 className="text-lg font-bold text-center">{teamA?.name || 'Vests A'}</h3>
+                                <Select value={tacticA} onValueChange={(v) => setTacticA(v as Tactic)} disabled={!canManageTeamA}>
+                                    <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
+                                    <SelectContent>{tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                             {canManageTeamA && (
+                              <div>
+                                  <h4 className="font-bold mb-2 text-sm px-4">Tactical Roles</h4>
+                                  <div className="p-4 bg-muted rounded-md grid grid-cols-2 gap-4">
+                                    <div className="space-y-1"><Label className="text-xs">Captain</Label><Select value={captainA} onValueChange={setCaptainA}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Penalties</Label><Select value={penaltyTakerA} onValueChange={setPenaltyTakerA}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Corners</Label><Select value={cornerTakerA} onValueChange={setCornerTakerA}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Free Kicks</Label><Select value={freeKickTakerA} onValueChange={setFreeKickTakerA}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamAPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                  </div>
+                              </div>
+                             )}
+                         </div>
+                         {/* Team B Controls */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center px-4">
+                                <h3 className="text-lg font-bold text-center">{teamB?.name || 'Vests B'}</h3>
+                                <Select value={tacticB} onValueChange={(v) => setTacticB(v as Tactic)} disabled={!canManageTeamB}>
+                                    <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
+                                    <SelectContent>{tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                             {canManageTeamB && (
+                              <div>
+                                  <h4 className="font-bold mb-2 text-sm px-4">Tactical Roles</h4>
+                                  <div className="p-4 bg-muted rounded-md grid grid-cols-2 gap-4">
+                                     <div className="space-y-1"><Label className="text-xs">Captain</Label><Select value={captainB} onValueChange={setCaptainB}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Penalties</Label><Select value={penaltyTakerB} onValueChange={setPenaltyTakerB}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Corners</Label><Select value={cornerTakerB} onValueChange={setCornerTakerB}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                    <div className="space-y-1"><Label className="text-xs">Free Kicks</Label><Select value={freeKickTakerB} onValueChange={setFreeKickTakerB}><SelectTrigger className="h-8"><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                                  </div>
+                              </div>
+                             )}
+                        </div>
+                    </div>
+                    {/* Bench */}
                     <div>
-                      <h4 className="font-bold mb-2">Tactical Roles: {teamB?.name || "Vests B"}</h4>
-                      <div className="p-4 bg-muted rounded-md grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-2"><Label>Captain</Label><Select value={captainB} onValueChange={setCaptainB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Penalties</Label><Select value={penaltyTakerB} onValueChange={setPenaltyTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Corners</Label><Select value={cornerTakerB} onValueChange={setCornerTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                        <div className="space-y-2"><Label>Free Kicks</Label><Select value={freeKickTakerB} onValueChange={setFreeKickTakerB}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{teamBPlayersOnField.map(p=><SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                      </div>
+                        <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
+                        <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
+                            {benchPlayers.length > 0 ? benchPlayers.map(p => (
+                                <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
+                            )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+                        </div>
                     </div>
-                  )}
                 </div>
-            </div>
-        </>
-      )}
-
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSaveChanges} disabled={loading}>Save Teams</Button>
-      </DialogFooter>
+            )}
+        </div>
+        <DialogFooter>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleSaveChanges} disabled={loading}>Save Teams</Button>
+        </DialogFooter>
     </DialogContent>
   );
 }
