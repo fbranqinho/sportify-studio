@@ -266,6 +266,7 @@ export function useMyGames(user: User | null) {
             pitchName: reservation.pitchName,
             teamName: teamName,
             teamRef: currentMatchData.teamARef!,
+            ownerRef: reservation.ownerProfileId, // Associate with the owner
         };
         batch.set(managerPaymentRef, managerPaymentData);
 
@@ -282,6 +283,7 @@ export function useMyGames(user: User | null) {
                 date: new Date().toISOString(),
                 pitchName: reservation.pitchName,
                 teamName: teamName,
+                ownerRef: reservation.ownerProfileId, // Associate with the owner
             };
             batch.set(paymentRef, paymentData);
 

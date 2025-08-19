@@ -15,7 +15,7 @@ export function usePayments(user: User | null) {
   const [loading, setLoading] = React.useState(true);
 
   const fetchData = React.useCallback(async () => {
-    if (!user) {
+    if (!user?.id) {
       setLoading(false);
       return;
     }
