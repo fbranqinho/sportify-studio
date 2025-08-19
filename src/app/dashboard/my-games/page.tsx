@@ -8,7 +8,6 @@ import { useUser } from "@/hooks/use-user";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Gamepad2, History, Search } from "lucide-react";
 import { MatchCard } from "@/components/game/match-card";
 import { useMyGames } from "@/hooks/use-my-games";
@@ -148,23 +147,15 @@ export default function MyGamesPage() {
         </div>
       </div>
 
-       <div className="border-t pt-8">
-        <Accordion type="single" collapsible>
-            <AccordionItem value="history">
-                <AccordionTrigger>
-                    <h2 className="text-2xl font-bold font-headline">Game History ({processedPastMatches.length})</h2>
-                </AccordionTrigger>
-                <AccordionContent>
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                        {processedPastMatches.length > 0 ? (
-                            <MatchList matches={processedPastMatches} hook={myGamesHook} />
-                        ) : (
-                            <EmptyState icon={History} title="No Game History" description="No past games match your current filters." />
-                        )}
-                    </div>
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+       <div className="border-t pt-8 space-y-4">
+        <h2 className="text-2xl font-bold font-headline">Game History ({processedPastMatches.length})</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+              {processedPastMatches.length > 0 ? (
+                  <MatchList matches={processedPastMatches} hook={myGamesHook} />
+              ) : (
+                  <EmptyState icon={History} title="No Game History" description="No past games match your current filters." />
+              )}
+          </div>
       </div>
     </div>
   );
