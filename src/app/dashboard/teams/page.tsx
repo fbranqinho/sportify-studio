@@ -247,74 +247,74 @@ function PlayerTeamsView() {
 
   return (
     <div className="space-y-8">
-        {/* Invitations Section */}
-        <div>
-            <h1 className="text-3xl font-bold font-headline">Team Invitations</h1>
-            <p className="text-muted-foreground">Respond to invitations to join new teams.</p>
-            {loading ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                    <Skeleton className="h-48" />
-                </div>
-            ) : invitations.length > 0 ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                    {invitations.map(inv => <InvitationCard key={inv.id} invitation={inv} />)}
-                </div>
-            ) : (
-                <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center">
-                    <CardHeader>
-                        <Mail className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <CardTitle className="font-headline mt-4">No Pending Invitations</CardTitle>
-                        <CardDescription>You don't have any team invitations at the moment.</CardDescription>
-                    </CardHeader>
-                </Card>
-            )}
-        </div>
+      {/* Invitations Section */}
+      <div>
+        <h1 className="text-3xl font-bold font-headline">Team Invitations</h1>
+        <p className="text-muted-foreground">Respond to invitations to join new teams.</p>
+        {loading ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+                <Skeleton className="h-48" />
+            </div>
+        ) : invitations.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+                {invitations.map(inv => <InvitationCard key={inv.id} invitation={inv} />)}
+            </div>
+        ) : (
+            <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center">
+                <CardHeader>
+                    <Mail className="mx-auto h-12 w-12 text-muted-foreground" />
+                    <CardTitle className="font-headline mt-4">No Pending Invitations</CardTitle>
+                    <CardDescription>You don't have any team invitations at the moment.</CardDescription>
+                </CardHeader>
+            </Card>
+        )}
+      </div>
 
-        <div className="border-t pt-8">
-             <h1 className="text-3xl font-bold font-headline">My Teams</h1>
-             <p className="text-muted-foreground">All the teams you are currently a part of.</p>
-             {loading ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                    <Skeleton className="h-48" />
-                    <Skeleton className="h-48" />
-                </div>
-             ) : teams.length > 0 ? (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-                    {teams.map((team) => (
-                         <Card key={team.id} className="flex flex-col">
-                            <CardHeader>
-                                <CardTitle className="font-headline">{team.name}</CardTitle>
-                                <CardDescription className="flex items-center gap-2 pt-1">
-                                <MapPin className="h-4 w-4" /> {team.city}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-grow space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-primary" />
-                                <span>
-                                    <span className="font-semibold">{team.playerIds?.length || 0}</span> players
-                                </span>
-                                </div>
-                                <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
-                            </CardContent>
-                            <CardFooter>
-                                 <Button asChild variant="outline" className="w-full">
-                                    <Link href={`/dashboard/teams/${team.id}`}>View Team</Link>
-                                 </Button>
-                            </CardFooter>
-                         </Card>
-                    ))}
-                </div>
-             ) : (
-                 <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center">
-                    <CardHeader>
-                        <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <CardTitle className="font-headline mt-4">No Teams Yet</CardTitle>
-                        <CardDescription>You are not yet part of any team. Accept an invitation or ask a manager to invite you.</CardDescription>
-                    </CardHeader>
-                </Card>
-             )}
-        </div>
+      <div className="border-t pt-8">
+        <h1 className="text-3xl font-bold font-headline">My Teams</h1>
+        <p className="text-muted-foreground">All the teams you are currently a part of.</p>
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+              <Skeleton className="h-48" />
+              <Skeleton className="h-48" />
+          </div>
+        ) : teams.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+              {teams.map((team) => (
+                    <Card key={team.id} className="flex flex-col">
+                      <CardHeader>
+                          <CardTitle className="font-headline">{team.name}</CardTitle>
+                          <CardDescription className="flex items-center gap-2 pt-1">
+                          <MapPin className="h-4 w-4" /> {team.city}
+                          </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex-grow space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span>
+                              <span className="font-semibold">{team.playerIds?.length || 0}</span> players
+                          </span>
+                          </div>
+                          <p className="text-muted-foreground italic">&quot;{team.motto}&quot;</p>
+                      </CardContent>
+                      <CardFooter>
+                            <Button asChild variant="outline" className="w-full">
+                              <Link href={`/dashboard/teams/${team.id}`}>View Team</Link>
+                            </Button>
+                      </CardFooter>
+                    </Card>
+              ))}
+          </div>
+        ) : (
+            <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center">
+              <CardHeader>
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <CardTitle className="font-headline mt-4">No Teams Yet</CardTitle>
+                  <CardDescription>You are not yet part of any team. Accept an invitation or ask a manager to invite you.</CardDescription>
+              </CardHeader>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }
