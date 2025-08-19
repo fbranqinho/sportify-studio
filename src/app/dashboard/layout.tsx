@@ -39,15 +39,29 @@ function NotificationBell() {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
+  const [ownerProfileId, setOwnerProfileId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (user?.role === 'OWNER' && user.id) {
+        const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
+        getDocs(q).then(profileSnapshot => {
+            if (!profileSnapshot.empty) {
+                setOwnerProfileId(profileSnapshot.docs[0].id);
+            }
+        });
+    }
+  }, [user]);
 
   React.useEffect(() => {
     if (!user) return;
+
+    // For owners, wait until we have the profile ID
+    if (user.role === 'OWNER' && !ownerProfileId) return;
 
     let unsubscribe: (() => void) | undefined;
 
     const handleSnapshot = (snapshot: any) => {
         const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
-        // Sort notifications by date client-side
         notifs.sort((a, b) => {
           const aTime = a.createdAt?.seconds || 0;
           const bTime = b.createdAt?.seconds || 0;
@@ -61,28 +75,24 @@ function NotificationBell() {
     const handleError = (error: any) => {
          console.error("Error fetching notifications (check Firestore indexes):", error);
     };
-
-    if (user.role === 'OWNER') {
-        const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
-        getDocs(q).then(profileSnapshot => {
-            if (!profileSnapshot.empty) {
-                const ownerProfileId = profileSnapshot.docs[0].id;
-                // Query without ordering, as it requires a composite index
-                const notifQuery = query(
-                    collection(db, "notifications"),
-                    where("ownerProfileId", "==", ownerProfileId),
-                    limit(10)
-                );
-                unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
-            }
-        });
-    } else {
-        const notifQuery = query(
+    
+    let notifQuery;
+    if (user.role === 'OWNER' && ownerProfileId) {
+        notifQuery = query(
+            collection(db, "notifications"),
+            where("ownerProfileId", "==", ownerProfileId),
+            limit(10)
+        );
+    } else if (user.role !== 'OWNER') {
+        notifQuery = query(
           collection(db, "notifications"),
           where("userId", "==", user.id),
           orderBy("createdAt", "desc"),
           limit(10)
         );
+    }
+    
+    if (notifQuery) {
         unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
     }
 
@@ -91,7 +101,7 @@ function NotificationBell() {
             unsubscribe();
         }
     };
-  }, [user]);
+  }, [user, ownerProfileId]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     const notifRef = doc(db, "notifications", notificationId);
@@ -101,7 +111,6 @@ function NotificationBell() {
   const handleOpenChange = (open: boolean) => {
       setIsPopoverOpen(open);
       if(open && unreadCount > 0) {
-          // Mark all visible notifications as read
           notifications.forEach(n => {
               if(!n.read) {
                   handleMarkAsRead(n.id);

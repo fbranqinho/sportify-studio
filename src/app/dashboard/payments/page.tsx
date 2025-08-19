@@ -90,7 +90,19 @@ const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { pay
                     createdAt: serverTimestamp() as any,
                 });
                 
-                // --- 4. Cancel conflicting reservations ---
+                // --- 4. Notify the Manager ---
+                if (reservation.managerRef) {
+                    const managerNotificationRef = doc(collection(db, "notifications"));
+                    batch.set(managerNotificationRef, {
+                        userId: reservation.managerRef,
+                        message: `The payment for your game at ${reservation.pitchName} is complete. The match is confirmed!`,
+                        link: `/dashboard/games/${matchSnap.docs[0].id}`,
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    });
+                }
+
+                // --- 5. Cancel conflicting reservations ---
                 conflictingSnap.docs.forEach(otherResDoc => {
                     if(otherResDoc.id !== reservation.id) {
                         batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
