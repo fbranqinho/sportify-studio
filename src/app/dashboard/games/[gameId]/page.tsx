@@ -231,6 +231,7 @@ export default function GameDetailsPage() {
                             onClose={() => setIsDressingRoomOpen(false)}
                             teamA={teamA}
                             teamB={teamB}
+                            pitch={pitch}
                             currentUserIsManagerFor={isManagerA ? 'A' : (isManagerB ? 'B' : 'none')}
                         />
                     </Dialog>

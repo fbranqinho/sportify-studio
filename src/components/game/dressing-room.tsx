@@ -9,53 +9,56 @@ import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTit
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import type { Match, Team, User, Formation, Tactic, PlayerProfile } from "@/types";
+import type { Match, Team, User, Formation, Tactic, PlayerProfile, Pitch } from "@/types";
 import { cn } from "@/lib/utils";
 import { Sparkles } from "lucide-react";
 
-const tactics: Tactic[] = ["3-2-1", "2-3-1", "3-1-2", "2-2-2"];
+// --- TACTICS & POSITIONS ---
+
+const fut7Tactics: Tactic[] = ["Fut7_3-2-1", "Fut7_2-3-1", "Fut7_3-1-2", "Fut7_2-2-2"];
+const futsalTactics: Tactic[] = ["Futsal_1-2-1", "Futsal_2-2"];
 
 const formationPositionsByTactic: { [key in Tactic]: string[] } = {
-    "3-2-1": ["GK", "CB1", "CB2", "CB3", "CM1", "CM2", "ST"],
-    "2-3-1": ["GK", "CB1", "CB2", "LM", "CM", "RM", "ST"],
-    "3-1-2": ["GK", "CB1", "CB2", "CB3", "CDM", "ST1", "ST2"],
-    "2-2-2": ["GK", "LB", "RB", "CM1", "CM2", "ST1", "ST2"],
+    // Fut7
+    "Fut7_3-2-1": ["GK", "CB1", "CB2", "CB3", "CM1", "CM2", "ST"],
+    "Fut7_2-3-1": ["GK", "CB1", "CB2", "LM", "CM", "RM", "ST"],
+    "Fut7_3-1-2": ["GK", "CB1", "CB2", "CB3", "CDM", "ST1", "ST2"],
+    "Fut7_2-2-2": ["GK", "LB", "RB", "CM1", "CM2", "ST1", "ST2"],
+    // Futsal
+    "Futsal_1-2-1": ["GK", "DEF", "LW", "RW", "PIV"], // Diamond
+    "Futsal_2-2":   ["GK", "DEF1", "DEF2", "FWD1", "FWD2"], // Square
 };
 
-const positionStyles: { [key: string]: string } = {
-  // Team A (Top) - Positions are from the top of the container
-  "A-GK": "top-[5%] left-1/2 -translate-x-1/2",
-  "A-CB1": "top-[20%] left-1/4 -translate-x-1/2",
-  "A-CB2": "top-[20%] left-1/2 -translate-x-1/2",
-  "A-CB3": "top-[20%] left-3/4 -translate-x-1/2",
-  "A-LB": "top-[20%] left-[15%]",
-  "A-RB": "top-[20%] right-[15%]",
-  "A-CM1": "top-[38%] left-1/4 -translate-x-1/2",
-  "A-CM2": "top-[38%] left-3/4 -translate-x-1/2",
-  "A-LM": "top-[35%] left-[15%]",
-  "A-CM": "top-[35%] left-1/2 -translate-x-1/2",
-  "A-RM": "top-[35%] right-[15%]",
-  "A-CDM": "top-[30%] left-1/2 -translate-x-1/2",
-  "A-ST": "top-[38%] left-1/2 -translate-x-1/2",
-  "A-ST1": "top-[38%] left-1/4 -translate-x-1/2",
-  "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
-  // Team B (Bottom) - Positions are from the bottom of the container
-  "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2",
-  "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2",
-  "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2",
-  "B-CB3": "bottom-[20%] left-3/4 -translate-x-1/2",
-  "B-LB": "bottom-[20%] left-[15%]",
-  "B-RB": "bottom-[20%] right-[15%]",
-  "B-CM1": "bottom-[38%] left-1/4 -translate-x-1/2",
-  "B-CM2": "bottom-[38%] left-3/4 -translate-x-1/2",
-  "B-LM": "bottom-[35%] left-[15%]",
-  "B-CM": "bottom-[35%] left-1/2 -translate-x-1/2",
-  "B-RM": "bottom-[35%] right-[15%]",
-  "B-CDM": "bottom-[30%] left-1/2 -translate-x-1/2",
-  "B-ST": "bottom-[38%] left-1/2 -translate-x-1/2",
-  "B-ST1": "bottom-[38%] left-1/4 -translate-x-1/2",
-  "B-ST2": "bottom-[38%] left-3/4 -translate-x-1/2",
+const positionStylesFut7: { [key: string]: string } = {
+  "A-GK": "top-[5%] left-1/2 -translate-x-1/2", "A-CB1": "top-[20%] left-1/4 -translate-x-1/2", "A-CB2": "top-[20%] left-1/2 -translate-x-1/2", "A-CB3": "top-[20%] left-3/4 -translate-x-1/2", "A-LB": "top-[20%] left-[15%]", "A-RB": "top-[20%] right-[15%]", "A-CM1": "top-[38%] left-1/4 -translate-x-1/2", "A-CM2": "top-[38%] left-3/4 -translate-x-1/2", "A-LM": "top-[35%] left-[15%]", "A-CM": "top-[35%] left-1/2 -translate-x-1/2", "A-RM": "top-[35%] right-[15%]", "A-CDM": "top-[30%] left-1/2 -translate-x-1/2", "A-ST": "top-[38%] left-1/2 -translate-x-1/2", "A-ST1": "top-[38%] left-1/4 -translate-x-1/2", "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
+  "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2", "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2", "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2", "B-CB3": "bottom-[20%] left-3/4 -translate-x-1/2", "B-LB": "bottom-[20%] left-[15%]", "B-RB": "bottom-[20%] right-[15%]", "B-CM1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-CM2": "bottom-[38%] left-3/4 -translate-x-1/2", "B-LM": "bottom-[35%] left-[15%]", "B-CM": "bottom-[35%] left-1/2 -translate-x-1/2", "B-RM": "bottom-[35%] right-[15%]", "B-CDM": "bottom-[30%] left-1/2 -translate-x-1/2", "B-ST": "bottom-[38%] left-1/2 -translate-x-1/2", "B-ST1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-ST2": "bottom-[38%] left-3/4 -translate-x-1/2",
 };
+
+const positionStylesFutsal: { [key: string]: string } = {
+  // Team A - Futsal
+  "A-GK": "top-[5%] left-1/2 -translate-x-1/2",
+  "A-DEF": "top-[25%] left-1/2 -translate-x-1/2", // Diamond
+  "A-LW": "top-[35%] left-[20%]", // Diamond
+  "A-RW": "top-[35%] right-[20%]", // Diamond
+  "A-PIV": "top-[45%] left-1/2 -translate-x-1/2", // Diamond
+  "A-DEF1": "top-[25%] left-[25%]", // Square
+  "A-DEF2": "top-[25%] right-[25%]", // Square
+  "A-FWD1": "top-[40%] left-[25%]", // Square
+  "A-FWD2": "top-[40%] right-[25%]", // Square
+
+  // Team B - Futsal
+  "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2",
+  "B-DEF": "bottom-[25%] left-1/2 -translate-x-1/2", // Diamond
+  "B-LW": "bottom-[35%] left-[20%]", // Diamond
+  "B-RW": "bottom-[35%] right-[20%]", // Diamond
+  "B-PIV": "bottom-[45%] left-1/2 -translate-x-1/2", // Diamond
+  "B-DEF1": "bottom-[25%] left-[25%]", // Square
+  "B-DEF2": "bottom-[25%] right-[25%]", // Square
+  "B-FWD1": "bottom-[40%] left-[25%]", // Square
+  "B-FWD2": "bottom-[40%] right-[25%]", // Square
+};
+
+// --- COMPONENT ---
 
 interface DressingRoomProps {
   match: Match;
@@ -63,28 +66,35 @@ interface DressingRoomProps {
   onClose: () => void;
   teamA: Team | null;
   teamB: Team | null;
+  pitch: Pitch | null;
   currentUserIsManagerFor: 'A' | 'B' | 'none';
 }
 
-export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUserIsManagerFor }: DressingRoomProps) {
+export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, currentUserIsManagerFor }: DressingRoomProps) {
   const [players, setPlayers] = React.useState<(User & { profile: PlayerProfile })[]>([]);
   const [loading, setLoading] = React.useState(true);
   
-  const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || '3-2-1');
+  const { toast } = useToast();
+
+  const isFutsal = pitch?.sport === 'futsal' || pitch?.sport === 'fut5';
+  const availableTactics = isFutsal ? futsalTactics : fut7Tactics;
+  const positionStyles = isFutsal ? positionStylesFutsal : positionStylesFut7;
+  const defaultTactic = isFutsal ? 'Futsal_1-2-1' : 'Fut7_3-2-1';
+
+  const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || defaultTactic);
   const [formationA, setFormationA] = React.useState<Formation>(match.teamADetails?.formation || {});
   const [captainA, setCaptainA] = React.useState<string | undefined>(match.teamADetails?.captainId);
   const [penaltyTakerA, setPenaltyTakerA] = React.useState<string | undefined>(match.teamADetails?.penaltyTakerId);
   const [cornerTakerA, setCornerTakerA] = React.useState<string | undefined>(match.teamADetails?.cornerTakerId);
   const [freeKickTakerA, setFreeKickTakerA] = React.useState<string | undefined>(match.teamADetails?.freeKickTakerId);
 
-  const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || '3-2-1');
+  const [tacticB, setTacticB] = React.useState<Tactic>(match.teamBDetails?.tactic || defaultTactic);
   const [formationB, setFormationB] = React.useState<Formation>(match.teamBDetails?.formation || {});
   const [captainB, setCaptainB] = React.useState<string | undefined>(match.teamBDetails?.captainId);
   const [penaltyTakerB, setPenaltyTakerB] = React.useState<string | undefined>(match.teamBDetails?.penaltyTakerId);
   const [cornerTakerB, setCornerTakerB] = React.useState<string | undefined>(match.teamBDetails?.cornerTakerId);
   const [freeKickTakerB, setFreeKickTakerB] = React.useState<string | undefined>(match.teamBDetails?.freeKickTakerId);
 
-  const { toast } = useToast();
   
   const isPracticeMatch = !!match.teamARef && !match.teamBRef;
   const hasOpponent = !!match.teamBRef;
@@ -106,9 +116,9 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
       let playerToAssign: (User & { profile: PlayerProfile }) | undefined;
       // Prefer players for their actual position
       if (pos === "GK") playerToAssign = playersToAssign.find(p => p.profile.position === "Goalkeeper" && !localTakenIds.has(p.id));
-      else if (pos.includes("B")) playerToAssign = playersToAssign.find(p => p.profile.position === "Defender" && !localTakenIds.has(p.id));
-      else if (pos.includes("M")) playerToAssign = playersToAssign.find(p => p.profile.position === "Midfielder" && !localTakenIds.has(p.id));
-      else if (pos.includes("ST") || pos.includes("W")) playerToAssign = playersToAssign.find(p => p.profile.position === "Forward" && !localTakenIds.has(p.id));
+      else if (pos.includes("DEF") || pos.includes("CB") || pos.includes("LB") || pos.includes("RB")) playerToAssign = playersToAssign.find(p => p.profile.position === "Defender" && !localTakenIds.has(p.id));
+      else if (pos.includes("CM") || pos.includes("LM") || pos.includes("RM") || pos.includes("CDM")) playerToAssign = playersToAssign.find(p => p.profile.position === "Midfielder" && !localTakenIds.has(p.id));
+      else if (pos.includes("ST") || pos.includes("FWD") || pos.includes("PIV") || pos.includes("LW") || pos.includes("RW")) playerToAssign = playersToAssign.find(p => p.profile.position === "Forward" && !localTakenIds.has(p.id));
       
       // Fallback to any available player
       if (!playerToAssign) playerToAssign = playersToAssign.find(p => !localTakenIds.has(p.id));
@@ -126,7 +136,6 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   const handleAutoFill = () => {
     if (players.length === 0) return;
     
-    // Case 1: Practice match, fill both teams
     if (canManagePractice) {
         const shuffled = [...players].sort(() => 0.5 - Math.random());
         const midPoint = Math.ceil(shuffled.length / 2);
@@ -140,7 +149,6 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
         setFormationB(filledFormationB);
         toast({ title: "Teams Auto-Filled!", description: "Players have been randomly assigned to both teams." });
     } 
-    // Case 2: Match with opponent, fill only manager's team
     else if (hasOpponent) {
         if (canManageTeamA) {
             const playersForA = players.filter(p => match.teamAPlayers?.includes(p.id));
@@ -348,7 +356,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                                 <h3 className="text-lg font-bold text-center">{teamA?.name || 'Vests A'}</h3>
                                 <Select value={tacticA} onValueChange={(v) => setTacticA(v as Tactic)} disabled={!(canManageTeamA || canManagePractice)}>
                                     <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d_/, '')}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                              {(canManageTeamA || canManagePractice) && (
@@ -369,7 +377,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
                                 <h3 className="text-lg font-bold text-center">{teamB?.name || 'Vests B'}</h3>
                                 <Select value={tacticB} onValueChange={(v) => setTacticB(v as Tactic)} disabled={!(canManageTeamB || canManagePractice)}>
                                     <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{tactics.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d_/, '')}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                              {(canManageTeamB || canManagePractice) && (

@@ -188,7 +188,7 @@ export interface MatchInvitation {
 
 
 export type PitchSport = "fut7" | "fut11" | "fut5" | "futsal";
-export type Tactic = "3-2-1" | "2-3-1" | "3-1-2" | "2-2-2";
+export type Tactic = "Fut7_3-2-1" | "Fut7_2-3-1" | "Fut7_3-1-2" | "Fut7_2-2-2" | "Futsal_1-2-1" | "Futsal_2-2";
 
 
 export interface Pitch {
