@@ -112,4 +112,3 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
         <Button size="sm" onClick={handlePayNow} disabled={!reservation}><CreditCard className="mr-2"/> Pay To Confirm</Button>
     )
 }
-
