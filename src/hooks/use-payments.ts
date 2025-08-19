@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc, or } from "firebase/firestore";
 import type { Payment, Notification, PaymentStatus, Reservation, User, Team, Match } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import type { User as AuthUser } from 'firebase/auth';
@@ -58,6 +58,10 @@ export function usePayments(user: AuthUser | null) {
   }, [toast]);
 
   const fetchData = React.useCallback(async (userId: string) => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     
     try {
@@ -80,11 +84,14 @@ export function usePayments(user: AuthUser | null) {
             const teamIds = teamsSnap.docs.map(doc => doc.id);
             
             if (teamIds.length > 0) {
-                initialQuery = query(collection(db, "payments"), where("teamRef", "in", teamIds));
+                // Correctly query for payments related to the manager OR their teams
+                initialQuery = query(collection(db, "payments"), or(
+                  where("managerRef", "==", userId),
+                  where("teamRef", "in", teamIds)
+                ));
             } else {
-                 setAllPayments([]);
-                 setLoading(false);
-                 return;
+                 // Manager has no teams, only query for direct payments
+                 initialQuery = query(collection(db, "payments"), where("managerRef", "==", userId));
             }
         } else if (userData.role === 'OWNER') {
             const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", userId));
