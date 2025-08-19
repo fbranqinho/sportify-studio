@@ -104,18 +104,22 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         
         // --- LOGIC HIERARCHY ---
         if (match && reservation) {
-            // 0. Is the game currently live? Highest priority.
-            if (match.status === 'InProgress') {
-                 return { status: 'Live', match, reservation, price: 0 };
+            
+            const isFinishedOrLive = match.status === 'Finished' || match.status === 'InProgress' || match.status === 'Cancelled';
+            if (isFinishedOrLive) {
+                 return { status: match.status === 'InProgress' ? 'Live' : 'Booked', match, reservation, price: 0 };
             }
 
-            // 1. Is it open for a team challenge?
+            const isFullyBooked = !!match.teamBRef || reservation.paymentStatus === 'Paid';
+            if (isFullyBooked) {
+                 return { status: 'Booked', match, reservation, price: 0 };
+            }
+
             const isChallengable = user.role === 'MANAGER' && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id;
             if (isChallengable) {
                 return { status: 'OpenForTeam', match, reservation, price: 0 };
             }
 
-            // 2. Is it open for individual players to apply?
             const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
             const capacity = getPlayerCapacity(pitch.sport);
             const canAcceptPlayers = user.role === 'PLAYER' && match.allowExternalPlayers && totalPlayers < capacity;
@@ -123,11 +127,9 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                  return { status: 'OpenForPlayers', match, reservation, price: 0 };
             }
             
-            // 3. If none of the above, it's booked/unavailable to the current user.
             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
-        // 4. If no reservation, the slot is available. Check for promotions.
         const dayOfWeek = getDay(day);
         const applicablePromo = promos
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
@@ -392,5 +394,3 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
-
-    
