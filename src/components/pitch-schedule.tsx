@@ -100,39 +100,34 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
         
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
+        const match = reservation ? matches.find(m => m.reservationRef === reservation.id) : undefined;
         
-        if (reservation) {
-            const match = matches.find(m => m.reservationRef === reservation.id);
-            const isMyGame = reservation.actorId === user.id;
-
-            if (match?.status === 'InProgress') {
+        // --- LOGIC HIERARCHY ---
+        if (match && reservation) {
+            // 0. Is the game currently live? Highest priority.
+            if (match.status === 'InProgress') {
                  return { status: 'Live', match, reservation, price: 0 };
             }
-            
-            // New logic: Check all "Booked" conditions first.
-            const isFullyBooked = !!(reservation.paymentStatus === 'Paid' || (match && match.teamBRef));
-            const isPracticeWithoutChallenges = !!(match && !match.teamBRef && !match.allowChallenges && !isMyGame);
 
-            if (isFullyBooked || isPracticeWithoutChallenges) {
-                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-            }
-            
-            // Challenge Logic
-            if (user.role === 'MANAGER' && match && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id) {
+            // 1. Is it open for a team challenge?
+            const isChallengable = user.role === 'MANAGER' && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id;
+            if (isChallengable) {
                 return { status: 'OpenForTeam', match, reservation, price: 0 };
             }
 
-            // Apply as Player Logic
-            const totalPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
+            // 2. Is it open for individual players to apply?
+            const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
             const capacity = getPlayerCapacity(pitch.sport);
-            if (user.role === 'PLAYER' && match && match.allowExternalPlayers && totalPlayers < capacity) {
+            const canAcceptPlayers = user.role === 'PLAYER' && match.allowExternalPlayers && totalPlayers < capacity;
+            if (canAcceptPlayers) {
                  return { status: 'OpenForPlayers', match, reservation, price: 0 };
             }
-
-            // If none of the above, but there's a reservation, it's considered booked for other users.
+            
+            // 3. If none of the above, it's booked/unavailable to the current user.
             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
+        // 4. If no reservation, the slot is available. Check for promotions.
         const dayOfWeek = getDay(day);
         const applicablePromo = promos
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
@@ -397,3 +392,5 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
+    
