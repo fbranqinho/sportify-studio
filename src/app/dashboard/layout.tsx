@@ -28,7 +28,7 @@ import type { User, UserRole, Notification, OwnerProfile } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Bell, LogOut, Settings, Check } from "lucide-react";
 import { app, db } from "@/lib/firebase";
-import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { UserProvider, useUser } from "@/hooks/use-user";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -252,7 +252,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset>
+        <div className="flex flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1" />
@@ -260,8 +260,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               <NotificationBell />
             </div>
           </header>
-          <main className="flex-1 flex-col p-4 sm:p-6">{children}</main>
-        </SidebarInset>
+          <main className="flex-1 p-4 sm:p-6">{children}</main>
+        </div>
       </div>
     </SidebarProvider>
   );
