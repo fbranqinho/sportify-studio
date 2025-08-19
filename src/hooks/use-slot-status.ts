@@ -48,45 +48,38 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
     const match = reservation ? matches.find(m => m.reservationRef === reservation.id) : undefined;
 
     // 3. Handle slots that have a reservation.
-    if (reservation) {
+    if (reservation && match) {
       if (match?.status === 'InProgress') {
         return { status: 'Live', match, reservation, price: reservation.totalAmount };
       }
       
+      const isPracticeMatch = !!match.teamARef && !match.teamBRef;
+      
+      // PRIORITY 1: Check for challenge opportunity
+      if (
+        isPracticeMatch &&
+        match.allowChallenges &&
+        user.role === 'MANAGER' &&
+        match.managerRef !== user.id
+      ) {
+        return { status: 'OpenForTeam', match, reservation, price: 0 };
+      }
+
+      // PRIORITY 2: Check for player application opportunity
+      if (isPracticeMatch && match.allowExternalPlayers && user.role === 'PLAYER') {
+        const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+        const capacity = getPlayerCapacity(pitch.sport);
+        if (totalPlayers < capacity) {
+            return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
+        }
+      }
+
       // If the slot is fully paid, it's booked.
       if (reservation.paymentStatus === 'Paid') {
         return { status: 'Booked', match, reservation, price: reservation.totalAmount };
       }
-
-      // If it's not paid, it might be open for actions for the current user.
-      const isPracticeMatch = !!match?.teamARef && !match?.teamBRef;
-
-      // Opportunity to Challenge
-      if (
-        isPracticeMatch &&
-        match?.allowChallenges &&
-        user.role === 'MANAGER' &&
-        match?.managerRef !== user.id
-      ) {
-        return { status: 'OpenForTeam', match, reservation, price: 0 };
-      }
       
-      // Opportunity to Apply as Player
-      if (match) {
-        const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-        const capacity = getPlayerCapacity(pitch.sport);
-        if (
-          isPracticeMatch &&
-          match.allowExternalPlayers &&
-          user.role === 'PLAYER' &&
-          totalPlayers < capacity
-        ) {
-          return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
-        }
-      }
-
       // If no actions are available for the current user, the slot is pending.
-      // This covers both "Pending owner approval" and "Pending payment by other team".
       return { status: 'Pending', reservation, match, price: reservation.totalAmount };
     }
     
