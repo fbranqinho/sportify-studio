@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Match, Team, User, Formation, Tactic, PlayerProfile, Pitch } from "@/types";
 import { cn } from "@/lib/utils";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Users } from "lucide-react";
 
 // --- TACTICS & POSITIONS ---
 
@@ -69,6 +69,18 @@ interface DressingRoomProps {
   pitch: Pitch | null;
   currentUserIsManagerFor: 'A' | 'B' | 'none';
 }
+
+const Bench = ({ title, players }: { title: string, players: (User & { profile: PlayerProfile })[] }) => (
+    <div>
+        <h4 className="font-bold mb-2 flex items-center gap-2"><Users className="h-4 w-4"/>{title} ({players.length})</h4>
+        <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
+            {players.length > 0 ? players.map(p => (
+                <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
+            )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
+        </div>
+    </div>
+);
+
 
 export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, currentUserIsManagerFor }: DressingRoomProps) {
   const [players, setPlayers] = React.useState<(User & { profile: PlayerProfile })[]>([]);
@@ -234,11 +246,15 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
       });
   }
 
-  const getBench = () => {
-      const allAssigned = new Set([...Array.from(assignedPlayersA), ...Array.from(assignedPlayersB)]);
-      return players.filter(p => !allAssigned.has(p.id));
-  }
-  const benchPlayers = getBench();
+  const getBenchA = () => {
+    const teamAPlayerIds = new Set(match.teamAPlayers || []);
+    return players.filter(p => teamAPlayerIds.has(p.id) && !assignedPlayersA.has(p.id));
+  };
+  
+  const getBenchB = () => {
+    const teamBPlayerIds = new Set(match.teamBPlayers || []);
+    return players.filter(p => teamBPlayerIds.has(p.id) && !assignedPlayersB.has(p.id));
+  };
 
   const handleSaveChanges = async () => {
     const updateData: Partial<Match> = {};
@@ -393,14 +409,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
                              )}
                         </div>
                     </div>
-                    {/* Bench */}
-                    <div>
-                        <h4 className="font-bold mb-2">Bench ({benchPlayers.length})</h4>
-                        <div className="p-4 bg-muted rounded-md min-h-[60px] flex flex-wrap gap-2">
-                            {benchPlayers.length > 0 ? benchPlayers.map(p => (
-                                <div key={p.id} className="bg-background px-3 py-1 rounded-md text-sm font-medium">{p.name}</div>
-                            )) : <p className="text-sm text-muted-foreground">No players on the bench.</p>}
-                        </div>
+                    {/* Benches */}
+                    <div className="space-y-4">
+                        {(canManageTeamA || canManagePractice) && <Bench title={`${teamA?.name || 'Vests A'} Bench`} players={getBenchA()} />}
+                        {(canManageTeamB || canManagePractice) && <Bench title={`${teamB?.name || 'Vests B'} Bench`} players={getBenchB()} />}
                     </div>
                 </div>
             )}
