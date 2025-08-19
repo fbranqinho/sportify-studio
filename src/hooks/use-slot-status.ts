@@ -47,50 +47,53 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
 
     const match = reservation ? matches.find(m => m.reservationRef === reservation.id) : undefined;
 
-    // 3. Handle slots that have a reservation/match.
-    if (reservation && match) {
-      // 3a. Handle definitive, un-interactive states first.
-      if (match.status === 'InProgress') {
-        return { status: 'Live', match, reservation, price: reservation.totalAmount };
-      }
-      if (match.status === 'Finished' || match.status === 'Cancelled') {
-        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-      }
-     
-      // 3b. Handle potential interactive states (Challenge, Apply). This now takes priority over payment status.
-      const isPracticeMatch = !!match.teamARef && !match.teamBRef;
-
-      // Opportunity to Challenge
-      if (
-        isPracticeMatch &&
-        match.allowChallenges &&
-        user.role === 'MANAGER' &&
-        match.managerRef !== user.id
-      ) {
-        return { status: 'OpenForTeam', match, reservation, price: 0 };
+    // 3. Handle slots that have a reservation.
+    if (reservation) {
+      // 3a. If the reservation is still pending owner approval, the slot is pending.
+      if (reservation.status === 'Pending') {
+        return { status: 'Pending', reservation, price: reservation.totalAmount };
       }
       
-      // Opportunity to Apply as Player
-      const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-      const capacity = getPlayerCapacity(pitch.sport);
-      if (
-        isPracticeMatch &&
-        match.allowExternalPlayers &&
-        user.role === 'PLAYER' &&
-        totalPlayers < capacity
-      ) {
-        return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
+      // If there's a match associated
+      if (match) {
+        if (match.status === 'InProgress') {
+          return { status: 'Live', match, reservation, price: reservation.totalAmount };
+        }
+        if (match.status === 'Finished' || match.status === 'Cancelled') {
+          return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+        }
+      
+        const isPracticeMatch = !!match.teamARef && !match.teamBRef;
+
+        // Opportunity to Challenge
+        if (
+          isPracticeMatch &&
+          match.allowChallenges &&
+          user.role === 'MANAGER' &&
+          match.managerRef !== user.id
+        ) {
+          return { status: 'OpenForTeam', match, reservation, price: 0 };
+        }
+        
+        // Opportunity to Apply as Player
+        const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
+        const capacity = getPlayerCapacity(pitch.sport);
+        if (
+          isPracticeMatch &&
+          match.allowExternalPlayers &&
+          user.role === 'PLAYER' &&
+          totalPlayers < capacity
+        ) {
+          return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
+        }
       }
       
-      // 3c. If no interaction is possible, check for other booking states.
-       if (reservation.paymentStatus === 'Paid') {
-        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-      }
-       if (match.teamBRef) { // Already a two-team match
-        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+      // 3b. If not interactive, it's definitively booked if paid or has two teams.
+      if (reservation.paymentStatus === 'Paid' || (match && match.teamBRef)) {
+          return { status: 'Booked', match, reservation, price: reservation.totalAmount };
       }
 
-      // 3d. If none of the above, it's booked but not actionable for this specific user.
+      // 3c. If none of the above, it's booked but potentially awaiting payment, etc. Treat as booked.
       return { status: 'Booked', match, reservation, price: reservation.totalAmount };
     }
     
@@ -116,7 +119,7 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
         return { status: 'Available', promotion: applicablePromo, price: finalPrice };
     }
 
-    // 5. Fallback for any other case (e.g., reservation exists but no match - should be rare)
+    // 5. Fallback for any other case
     return { status: 'Booked', reservation, price: reservation?.totalAmount || pitch.basePrice };
 
   }, [day, time, pitch, user, reservations, matches, promos]);

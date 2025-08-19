@@ -16,7 +16,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { addDoc, collection, doc, writeBatch, serverTimestamp, arrayUnion, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { BookMarked, UserPlus, ShieldPlus, Eye, Info, Ban, Send, Tag } from "lucide-react";
+import { BookMarked, UserPlus, ShieldPlus, Eye, Info, Ban, Send, Tag, Clock } from "lucide-react";
 
 interface TimeSlotProps {
   day: Date;
@@ -187,12 +187,13 @@ const LiveSlot = ({ match }: { match: Match }) => (
   </Button>
 );
 
-const BookedSlot = ({ time, status }: { time: string; status: 'Booked' | 'Past' }) => (
+const BookedSlot = ({ time, status }: { time: string; status: 'Booked' | 'Past' | 'Pending' }) => (
   <Button variant="secondary" disabled className="h-16 flex-col w-full rounded-none border-0">
       <span className="font-semibold">{time}</span>
       <div className="text-xs flex items-center gap-1">
           {status === 'Booked' && <Ban className="h-3 w-3" />}
           {status === 'Past' && <Info className="h-3 w-3" />}
+          {status === 'Pending' && <Clock className="h-3 w-3" />}
           <span>{status}</span>
       </div>
   </Button>
@@ -215,6 +216,7 @@ export const TimeSlot = ({ day, time, ...props }: TimeSlotProps) => {
       return <LiveSlot match={slotInfo.match!} />;
     case 'Booked':
     case 'Past':
+    case 'Pending':
       return <BookedSlot time={time} status={slotInfo.status} />;
     default:
       return <BookedSlot time={time} status="Booked" />;
