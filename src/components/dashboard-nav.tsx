@@ -84,9 +84,17 @@ export function DashboardNav({ role }: DashboardNavProps) {
       <SidebarMenu>
         {filteredNavItems.map((item) => {
           const isGameDetailsPage = /^\/dashboard\/games\/[a-zA-Z0-9]+$/.test(pathname);
-          const isActive = 
-            isGameDetailsPage && item.href === '/dashboard/my-games' ? true :
-            pathname.startsWith(item.href) && (item.href === '/dashboard' ? pathname === '/dashboard' : true);
+          const isPitchesDetailsPage = /^\/dashboard\/pitches\/[a-zA-Z0-9]+$/.test(pathname);
+
+          let isActive = false;
+          if (isGameDetailsPage) {
+              isActive = item.href === '/dashboard/my-games';
+          } else if(isPitchesDetailsPage) {
+              isActive = item.href === '/dashboard/games';
+          }
+          else {
+              isActive = pathname.startsWith(item.href) && (item.href === '/dashboard' ? pathname === '/dashboard' : true);
+          }
           
           return (
             <SidebarMenuItem key={item.href}>
