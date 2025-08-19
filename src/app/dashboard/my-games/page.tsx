@@ -18,13 +18,13 @@ import type { Match as MatchType } from "@/types";
 
 
 const MatchList = ({ matches, hook }: { matches: any[], hook: ReturnType<typeof useMyGames> }) => (
-     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+     <>
       {matches.map(m => <MatchCard key={m.id} match={m} hook={hook} />)}
-     </div>
+     </>
 );
 
 const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
-    <Card className="flex flex-col items-center justify-center p-12 text-center mt-4 border-dashed">
+    <Card className="flex flex-col items-center justify-center p-12 text-center mt-4 border-dashed md:col-span-2 lg:col-span-3">
         <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="mt-4 text-lg font-semibold font-headline">{title}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -139,11 +139,13 @@ export default function MyGamesPage() {
 
       <div className="space-y-4">
         <h2 className="text-2xl font-bold font-headline">Upcoming Games ({processedUpcomingMatches.length})</h2>
-        {processedUpcomingMatches.length > 0 ? (
-            <MatchList matches={processedUpcomingMatches} hook={myGamesHook} />
-        ) : (
-            <EmptyState icon={Gamepad2} title="No Upcoming Games" description="No games match your current filters." />
-        )}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+            {processedUpcomingMatches.length > 0 ? (
+                <MatchList matches={processedUpcomingMatches} hook={myGamesHook} />
+            ) : (
+                <EmptyState icon={Gamepad2} title="No Upcoming Games" description="No games match your current filters." />
+            )}
+        </div>
       </div>
 
        <div className="border-t pt-8">
@@ -153,11 +155,13 @@ export default function MyGamesPage() {
                     <h2 className="text-2xl font-bold font-headline">Game History ({processedPastMatches.length})</h2>
                 </AccordionTrigger>
                 <AccordionContent>
-                    {processedPastMatches.length > 0 ? (
-                        <MatchList matches={processedPastMatches} hook={myGamesHook} />
-                    ) : (
-                        <EmptyState icon={History} title="No Game History" description="No past games match your current filters." />
-                    )}
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+                        {processedPastMatches.length > 0 ? (
+                            <MatchList matches={processedPastMatches} hook={myGamesHook} />
+                        ) : (
+                            <EmptyState icon={History} title="No Game History" description="No past games match your current filters." />
+                        )}
+                    </div>
                 </AccordionContent>
             </AccordionItem>
         </Accordion>
