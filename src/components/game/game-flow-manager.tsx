@@ -2,29 +2,54 @@
 "use client";
 
 import * as React from "react";
-import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, getDoc } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Pitch, PlayerProfile, Reservation } from "@/types";
+import type { Match, Team, Pitch, PlayerProfile, Reservation, MatchEvent, MatchEventType, User } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Play, Flag, Trophy, Lock } from "lucide-react";
-import { cn, getGameDuration, getPlayerCapacity } from "@/lib/utils";
+import { Flag, Trophy, Goal, CirclePlus, Square, UserPlus } from "lucide-react";
+import { getGameDuration } from "@/lib/utils";
 import { EventTimeline } from "./event-timeline";
 import { useRouter } from "next/navigation";
+import { v4 as uuidv4 } from 'uuid';
+import { Timestamp } from "firebase/firestore";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select";
+
+
+interface EventState {
+  type: MatchEventType;
+}
 
 export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, reservation }: { match: Match, onMatchUpdate: (data: Partial<Match>) => void, teamA?: Team | null, teamB?: Team | null, pitch: Pitch | null, reservation: Reservation | null }) {
     const { toast } = useToast();
     const router = useRouter();
     const [isEndGameOpen, setIsEndGameOpen] = React.useState(false);
+    const [isEventDialogOpen, setIsEventDialogOpen] = React.useState(false);
+    const [currentEvent, setCurrentEvent] = React.useState<EventState | null>(null);
+    const [selectedPlayerId, setSelectedPlayerId] = React.useState<string | undefined>();
     const [scoreA, setScoreA] = React.useState(match.scoreA);
     const [scoreB, setScoreB] = React.useState(match.scoreB);
+    const [eventMinute, setEventMinute] = React.useState<number | "">("");
+    const [gamePlayers, setGamePlayers] = React.useState<User[]>([]);
+
     const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
     const gameDuration = pitch ? getGameDuration(pitch.sport) : 90;
+
+    React.useEffect(() => {
+        const fetchPlayers = async () => {
+            const playerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
+            if (playerIds.length > 0) {
+                const q = query(collection(db, 'users'), where('id', 'in', playerIds));
+                const snap = await getDocs(q);
+                setGamePlayers(snap.docs.map(d => d.data() as User));
+            }
+        };
+        fetchPlayers();
+    }, [match.teamAPlayers, match.teamBPlayers]);
 
     const handleEndGame = async () => {
         const batch = writeBatch(db);
@@ -141,6 +166,49 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
         }
     }, [isEndGameOpen, match.events]);
     
+     const openEventDialog = (type: MatchEventType) => {
+        setCurrentEvent({ type });
+        setIsEventDialogOpen(true);
+    };
+
+    const handleConfirmEvent = async () => {
+        if (!currentEvent || !selectedPlayerId || typeof eventMinute !== 'number' || eventMinute < 0) {
+            toast({ variant: "destructive", title: "Error", description: "Please select a player and enter a valid minute." });
+            return;
+        }
+
+        const player = gamePlayers.find(p => p.id === selectedPlayerId);
+        if (!player) return;
+
+        const teamId = (match.teamAPlayers || []).includes(player.id) ? 'A' : 'B';
+        
+        const newEvent: MatchEvent = {
+            id: uuidv4(),
+            type: currentEvent.type,
+            playerId: player.id,
+            playerName: player.name,
+            teamId,
+            timestamp: Timestamp.now(),
+            minute: eventMinute,
+        };
+        
+        const matchRef = doc(db, "matches", match.id);
+
+        try {
+            await updateDoc(matchRef, { events: arrayUnion(newEvent) });
+            onMatchUpdate({ events: [...(match.events || []), newEvent] });
+            toast({ title: "Event Added", description: `${currentEvent.type} at ${eventMinute}' added for ${player.name}.` });
+        } catch (error) {
+            console.error("Error adding event:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not add the event." });
+        } finally {
+            setIsEventDialogOpen(false);
+            setCurrentEvent(null);
+            setSelectedPlayerId(undefined);
+            setEventMinute("");
+        }
+    };
+
     if (match.status !== 'InProgress') return null;
 
     return (
@@ -150,10 +218,14 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
                 <CardDescription>Manage the game flow from start to finish.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="flex items-center justify-center gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                     <Button variant="outline" onClick={() => openEventDialog('Goal')}><Goal className="mr-2 text-green-500" /> Goal</Button>
+                     <Button variant="outline" onClick={() => openEventDialog('Assist')}><CirclePlus className="mr-2 text-blue-500"/> Assist</Button>
+                     <Button variant="outline" onClick={() => openEventDialog('YellowCard')}><Square className="mr-2 text-yellow-500 fill-current"/> Yellow</Button>
+                     <Button variant="outline" onClick={() => openEventDialog('RedCard')}><Square className="mr-2 text-red-500 fill-current"/> Red</Button>
                     <Dialog open={isEndGameOpen} onOpenChange={setIsEndGameOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="destructive" size="lg">
+                            <Button variant="destructive">
                                 <Flag className="mr-2" /> End Game
                             </Button>
                         </DialogTrigger>
@@ -179,15 +251,54 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
                         </DialogContent>
                     </Dialog>
                 </div>
-                {match.events && (
+                 {match.events && match.events.length > 0 && (
                     <div className="border-t pt-4">
                         <h4 className="font-semibold mb-2 text-center">Event Timeline</h4>
                         <EventTimeline events={match.events} teamAName={teamA?.name} teamBName={teamB?.name} duration={gameDuration}/>
                     </div>
                 )}
             </CardContent>
+            
+            {/* Event Dialog */}
+            <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Record Event: {currentEvent?.type}</DialogTitle>
+                        <DialogDescription>
+                            Select the player and enter the game minute for this event.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                             <Label htmlFor="eventPlayer">Player</Label>
+                             <Select onValueChange={setSelectedPlayerId} value={selectedPlayerId}>
+                                <SelectTrigger id="eventPlayer">
+                                    <SelectValue placeholder="Select a player..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {gamePlayers.map(p => (
+                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="eventMinute">Game Minute</Label>
+                            <Input
+                                id="eventMinute"
+                                type="number"
+                                placeholder="e.g., 42"
+                                value={eventMinute}
+                                onChange={(e) => setEventMinute(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEventDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleConfirmEvent}>Save Event</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }
-
-    

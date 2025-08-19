@@ -12,41 +12,24 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { UserCheck, UserX, MailQuestion, CheckCircle, Clock, Send, Shuffle, Goal, CirclePlus, Square, Shirt } from "lucide-react";
-import { v4 as uuidv4 } from 'uuid';
+import { UserCheck, UserX, MailQuestion, CheckCircle, Clock, Send } from "lucide-react";
 import { format } from 'date-fns';
-import { DressingRoom } from "./dressing-room";
-import { GameFlowManager } from './game-flow-manager';
 
 interface RosterPlayer extends User {
     status: InvitationStatus | 'confirmed';
-    team: 'A' | 'B' | null;
     payment?: Payment;
 }
 
-interface EventState {
-  player: User;
-  type: MatchEventType;
-  teamId: string;
-}
 
 export function PlayerRoster({ 
     match, 
     isManager, 
-    onUpdate,
-    onEventAdded,
     reservation,
     teamA,
     teamB,
 }: { 
     match: Match; 
     isManager: boolean;
-    onUpdate: (data: Partial<Match>) => void;
-    onEventAdded: (event: MatchEvent) => void;
     reservation: Reservation | null;
     teamA: Team | null;
     teamB: Team | null;
@@ -55,10 +38,7 @@ export function PlayerRoster({
     const [players, setPlayers] = React.useState<RosterPlayer[]>([]);
     const [loading, setLoading] = React.useState(true);
     const { toast } = useToast();
-    const [isEventDialogOpen, setIsEventDialogOpen] = React.useState(false);
-    const [currentEvent, setCurrentEvent] = React.useState<EventState | null>(null);
-    const [eventMinute, setEventMinute] = React.useState<number | "">("");
-
+    
     const isPracticeMatch = !!match.teamARef && !match.teamBRef && !match.invitedTeamId;
     const isScheduledMatch = !!match.teamARef && !!match.teamBRef;
     const isLive = match.status === 'InProgress';
@@ -115,13 +95,9 @@ export function PlayerRoster({
                     status = invitation.status;
                 }
                 
-                let team: 'A' | 'B' | null = null;
-                if(isConfirmedA) team = 'A';
-                if(isConfirmedB) team = 'B';
-                
                 const payment = paymentsMap.get(user.id);
 
-                return { ...user, status, team, payment };
+                return { ...user, status, payment };
             }).sort((a, b) => a.name.localeCompare(b.name));
 
             setPlayers(rosterPlayers);
@@ -131,50 +107,6 @@ export function PlayerRoster({
         fetchPlayersAndPayments();
     }, [match]);
     
-    const openEventDialog = (player: User, type: MatchEventType, teamId: string | null) => {
-        if (!teamId) {
-            toast({ variant: "destructive", title: "Error", description: "Cannot add event, player team is not identified."});
-            return;
-        }
-        setCurrentEvent({ player, type, teamId });
-        setIsEventDialogOpen(true);
-    };
-
-    const handleConfirmEvent = async () => {
-        if (!currentEvent || typeof eventMinute !== 'number' || eventMinute < 0) {
-            toast({ variant: "destructive", title: "Error", description: "Please enter a valid minute." });
-            return;
-        }
-
-        const { player, type, teamId } = currentEvent;
-        
-        const newEvent: MatchEvent = {
-            id: uuidv4(),
-            type,
-            playerId: player.id,
-            playerName: player.name,
-            teamId,
-            timestamp: Timestamp.now(),
-            minute: eventMinute,
-        };
-        
-        const matchRef = doc(db, "matches", match.id);
-
-        try {
-            await updateDoc(matchRef, {
-                events: arrayUnion(newEvent)
-            });
-            onEventAdded(newEvent);
-            toast({ title: "Event Added", description: `${type} at ${eventMinute}' added for ${player.name}.` });
-        } catch (error) {
-            console.error("Error adding event:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not add the event." });
-        } finally {
-            setIsEventDialogOpen(false);
-            setCurrentEvent(null);
-            setEventMinute("");
-        }
-    };
 
     const handleRemindPlayer = async (player: RosterPlayer) => {
         if (!player.id) return;
@@ -193,18 +125,6 @@ export function PlayerRoster({
             toast({ variant: "destructive", title: "Error", description: "Could not send reminder." });
         }
     };
-
-    const PlayerActions = ({ player, teamId }: { player: User, teamId: string | null }) => {
-        const isSentOff = sentOffPlayers.includes(player.id);
-        return (
-            <div className="flex gap-1">
-                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'Goal', teamId)}><Goal className="h-4 w-4 text-green-600"/></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'Assist', teamId)}><CirclePlus className="h-4 w-4 text-blue-600"/></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'YellowCard', teamId)}><Square className="h-4 w-4 text-yellow-500 fill-yellow-500"/></Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={isSentOff} onClick={() => openEventDialog(player, 'RedCard', teamId)}><Square className="h-4 w-4 text-red-600 fill-red-600"/></Button>
-            </div>
-        );
-    }
 
     const getStatusIcon = (status: InvitationStatus | 'confirmed') => {
         switch (status) {
@@ -233,7 +153,6 @@ export function PlayerRoster({
         else if (user?.id === teamB?.managerId) currentUserIsManagerFor = 'B';
     }
 
-    const showDressingRoomButton = isManager && (isPracticeMatch || isScheduledMatch) && !isLive;
 
     // A scheduled match for a manager, showing their team vs opponent
     if (isScheduledMatch && !isPracticeMatch) {
@@ -244,7 +163,7 @@ export function PlayerRoster({
                         <CardHeader>
                             <CardTitle>{teamA?.name}</CardTitle>
                             <CardDescription>
-                                {isManager && currentUserIsManagerFor === 'A' ? 'Manage your team roster.' : 'Opponent roster.'}
+                                {isManager && currentUserIsManagerFor === 'A' ? 'Your team roster.' : 'Opponent roster.'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -253,7 +172,6 @@ export function PlayerRoster({
                                     <TableRow>
                                         <TableHead>Player</TableHead>
                                         {isManager && currentUserIsManagerFor === 'A' && <TableHead>Status</TableHead>}
-                                        {isManager && isLive && currentUserIsManagerFor === 'A' && <TableHead className="text-right">Actions</TableHead>}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -268,11 +186,6 @@ export function PlayerRoster({
                                                     </Badge>
                                                 </TableCell>
                                             )}
-                                            {isManager && isLive && currentUserIsManagerFor === 'A' && (
-                                                <TableCell className="text-right">
-                                                    <PlayerActions player={player} teamId="A" />
-                                                </TableCell>
-                                            )}
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -284,7 +197,7 @@ export function PlayerRoster({
                         <CardHeader>
                             <CardTitle>{teamB?.name}</CardTitle>
                             <CardDescription>
-                                {isManager && currentUserIsManagerFor === 'B' ? 'Manage your team roster.' : 'Opponent roster.'}
+                                {isManager && currentUserIsManagerFor === 'B' ? 'Your team roster.' : 'Opponent roster.'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -293,7 +206,6 @@ export function PlayerRoster({
                                     <TableRow>
                                         <TableHead>Player</TableHead>
                                         {isManager && currentUserIsManagerFor === 'B' && <TableHead>Status</TableHead>}
-                                        {isManager && isLive && currentUserIsManagerFor === 'B' && <TableHead className="text-right">Actions</TableHead>}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -308,11 +220,6 @@ export function PlayerRoster({
                                                     </Badge>
                                                 </TableCell>
                                             )}
-                                            {isManager && isLive && currentUserIsManagerFor === 'B' && (
-                                                <TableCell className="text-right">
-                                                    <PlayerActions player={player} teamId="B" />
-                                                </TableCell>
-                                            )}
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -320,30 +227,6 @@ export function PlayerRoster({
                         </CardContent>
                     </Card>
                 </div>
-                 <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Record Event: {currentEvent?.type}</DialogTitle>
-                            <DialogDescription>
-                                Enter the game minute for the {currentEvent?.type.toLowerCase()} by {currentEvent?.player.name}.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-2">
-                            <Label htmlFor="eventMinute">Game Minute</Label>
-                            <Input
-                                id="eventMinute"
-                                type="number"
-                                placeholder="e.g., 42"
-                                value={eventMinute}
-                                onChange={(e) => setEventMinute(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsEventDialogOpen(false)}>Cancel</Button>
-                            <Button onClick={handleConfirmEvent}>Save Event</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
             </div>
         );
     }
@@ -355,9 +238,7 @@ export function PlayerRoster({
     else if (isPracticeMatch && isManager) description = "Set up teams in the Dressing Room before starting the game.";
     const isReservationPaid = reservation?.paymentStatus === 'Paid';
     const showPaymentStatus = isManager && (match.status === 'Scheduled' || match.status === 'Collecting players' || match.status === 'InProgress');
-    const showLiveActions = isManager && isLive;
-    const confirmedPlayers = players.filter(p => p.status === 'confirmed');
-
+    
     return (
         <Card>
             <CardHeader>
@@ -370,7 +251,6 @@ export function PlayerRoster({
                         <TableRow>
                             <TableHead>Player</TableHead>
                             <TableHead>Status</TableHead>
-                            {isLive && <TableHead>Team</TableHead>}
                             {showPaymentStatus && <>
                                 <TableHead>Payment</TableHead>
                                 <TableHead>Amount</TableHead>
@@ -388,10 +268,6 @@ export function PlayerRoster({
                                         <span className="capitalize">{player.status}</span>
                                     </Badge>
                                 </TableCell>
-                                {isLive && <TableCell>
-                                    {player.team === 'A' && <Badge variant="secondary">{teamA?.name || 'Vests A'}</Badge>}
-                                    {player.team === 'B' && <Badge variant="default">{teamB?.name || 'Vests B'}</Badge>}
-                                </TableCell>}
 
                                 {showPaymentStatus && (
                                     <>
@@ -408,9 +284,7 @@ export function PlayerRoster({
                                     </>
                                 )}
                                 <TableCell className="text-right">
-                                    {showLiveActions && player.team && player.status === 'confirmed' ? (
-                                        <PlayerActions player={player} teamId={player.team} />
-                                    ) : (showPaymentStatus && !isReservationPaid && player.payment?.status === 'Pending') ? (
+                                    {(showPaymentStatus && !isReservationPaid && player.payment?.status === 'Pending') ? (
                                         <Button size="sm" variant="outline" onClick={() => handleRemindPlayer(player)}>
                                             <Send className="mr-2 h-3 w-3" /> Remind
                                         </Button>
@@ -423,32 +297,6 @@ export function PlayerRoster({
                     </TableBody>
                 </Table>
             </CardContent>
-             <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Record Event: {currentEvent?.type}</DialogTitle>
-                        <DialogDescription>
-                            Enter the game minute for the {currentEvent?.type.toLowerCase()} by {currentEvent?.player.name}.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="eventMinute">Game Minute</Label>
-                        <Input
-                            id="eventMinute"
-                            type="number"
-                            placeholder="e.g., 42"
-                            value={eventMinute}
-                            onChange={(e) => setEventMinute(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsEventDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleConfirmEvent}>Save Event</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </Card>
     );
 }
-
-    
