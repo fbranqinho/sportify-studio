@@ -203,6 +203,7 @@ export interface Pitch {
   basePrice: number;
   coords: { lat: number; lng: number };
   allowPostGamePayments?: boolean;
+  allowCancellationsAfterPayment?: boolean;
 }
 
 export type ReservationStatus = "Pending" | "Confirmed" | "Scheduled" | "Canceled";
@@ -230,6 +231,7 @@ export interface Reservation {
   managerRef?: string;
   playerRef?: string;
   teamRef?: string; // Optional: To associate reservation with a specific team
+  createdAt?: Timestamp;
 }
 
 
@@ -328,8 +330,8 @@ export interface Payment {
   managerRef?: string; // ManagerProfile ID
   matchRef?: string; // Match ID
   competitionRef?: string; // Competition ID
-  teamRef: string; // Team ID
-  reservationRef: string; // Reservation ID
+  teamRef?: string; // Team ID
+  reservationRef?: string; // Reservation ID
   type: PaymentType;
   amount: number;
   date: string; // ISO 8601 string
@@ -337,8 +339,8 @@ export interface Payment {
   status: PaymentStatus;
   notes?: string;
   reminder?: boolean;
-  pitchName: string;
-  teamName: string;
+  pitchName?: string;
+  teamName?: string;
 }
 
 export interface Promo {

@@ -4,9 +4,9 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch, deleteDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch, deleteDoc, documentId } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
-import type { Reservation, Team, Notification, Match, Payment, PaymentStatus } from "@/types";
+import type { Reservation, Team, Notification, Match, Payment, PaymentStatus, Pitch } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +30,7 @@ export default function SchedulePage() {
   const { user } = useUser();
   const { toast } = useToast();
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
+  const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [ownerProfileId, setOwnerProfileId] = React.useState<string | null>(null);
 
@@ -53,7 +54,7 @@ export default function SchedulePage() {
     }
   }, [user]);
 
-  // Effect to fetch reservations based on user role
+  // Effect to fetch reservations and associated pitches based on user role
   React.useEffect(() => {
     if (!user || user.role !== 'OWNER' || !ownerProfileId) {
         if (user?.role !== 'OWNER') setLoading(false);
@@ -65,9 +66,19 @@ export default function SchedulePage() {
     let unsubscribe = () => {};
     let reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
     
-    unsubscribe = onSnapshot(reservationsQuery, (querySnapshot) => {
+    unsubscribe = onSnapshot(reservationsQuery, async (querySnapshot) => {
       const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
       setReservations(reservationsData);
+
+      const pitchIds = [...new Set(reservationsData.map(r => r.pitchId))];
+      if (pitchIds.length > 0) {
+          const pitchesQuery = query(collection(db, 'pitches'), where(documentId(), 'in', pitchIds));
+          const pitchesSnap = await getDocs(pitchesQuery);
+          const pitchesMap = new Map<string, Pitch>();
+          pitchesSnap.forEach(doc => pitchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Pitch));
+          setPitches(pitchesMap);
+      }
+
       setLoading(false);
     }, (error) => {
       console.error("Error fetching reservations: ", error);
@@ -209,6 +220,7 @@ export default function SchedulePage() {
   }
 
   const ReservationCard = ({ reservation }: { reservation: Reservation }) => {
+    const pitch = pitches.get(reservation.pitchId);
     
     const handleCancel = async () => {
         const batch = writeBatch(db);
@@ -228,6 +240,10 @@ export default function SchedulePage() {
         await batch.commit();
         toast({ title: "Reservation Cancelled", description: "This reservation has been cancelled." });
     }
+    
+    const canCancel = user?.role === 'MANAGER' &&
+                      user?.id === reservation.actorId &&
+                      (reservation.paymentStatus !== 'Paid' || pitch?.allowCancellationsAfterPayment);
 
     return (
         <Card>
@@ -257,7 +273,7 @@ export default function SchedulePage() {
                 </Button>
                 </CardFooter>
             )}
-             {user?.id === reservation.actorId && reservation.status === 'Confirmed' && (
+             {canCancel && (
                  <CardFooter>
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
