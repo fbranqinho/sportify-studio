@@ -59,7 +59,7 @@ export const MatchCard = ({ match, hook }: { match: Match, hook: ReturnType<type
       return 'Match Details';
     }
     
-    const showStartPaymentButton = isManager && reservation?.status === 'Confirmed' && reservation?.paymentStatus === 'Pending';
+    const showStartPaymentButton = isManager && reservation?.status === 'Confirmed' && reservation?.paymentStatus === 'Pending' && confirmedPlayers > 0;
     
     let buttonContent;
     if (playerInvitation) {
