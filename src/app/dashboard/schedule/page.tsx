@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, User, Clock, CheckCircle, XCircle, History, CheckCheck, Ban, CalendarCheck } from "lucide-react";
 import { format } from "date-fns";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -387,21 +386,13 @@ export default function SchedulePage() {
         )}
       </div>
 
-       <div className="border-t pt-8">
-        <Accordion type="single" collapsible>
-            <AccordionItem value="history">
-                <AccordionTrigger>
-                    <h2 className="text-2xl font-bold font-headline">Reservation History ({pastReservations.length})</h2>
-                </AccordionTrigger>
-                <AccordionContent>
-                    {pastReservations.length > 0 ? (
-                        <ReservationList reservations={pastReservations} />
-                    ) : (
-                        <EmptyState icon={History} title="No Reservation History" description="Your past bookings will appear here." />
-                    )}
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+       <div className="border-t pt-8 space-y-4">
+        <h2 className="text-2xl font-bold font-headline">Reservation History ({pastReservations.length})</h2>
+          {pastReservations.length > 0 ? (
+              <ReservationList reservations={pastReservations} />
+          ) : (
+              <EmptyState icon={History} title="No Reservation History" description="Your past bookings will appear here." />
+          )}
       </div>
 
     </div>
