@@ -97,36 +97,37 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
         if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice || 0 };
 
-        const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getDate(day) && getHours(d) === slotHours;
+        const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getHours(d);
         
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         const match = reservation ? matches.find(m => m.reservationRef === reservation.id) : undefined;
         
         // --- LOGIC HIERARCHY ---
         if (match && reservation) {
-            
-            const isFinishedOrLive = match.status === 'Finished' || match.status === 'InProgress' || match.status === 'Cancelled';
-            if (isFinishedOrLive) {
-                 return { status: match.status === 'InProgress' ? 'Live' : 'Booked', match, reservation, price: 0 };
+            // 1. Check for finished or ongoing matches first. These are always unavailable.
+            if (match.status === 'Finished' || match.status === 'Cancelled') {
+                return { status: 'Booked', match, reservation, price: 0 };
+            }
+             if (match.status === 'InProgress') {
+                 return { status: 'Live', match, reservation, price: 0 };
             }
 
-            const isFullyBooked = !!match.teamBRef || reservation.paymentStatus === 'Paid';
-            if (isFullyBooked) {
-                 return { status: 'Booked', match, reservation, price: 0 };
-            }
-
-            const isChallengable = user.role === 'MANAGER' && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id;
+            // 2. Check for challenge opportunities.
+            const isPracticeMatch = !!match.teamARef && !match.teamBRef;
+            const isChallengable = user.role === 'MANAGER' && isPracticeMatch && match.allowChallenges && match.managerRef !== user.id;
             if (isChallengable) {
                 return { status: 'OpenForTeam', match, reservation, price: 0 };
             }
 
+            // 3. Check for player application opportunities.
             const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
             const capacity = getPlayerCapacity(pitch.sport);
-            const canAcceptPlayers = user.role === 'PLAYER' && match.allowExternalPlayers && totalPlayers < capacity;
+            const canAcceptPlayers = user.role === 'PLAYER' && match.allowExternalPlayers && isPracticeMatch && totalPlayers < capacity;
             if (canAcceptPlayers) {
                  return { status: 'OpenForPlayers', match, reservation, price: 0 };
             }
             
+            // 4. If none of the above, it's booked.
             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
