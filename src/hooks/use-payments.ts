@@ -63,6 +63,12 @@ export function usePayments(user: AuthUser | null) {
         return;
     }
     
+    // Explicitly check for user before proceeding to fix the error.
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     if (!userDoc.exists()) {
         setLoading(false);
