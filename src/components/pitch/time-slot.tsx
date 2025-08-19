@@ -188,11 +188,6 @@ const LiveSlot = ({ match }: { match: Match }) => (
 );
 
 const BookedSlot = ({ time, status }: { time: string; status: 'Booked' | 'Past' | 'Pending' }) => {
-    let statusText: string = status;
-    if (status === 'Pending') {
-        statusText = 'Pendente';
-    }
-
     return (
         <Button variant="secondary" disabled className="h-16 flex-col w-full rounded-none border-0">
             <span className="font-semibold">{time}</span>
@@ -200,7 +195,7 @@ const BookedSlot = ({ time, status }: { time: string; status: 'Booked' | 'Past' 
                 {status === 'Booked' && <Ban className="h-3 w-3" />}
                 {status === 'Past' && <Info className="h-3 w-3" />}
                 {status === 'Pending' && <Clock className="h-3 w-3" />}
-                <span>{statusText}</span>
+                <span>{status}</span>
             </div>
         </Button>
     );
