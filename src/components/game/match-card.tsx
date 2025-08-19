@@ -109,7 +109,7 @@ export const MatchCard = ({ match, hook }: { match: Match, hook: ReturnType<type
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleStartSplitPayment(match)}>Continue</AlertDialogAction>
+                                <AlertDialogAction onClick={() => handleStartSplitPayment(reservation!)}>Continue</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
