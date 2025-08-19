@@ -57,16 +57,13 @@ export function usePayments(user: AuthUser | null) {
 
   }, [toast]);
 
-  const fetchData = React.useCallback(async () => {
+  const fetchData = React.useCallback(async (userId: string) => {
     setLoading(true);
-    if (!user) {
-        setLoading(false);
-        return;
-    }
-
+    
     try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, 'users', userId));
         if (!userDoc.exists()) {
+            console.error("User document not found for UID:", userId);
             setLoading(false);
             return;
         }
@@ -76,9 +73,9 @@ export function usePayments(user: AuthUser | null) {
         let initialQuery;
 
         if (userData.role === 'PLAYER') {
-            initialQuery = query(collection(db, "payments"), where("playerRef", "==", user.uid));
+            initialQuery = query(collection(db, "payments"), where("playerRef", "==", userId));
         } else if (userData.role === 'MANAGER') {
-            const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.uid));
+            const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', userId));
             const teamsSnap = await getDocs(teamsQuery);
             const teamIds = teamsSnap.docs.map(doc => doc.id);
             
@@ -90,7 +87,7 @@ export function usePayments(user: AuthUser | null) {
                  return;
             }
         } else if (userData.role === 'OWNER') {
-            const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.uid));
+            const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", userId));
             const ownerProfileSnap = await getDocs(ownerProfileQuery);
             if(!ownerProfileSnap.empty) {
                 const ownerProfileId = ownerProfileSnap.docs[0].id;
@@ -128,7 +125,7 @@ export function usePayments(user: AuthUser | null) {
             }
             
             if (playerIds.length > 0) {
-                const usersQuery = query(collection(db, 'users'), where('id', 'in', playerIds.filter(Boolean)));
+                const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds.filter(Boolean)));
                 const usersSnap = await getDocs(usersQuery);
                 const usersMap = new Map<string, User>();
                 usersSnap.forEach(doc => {
@@ -150,14 +147,17 @@ export function usePayments(user: AuthUser | null) {
         toast({ variant: "destructive", title: "An unexpected error occurred while fetching data." });
         setLoading(false);
     }
-  }, [user, toast, runConsistencyCheck]);
+  }, [toast, runConsistencyCheck]);
 
 
   React.useEffect(() => {
-    if (user) {
-      fetchData();
+    if (user?.uid) {
+      fetchData(user.uid);
+    } else {
+      setLoading(false);
+      setAllPayments([]);
     }
-  }, [user, fetchData]);
+  }, [user?.uid, fetchData]);
 
-  return { allPayments, reservations, playerUsers, loading, fetchData };
+  return { allPayments, reservations, playerUsers, loading, fetchData: () => user?.uid ? fetchData(user.uid) : Promise.resolve() };
 }
