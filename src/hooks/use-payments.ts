@@ -154,8 +154,10 @@ export function usePayments(user: AuthUser | null) {
 
 
   React.useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user) {
+      fetchData();
+    }
+  }, [user, fetchData]);
 
   return { allPayments, reservations, playerUsers, loading, fetchData };
 }
