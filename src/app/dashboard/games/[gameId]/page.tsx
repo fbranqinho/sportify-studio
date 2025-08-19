@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Play, Shirt } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn, getPlayerCapacity } from "@/lib/utils";
 
 // Import individual components
@@ -128,9 +128,6 @@ export default function GameDetailsPage() {
     
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
-        if (data.status || data.teamAPlayers !== undefined || data.teamBPlayers !== undefined || data.events !== undefined) {
-            fetchGameDetails();
-        }
     }
 
     const handleEventAdded = (event: MatchEvent) => {
@@ -142,11 +139,13 @@ export default function GameDetailsPage() {
     }
 
     const handleStartGame = async () => {
+        if (!match || !pitch) return;
+        
         const matchRef = doc(db, "matches", match.id);
         const minPlayers = getPlayerCapacity(pitch?.sport);
         const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
 
-        if (totalPlayers < minPlayers && !(pitch?.allowPostGamePayments)) {
+        if (totalPlayers < minPlayers && !pitch.allowPostGamePayments) {
             toast({
                 variant: "destructive",
                 title: "Not Enough Players",
@@ -161,8 +160,7 @@ export default function GameDetailsPage() {
                 startTime: serverTimestamp(),
             });
             handleMatchUpdate({ status: "InProgress" });
-            toast({ title: "Game Started!", description: "The game is now live." });
-            router.push(`/live-game/${match.id}`);
+            toast({ title: "Game Started!", description: "The game is now live. Good luck!" });
         } catch (error) {
             console.error("Error starting game: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not start the game." });
@@ -251,8 +249,6 @@ export default function GameDetailsPage() {
                     <PlayerRoster 
                         match={match} 
                         isManager={isManager} 
-                        onUpdate={handleMatchUpdate} 
-                        onEventAdded={handleEventAdded} 
                         reservation={reservation}
                         teamA={teamA}
                         teamB={teamB}
@@ -267,5 +263,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    

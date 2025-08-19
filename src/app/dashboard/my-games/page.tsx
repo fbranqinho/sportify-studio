@@ -418,7 +418,7 @@ export default function MyGamesPage() {
                     </AlertDialog>
                 )}
                 <Button variant="outline" className="w-full" asChild>
-                    <Link href={isLive ? `/live-game/${match.id}` : `/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
+                    <Link href={`/dashboard/games/${match.id}`} className="flex justify-between items-center w-full">
                         <span>{isFinished ? "View Report" : isLive ? "View Live" : "Manage Game"}</span>
                         <ArrowRight className="h-4 w-4" />
                     </Link>
