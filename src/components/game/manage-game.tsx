@@ -5,7 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { doc, updateDoc, writeBatch, collection, query, where, getDocs, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Reservation, Payment } from "@/types";
+import type { Match, Reservation, Payment, Pitch } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,11 +24,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { getPlayerCapacity } from "@/lib/utils";
 
-export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; }) {
+export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; pitch: Pitch | null; }) {
     const { toast } = useToast();
     const router = useRouter();
     const isPaid = reservation?.paymentStatus === 'Paid';
+
+    const capacity = pitch ? getPlayerCapacity(pitch.sport) : 0;
+    const isFull = capacity > 0 && (match.teamAPlayers.length + match.teamBPlayers.length) >= capacity;
 
     const handleToggleExternalPlayers = async (checked: boolean) => {
         const matchRef = doc(db, "matches", match.id);
@@ -130,6 +134,7 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
                         id="allow-external"
                         checked={!!match.allowExternalPlayers}
                         onCheckedChange={handleToggleExternalPlayers}
+                        disabled={isFull}
                     />
                 </div>
                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
@@ -145,6 +150,7 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
                         id="allow-challenges"
                         checked={!!match.allowChallenges}
                         onCheckedChange={handleToggleAllowChallenges}
+                        disabled={isFull || !!match.teamBRef}
                     />
                 </div>
                  {!isPaid && (
@@ -183,5 +189,3 @@ export function ManageGame({ match, onMatchUpdate, reservation }: { match: Match
         </Card>
     )
 }
-
-    

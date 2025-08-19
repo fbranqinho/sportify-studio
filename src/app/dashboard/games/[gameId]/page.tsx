@@ -257,7 +257,7 @@ export default function GameDetailsPage() {
                     {isManagerA && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
                     {isManagerA && <ChallengeInvitations match={match} onUpdate={fetchGameDetails} />}
                     
-                    {isManager && !isLive && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} />}
+                    {isManager && !isLive && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} pitch={pitch} />}
                 </div>
             )}
         </div>
