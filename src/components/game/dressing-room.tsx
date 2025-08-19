@@ -5,12 +5,13 @@ import * as React from "react";
 import { doc, updateDoc, collection, query, where, documentId, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Match, Team, User, Formation, Tactic, PlayerProfile } from "@/types";
 import { cn } from "@/lib/utils";
+import { Sparkles } from "lucide-react";
 
 const tactics: Tactic[] = ["3-2-1", "2-3-1", "3-1-2", "2-2-2"];
 
@@ -90,6 +91,48 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
   const canManageTeamA = currentUserIsManagerFor === 'A' || isPracticeMatch;
   const canManageTeamB = currentUserIsManagerFor === 'B' || isPracticeMatch;
 
+  const handleAutoFill = React.useCallback(() => {
+    if (!isPracticeMatch || players.length === 0) return;
+
+    const shuffled = [...players].sort(() => 0.5 - Math.random());
+    const newFormationA: Formation = {};
+    const newFormationB: Formation = {};
+    
+    const midPoint = Math.ceil(shuffled.length / 2);
+    const playersForA = shuffled.slice(0, midPoint);
+    const playersForB = shuffled.slice(midPoint);
+
+    const assignPlayers = (formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[], tactic: Tactic) => {
+        let assigned = new Set<string>();
+        const positions = formationPositionsByTactic[tactic];
+        positions.forEach(pos => {
+            let playerToAssign: (User & { profile: PlayerProfile }) | undefined;
+            if (pos === "GK") playerToAssign = availablePlayers.find(p => p.profile.position === "Goalkeeper" && !assigned.has(p.id));
+            else if (pos.includes("B")) playerToAssign = availablePlayers.find(p => p.profile.position === "Defender" && !assigned.has(p.id));
+            else if (pos.includes("M")) playerToAssign = availablePlayers.find(p => p.profile.position === "Midfielder" && !assigned.has(p.id));
+            else if (pos.includes("ST") || pos.includes("W")) playerToAssign = availablePlayers.find(p => p.profile.position === "Forward" && !assigned.has(p.id));
+            
+            if (!playerToAssign) playerToAssign = availablePlayers.find(p => !assigned.has(p.id));
+
+            if (playerToAssign) {
+                formation[pos] = playerToAssign.id;
+                assigned.add(playerToAssign.id);
+            } else {
+                formation[pos] = null;
+            }
+        });
+    };
+    
+    assignPlayers(newFormationA, playersForA, tacticA);
+    assignPlayers(newFormationB, playersForB, tacticB);
+
+    setFormationA(newFormationA);
+    setFormationB(newFormationB);
+    toast({ title: "Teams Auto-Filled!", description: "Players have been randomly assigned to teams and positions."});
+
+  }, [isPracticeMatch, players, tacticA, tacticB, toast]);
+
+
   React.useEffect(() => {
     const fetchPlayers = async () => {
         setLoading(true);
@@ -122,40 +165,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
 
   React.useEffect(() => {
     if (isPracticeMatch && players.length > 0 && !autoFilled.current) {
-        const shuffled = [...players].sort(() => 0.5 - Math.random());
-        const newFormationA: Formation = {};
-        const newFormationB: Formation = {};
-        
-        const playersForA = shuffled.slice(0, Math.ceil(shuffled.length / 2));
-        const playersForB = shuffled.slice(Math.ceil(shuffled.length / 2));
-
-        const assignPlayers = (formation: Formation, availablePlayers: (User & {profile: PlayerProfile})[], tactic: Tactic) => {
-            let assigned = new Set<string>();
-            const positions = formationPositionsByTactic[tactic];
-            positions.forEach(pos => {
-                let playerToAssign: (User & { profile: PlayerProfile }) | undefined;
-                if (pos === "GK") playerToAssign = availablePlayers.find(p => p.profile.position === "Goalkeeper" && !assigned.has(p.id));
-                else if (pos.includes("B")) playerToAssign = availablePlayers.find(p => p.profile.position === "Defender" && !assigned.has(p.id));
-                else if (pos.includes("M")) playerToAssign = availablePlayers.find(p => p.profile.position === "Midfielder" && !assigned.has(p.id));
-                else if (pos.includes("ST") || pos.includes("W")) playerToAssign = availablePlayers.find(p => p.profile.position === "Forward" && !assigned.has(p.id));
-                
-                if (!playerToAssign) playerToAssign = availablePlayers.find(p => !assigned.has(p.id));
-
-                if (playerToAssign) {
-                    formation[pos] = playerToAssign.id;
-                    assigned.add(playerToAssign.id);
-                }
-            });
-        };
-        
-        assignPlayers(newFormationA, playersForA, tacticA);
-        assignPlayers(newFormationB, playersForB, tacticB);
-
-        setFormationA(newFormationA);
-        setFormationB(newFormationB);
+        handleAutoFill();
         autoFilled.current = true;
     }
-  }, [players, isPracticeMatch, tacticA, tacticB]);
+  }, [players, isPracticeMatch, handleAutoFill]);
 
   const handleFormationChange = (team: 'A' | 'B', position: string, playerId: string) => {
     const currentFormation = team === 'A' ? formationA : formationB;
@@ -367,6 +380,12 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
         </div>
         <DialogFooter>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
+            {isPracticeMatch && (
+                <Button variant="secondary" onClick={handleAutoFill}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Auto-fill
+                </Button>
+            )}
             <Button onClick={handleSaveChanges} disabled={loading}>Save Teams</Button>
         </DialogFooter>
     </DialogContent>
