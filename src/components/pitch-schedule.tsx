@@ -109,22 +109,25 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                  return { status: 'Live', match, reservation, price: 0 };
             }
             
-            // This is the source of truth for "is the slot full?"
-            if (match && !match.teamBRef && match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
-                return { status: 'OpenForTeam', match, reservation, price: 0 };
-            }
-
-            const totalPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
-            const capacity = getPlayerCapacity(pitch.sport);
-            if (match && match.allowExternalPlayers && totalPlayers < capacity) {
-                 return { status: 'OpenForPlayers', match, reservation, price: 0 };
-            }
-
-            if (isMyGame && user.role !== "OWNER") { // Owners shouldn't see their own bookings as "Booked" by them
+            // If the game is fully paid, it's always considered booked. No more actions.
+            if(reservation.paymentStatus === 'Paid') {
                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
 
-            return { status: 'Booked', reservation, price: reservation.totalAmount };
+            // Challenge Logic: Only show if it's a manager, there's no opponent yet, challenges are allowed, and it's not the manager's own game.
+            if (user.role === 'MANAGER' && match && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id) {
+                return { status: 'OpenForTeam', match, reservation, price: 0 };
+            }
+
+            // Apply as Player Logic: Only show if it's a PLAYER, the game allows it, and it's not full.
+            const totalPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
+            const capacity = getPlayerCapacity(pitch.sport);
+            if (user.role === 'PLAYER' && match && match.allowExternalPlayers && totalPlayers < capacity) {
+                 return { status: 'OpenForPlayers', match, reservation, price: 0 };
+            }
+
+            // Default to booked for any other case (e.g., game is full, it's my game, challenges are off, etc.)
+            return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
         const dayOfWeek = getDay(day);
@@ -137,6 +140,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
         return { status: 'Available', promotion: applicablePromo, price: finalPrice };
     };
+
 
     const handleApplyToGame = async (match: Match) => {
         if (!user.id) return toast({ variant: "destructive", title: "You must be logged in." });
@@ -183,7 +187,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             const notification: Omit<Notification, 'id'> = {
                 userId: challengeTarget.managerRef,
                 message: `The team '${challengingTeam.name}' has challenged you to a match!`,
-                link: `/dashboard/games/${challengeTarget.id}`, // Corrected link
+                link: `/dashboard/games/${challengeTarget.id}`,
                 read: false,
                 createdAt: serverTimestamp() as any,
                 type: 'Challenge',
@@ -390,6 +394,3 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
-
-    
-    
