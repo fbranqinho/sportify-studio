@@ -39,14 +39,14 @@ function NotificationBell() {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
-  const [ownerProfileId, setOwnerProfileId] = React.useState<string | null>(null);
+  const [ownerProfile, setOwnerProfile] = React.useState<OwnerProfile | null>(null);
 
   React.useEffect(() => {
     if (user?.role === 'OWNER' && user.id) {
         const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id), limit(1));
         getDocs(q).then(profileSnapshot => {
             if (!profileSnapshot.empty) {
-                setOwnerProfileId(profileSnapshot.docs[0].id);
+                setOwnerProfile({id: profileSnapshot.docs[0].id, ...profileSnapshot.docs[0].data()} as OwnerProfile);
             }
         });
     }
@@ -54,9 +54,6 @@ function NotificationBell() {
 
   React.useEffect(() => {
     if (!user) return;
-
-    // For owners, wait until we have the profile ID
-    if (user.role === 'OWNER' && !ownerProfileId) return;
 
     let unsubscribe: (() => void) | undefined;
 
@@ -77,13 +74,16 @@ function NotificationBell() {
     };
     
     let notifQuery;
-    if (user.role === 'OWNER' && ownerProfileId) {
-        notifQuery = query(
-            collection(db, "notifications"),
-            where("ownerProfileId", "==", ownerProfileId),
-            limit(10)
-        );
-    } else if (user.role !== 'OWNER') {
+    if (user.role === 'OWNER') {
+        // Wait for profile to be loaded
+        if (ownerProfile) {
+            notifQuery = query(
+                collection(db, "notifications"),
+                where("ownerProfileId", "==", ownerProfile.id),
+                limit(10)
+            );
+        }
+    } else {
         notifQuery = query(
           collection(db, "notifications"),
           where("userId", "==", user.id),
@@ -101,7 +101,7 @@ function NotificationBell() {
             unsubscribe();
         }
     };
-  }, [user, ownerProfileId]);
+  }, [user, ownerProfile]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     const notifRef = doc(db, "notifications", notificationId);
