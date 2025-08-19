@@ -36,6 +36,9 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
     // 2. Find reservation and match for this specific slot.
     const reservation = reservations.find(r => {
       const resDate = new Date(r.date);
+      // Ignore cancelled reservations for slot availability checks
+      if (r.status === 'Canceled') return false;
+
       return getYear(resDate) === getYear(slotDateTime) &&
              getMonth(resDate) === getMonth(slotDateTime) &&
              getDate(resDate) === getDate(slotDateTime) &&
@@ -50,7 +53,7 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
       if (match.status === 'InProgress') {
         return { status: 'Live', match, reservation, price: reservation.totalAmount };
       }
-      if (match.status === 'Finished' || match.status === 'Cancelled' || reservation.status === 'Canceled') {
+      if (match.status === 'Finished' || match.status === 'Cancelled') {
         return { status: 'Booked', match, reservation, price: reservation.totalAmount };
       }
      

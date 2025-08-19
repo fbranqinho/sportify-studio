@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch, deleteDoc } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Reservation, Team, Notification, Match, Payment, PaymentStatus } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -87,7 +87,8 @@ export default function SchedulePage() {
     // --- CANCELLATION LOGIC ---
     if (status === "Canceled") {
       try {
-        batch.update(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
+        // Instead of updating, we now delete the reservation to free up the slot
+        batch.delete(reservationRef);
         
         const actorId = reservation.managerRef || reservation.playerRef;
         if (actorId) {
@@ -102,7 +103,7 @@ export default function SchedulePage() {
         }
         
         await batch.commit();
-        toast({ title: "Reservation Request Rejected" });
+        toast({ title: "Reservation Request Rejected", description: "The time slot is now available again." });
 
       } catch (error) {
         console.error("Error rejecting reservation: ", error);
