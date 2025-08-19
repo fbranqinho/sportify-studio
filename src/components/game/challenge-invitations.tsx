@@ -25,17 +25,14 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const fetchChallenges = async () => {
             setLoading(true);
             try {
-                // Corrected query: Fetch all challenges for the user and then filter by matchId in the client.
                 const challengesQuery = query(
                     collection(db, "notifications"),
                     where("userId", "==", user.id),
-                    where("type", "==", "Challenge")
+                    where("type", "==", "Challenge"),
+                    where("payload.matchId", "==", match.id)
                 );
                 const snapshot = await getDocs(challengesQuery);
-                const allChallenges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-                
-                // Filter for the current match
-                const matchChallenges = allChallenges.filter(c => c.payload?.matchId === match.id);
+                const matchChallenges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
 
                 setChallenges(matchChallenges);
             } catch (e) {
@@ -50,8 +47,9 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
 
     const handleResponse = async (notification: Notification, accepted: boolean) => {
         const { payload } = notification;
+        const challengerTeamId = payload?.challengerTeamId;
 
-        if (!payload || !payload.matchId || !payload.challengerTeamId || !payload.challengerManagerId) {
+        if (!payload || !payload.matchId || !challengerTeamId || !payload.challengerManagerId) {
             toast({ variant: "destructive", title: "Invalid Challenge Data", description: "This challenge notification is outdated or corrupted. It will be removed." });
             try {
                 await deleteDoc(doc(db, "notifications", notification.id));
@@ -68,7 +66,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         batch.delete(doc(db, "notifications", notification.id));
 
         if (accepted) {
-            const challengerTeamRef = doc(db, "teams", payload.challengerTeamId);
+            const challengerTeamRef = doc(db, "teams", challengerTeamId);
             const challengerTeamSnap = await getDoc(challengerTeamRef);
 
             if (!challengerTeamSnap.exists()) {
@@ -78,7 +76,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
             const challengerTeam = challengerTeamSnap.data() as Team;
 
             batch.update(matchRef, {
-                teamBRef: payload.challengerTeamId,
+                teamBRef: challengerTeamId,
                 teamBPlayers: [], // Clear team B players as new ones will be invited
                 status: "Scheduled",
                 allowChallenges: false, 
@@ -99,7 +97,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                     const invitationRef = doc(collection(db, "matchInvitations"));
                     batch.set(invitationRef, {
                         matchId: match.id,
-                        teamId: challengerTeam.id,
+                        teamId: challengerTeamId, // Ensure this is always defined
                         playerId: playerId,
                         managerId: payload.challengerManagerId,
                         status: "pending",
