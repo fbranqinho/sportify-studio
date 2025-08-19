@@ -4,7 +4,7 @@
 import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc, or } from "firebase/firestore";
-import type { Payment, Notification, PaymentStatus, Reservation, User, Team, Match } from "@/types";
+import type { Payment, Notification, PaymentStatus, Reservation, User, Team, Match, OwnerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 export function usePayments(user: User | null) {
@@ -12,6 +12,7 @@ export function usePayments(user: User | null) {
   const [allPayments, setAllPayments] = React.useState<Payment[]>([]);
   const [reservations, setReservations] = React.useState<Map<string, Reservation>>(new Map());
   const [playerUsers, setPlayerUsers] = React.useState<Map<string, User>>(new Map());
+  const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   const fetchData = React.useCallback(async () => {
@@ -33,11 +34,9 @@ export function usePayments(user: User | null) {
         const handleSnapshots = async (paymentsSnapshot: any, reservationsSnapshot?: any) => {
             const paymentsData = paymentsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Payment));
             
-            const managerReservations: Reservation[] = [];
             if (reservationsSnapshot) {
                  reservationsSnapshot.docs.forEach((doc: any) => {
                      const res = { id: doc.id, ...doc.data() } as Reservation;
-                     // If a payment document for this initial booking doesn't exist, create a temporary one for display
                      if (!paymentsData.some(p => p.reservationRef === res.id && p.type === 'booking')) {
                         paymentsData.push({
                             id: `temp-${res.id}`,
@@ -45,13 +44,13 @@ export function usePayments(user: User | null) {
                             type: 'booking',
                             amount: res.totalAmount,
                             status: 'Pending',
-                            date: res.createdAt,
+                            date: new Date().toISOString(),
                             pitchName: res.pitchName,
                             teamName: 'Initial Booking',
                             managerRef: res.managerRef,
+                            ownerRef: res.ownerProfileId,
                         } as Payment);
                      }
-                     managerReservations.push(res);
                  });
             }
 
@@ -59,11 +58,12 @@ export function usePayments(user: User | null) {
 
             const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
             const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean)), ...new Set(paymentsData.map(p => p.managerRef).filter(Boolean))];
+            const ownerIds = [...new Set(paymentsData.map(p => p.ownerRef).filter(Boolean))];
 
-            const reservationsMap = new Map<string, Reservation>();
             if (reservationIds.length > 0) {
                 const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
                 const fetchedReservationsSnap = await getDocs(reservationsQuery);
+                const reservationsMap = new Map<string, Reservation>();
                 fetchedReservationsSnap.forEach(doc => {
                     reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
                 });
@@ -78,6 +78,16 @@ export function usePayments(user: User | null) {
                     usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
                 });
                 setPlayerUsers(usersMap);
+            }
+            
+            if (ownerIds.length > 0) {
+                 const ownersQuery = query(collection(db, 'ownerProfiles'), where(documentId(), 'in', ownerIds));
+                 const ownersSnap = await getDocs(ownersQuery);
+                 const ownersMap = new Map<string, OwnerProfile>();
+                 ownersSnap.forEach(doc => {
+                     ownersMap.set(doc.id, { id: doc.id, ...doc.data() } as OwnerProfile);
+                 });
+                 setOwners(ownersMap);
             }
             
             setLoading(false);
@@ -101,13 +111,7 @@ export function usePayments(user: User | null) {
             queries.push(where("managerRef", "==", user.id));
             
             paymentsQuery = query(collection(db, "payments"), or(...queries));
-
-            // Also fetch pending reservations that don't have a payment doc yet
-            const reservationsQuery = query(
-                collection(db, "reservations"),
-                where("managerRef", "==", user.id),
-                where("paymentStatus", "==", "Pending")
-            );
+            const reservationsQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id), where("paymentStatus", "==", "Pending"));
 
             const unsubPayments = onSnapshot(paymentsQuery, (paymentsSnap) => {
                  getDocs(reservationsQuery).then(reservationsSnap => {
@@ -154,11 +158,11 @@ export function usePayments(user: User | null) {
   React.useEffect(() => {
     if (user?.id) {
       fetchData();
-    } else if (user === null) { // Explicitly check for null to know auth state is determined
+    } else if (user === null) { 
       setLoading(false);
       setAllPayments([]);
     }
   }, [user, fetchData]);
 
-  return { allPayments, reservations, playerUsers, loading, fetchData };
+  return { allPayments, reservations, playerUsers, owners, loading, fetchData };
 }

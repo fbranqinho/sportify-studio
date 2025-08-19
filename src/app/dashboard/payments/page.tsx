@@ -20,7 +20,7 @@ const LoadingSkeleton = () => (
   
 export default function PaymentsPage() {
   const { user } = useUser();
-  const { allPayments, reservations, playerUsers, loading, fetchData } = usePayments(user);
+  const { allPayments, reservations, playerUsers, owners, loading, fetchData } = usePayments(user);
   const [searchTerm, setSearchTerm] = React.useState("");
   
   const filteredPayments = React.useMemo(() => {
@@ -75,6 +75,7 @@ export default function PaymentsPage() {
               userRole={user?.role}
               playerUsers={playerUsers}
               reservations={reservations}
+              owners={owners}
               onActionProcessed={fetchData}
           />
         )}
@@ -89,6 +90,7 @@ export default function PaymentsPage() {
             userRole={user?.role}
             playerUsers={playerUsers}
             reservations={reservations}
+            owners={owners}
             onActionProcessed={fetchData}
           />
         )}

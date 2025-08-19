@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import type { Payment, Reservation, User, UserRole, PaymentStatus } from "@/types";
+import type { Payment, Reservation, User, UserRole, PaymentStatus, OwnerProfile } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +19,7 @@ interface PaymentsTableProps {
   userRole?: UserRole;
   playerUsers: Map<string, User>;
   reservations: Map<string, Reservation>;
+  owners: Map<string, OwnerProfile>;
   onActionProcessed: () => void;
 }
 
@@ -32,7 +33,7 @@ const getStatusBadge = (status: PaymentStatus) => {
     }
 }
 
-export function PaymentsTable({ payments, showActions, userRole, playerUsers, reservations, onActionProcessed }: PaymentsTableProps) {
+export function PaymentsTable({ payments, showActions, userRole, playerUsers, reservations, owners, onActionProcessed }: PaymentsTableProps) {
     const { user } = useUser();
     const myGamesHook = useMyGames(user); // We need this for the handler
 
@@ -42,6 +43,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                 <TableRow>
                     {userRole !== 'PLAYER' && <TableHead>Player</TableHead>}
                     <TableHead>Description</TableHead>
+                    {userRole !== 'OWNER' && <TableHead>Owner</TableHead>}
                     <TableHead className="w-[150px]">Game Date</TableHead>
                     <TableHead className="w-[150px]">Payment Date</TableHead>
                     <TableHead className="w-[120px] text-center">Status</TableHead>
@@ -52,6 +54,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
             <TableBody>
                 {payments.length > 0 ? payments.map((p) => {
                     const reservation = p.reservationRef ? reservations.get(p.reservationRef) : null;
+                    const owner = p.ownerRef ? owners.get(p.ownerRef) : null;
                     const actorName = p.playerRef ? playerUsers.get(p.playerRef)?.name : "N/A";
                     const description = p.type === 'booking' 
                         ? `Initial fee for ${p.pitchName}` 
@@ -63,6 +66,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                         <TableRow key={p.id}>
                             {userRole !== 'PLAYER' && <TableCell className="font-medium">{p.type === 'booking' ? 'Your Booking' : actorName}</TableCell>}
                             <TableCell className="font-medium">{description}</TableCell>
+                            {userRole !== 'OWNER' && <TableCell>{owner?.companyName || "N/A"}</TableCell>}
                             <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
                             <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
                             <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
@@ -86,7 +90,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                     )
                 }) : (
                     <TableRow>
-                        <TableCell colSpan={userRole !== 'PLAYER' ? 7 : (showActions ? 6 : 5)} className="h-24 text-center">
+                        <TableCell colSpan={userRole === 'PLAYER' ? 7 : (showActions ? 8 : 7)} className="h-24 text-center">
                             No payments match your criteria.
                         </TableCell>
                     </TableRow>
