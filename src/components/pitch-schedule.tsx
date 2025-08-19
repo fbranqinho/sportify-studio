@@ -109,7 +109,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                  return { status: 'Live', match, reservation, price: 0 };
             }
 
-            if (isMyGame) {
+            if (isMyGame && user.role !== "OWNER") { // Owners shouldn't see their own bookings as "Booked" by them
                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
 
