@@ -58,11 +58,11 @@ export function usePayments(user: AuthUser | null) {
   }, [toast]);
 
   const fetchData = React.useCallback(async () => {
+    setLoading(true);
     if (!user) {
         setLoading(false);
         return;
     }
-    setLoading(true);
 
     try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
