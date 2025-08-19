@@ -97,40 +97,62 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
         if (isBefore(slotDateTime, new Date())) return { status: 'Past', price: pitch.basePrice || 0 };
 
-        const isSameTime = (d: Date) => getYear(d) === getYear(day) && getMonth(d) === getMonth(day) && getDate(d) === getHours(d);
-        
-        const reservation = reservations.find(r => isSameTime(new Date(r.date)));
+        const reservation = reservations.find(r => {
+            const resDate = new Date(r.date);
+            return getYear(resDate) === getYear(slotDateTime) &&
+                   getMonth(resDate) === getMonth(slotDateTime) &&
+                   getDate(resDate) === getDate(slotDateTime) &&
+                   getHours(resDate) === getHours(slotDateTime);
+        });
+
         const match = reservation ? matches.find(m => m.reservationRef === reservation.id) : undefined;
         
-        // --- LOGIC HIERARCHY ---
         if (match && reservation) {
-            // 1. Check for finished or ongoing matches first. These are always unavailable.
+            // 1. Check for definitive, unchangeable states first.
             if (match.status === 'Finished' || match.status === 'Cancelled') {
-                return { status: 'Booked', match, reservation, price: 0 };
+                return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
-             if (match.status === 'InProgress') {
-                 return { status: 'Live', match, reservation, price: 0 };
+            if (match.status === 'InProgress') {
+                return { status: 'Live', match, reservation, price: reservation.totalAmount };
+            }
+            if (reservation.paymentStatus === 'Paid') {
+                return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+            }
+             if (match.teamBRef) { // Already a two-team match
+                return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
 
-            // 2. Check for challenge opportunities.
+
+            // 2. Check for actionable states, if the game is not in a final state.
             const isPracticeMatch = !!match.teamARef && !match.teamBRef;
-            const isChallengable = user.role === 'MANAGER' && isPracticeMatch && match.allowChallenges && match.managerRef !== user.id;
-            if (isChallengable) {
+
+            // Challenge Opportunity
+            if (
+                isPracticeMatch &&
+                match.allowChallenges &&
+                user.role === 'MANAGER' &&
+                match.managerRef !== user.id
+            ) {
                 return { status: 'OpenForTeam', match, reservation, price: 0 };
             }
 
-            // 3. Check for player application opportunities.
+            // Player Application Opportunity
             const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
             const capacity = getPlayerCapacity(pitch.sport);
-            const canAcceptPlayers = user.role === 'PLAYER' && match.allowExternalPlayers && isPracticeMatch && totalPlayers < capacity;
-            if (canAcceptPlayers) {
-                 return { status: 'OpenForPlayers', match, reservation, price: 0 };
+            if (
+                isPracticeMatch &&
+                match.allowExternalPlayers &&
+                user.role === 'PLAYER' &&
+                totalPlayers < capacity
+            ) {
+                return { status: 'OpenForPlayers', match, reservation, price: 0 };
             }
             
-            // 4. If none of the above, it's booked.
+            // 3. If none of the above, it's booked but not actionable for this user.
             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
+        // --- SLOT IS AVAILABLE ---
         const dayOfWeek = getDay(day);
         const applicablePromo = promos
             .filter(p => new Date(day) >= startOfDay(new Date(p.validFrom)) && new Date(day) <= startOfDay(new Date(p.validTo)) && p.applicableDays.includes(dayOfWeek) && p.applicableHours.includes(slotHours) && (p.pitchIds.length === 0 || p.pitchIds.includes(pitch.id)))
