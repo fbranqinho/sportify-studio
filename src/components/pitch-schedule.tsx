@@ -101,7 +101,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         
         const reservation = reservations.find(r => isSameTime(new Date(r.date)));
         
-        if (reservation && (reservation.status === 'Confirmed' || reservation.status === 'Scheduled')) {
+        if (reservation) {
             const match = matches.find(m => m.reservationRef === reservation.id);
             const isMyGame = reservation.actorId === user.id;
 
@@ -109,24 +109,27 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                  return { status: 'Live', match, reservation, price: 0 };
             }
             
-            // If the game is fully paid, it's always considered booked. No more actions.
-            if(reservation.paymentStatus === 'Paid') {
-                return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-            }
+            // New logic: Check all "Booked" conditions first.
+            const isFullyBooked = !!(reservation.paymentStatus === 'Paid' || (match && match.teamBRef));
+            const isPracticeWithoutChallenges = !!(match && !match.teamBRef && !match.allowChallenges && !isMyGame);
 
-            // Challenge Logic: Only show if it's a manager, there's no opponent yet, challenges are allowed, and it's not the manager's own game.
+            if (isFullyBooked || isPracticeWithoutChallenges) {
+                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+            }
+            
+            // Challenge Logic
             if (user.role === 'MANAGER' && match && !match.teamBRef && match.allowChallenges && match.managerRef !== user.id) {
                 return { status: 'OpenForTeam', match, reservation, price: 0 };
             }
 
-            // Apply as Player Logic: Only show if it's a PLAYER, the game allows it, and it's not full.
+            // Apply as Player Logic
             const totalPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
             const capacity = getPlayerCapacity(pitch.sport);
             if (user.role === 'PLAYER' && match && match.allowExternalPlayers && totalPlayers < capacity) {
                  return { status: 'OpenForPlayers', match, reservation, price: 0 };
             }
 
-            // Default to booked for any other case (e.g., game is full, it's my game, challenges are off, etc.)
+            // If none of the above, but there's a reservation, it's considered booked for other users.
             return { status: 'Booked', match, reservation, price: reservation.totalAmount };
         }
         
