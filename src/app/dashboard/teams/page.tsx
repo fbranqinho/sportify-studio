@@ -257,7 +257,7 @@ function PlayerTeamsView() {
           ) : invitations.length > 0 ? (
               invitations.map(inv => <InvitationCard key={inv.id} invitation={inv} />)
           ) : (
-            <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center md:col-span-2 lg:col-span-3">
+            <Card className="md:col-span-3 flex flex-col items-center justify-center p-12 text-center">
                 <CardHeader>
                     <Mail className="mx-auto h-12 w-12 text-muted-foreground" />
                     <CardTitle className="font-headline mt-4">No Pending Invitations</CardTitle>
@@ -268,6 +268,7 @@ function PlayerTeamsView() {
         </div>
       </div>
 
+      {/* My Teams Section */}
       <div className="border-t pt-8">
         <h1 className="text-3xl font-bold font-headline">My Teams</h1>
         <p className="text-muted-foreground">All the teams you are currently a part of.</p>
@@ -303,7 +304,7 @@ function PlayerTeamsView() {
                     </Card>
               ))
           ) : (
-            <Card className="mt-4 flex flex-col items-center justify-center p-12 text-center md:col-span-2 lg:col-span-3">
+            <Card className="md:col-span-3 flex flex-col items-center justify-center p-12 text-center">
               <CardHeader>
                   <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                   <CardTitle className="font-headline mt-4">No Teams Yet</CardTitle>
