@@ -4,7 +4,7 @@
 import * as React from "react";
 import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, increment, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Team, Pitch, PlayerProfile, Reservation, MatchEvent, MatchEventType, User } from "@/types";
+import type { Match, Team, Pitch, PlayerProfile, Reservation, MatchEvent, MatchEventType, User, Notification } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,6 +145,19 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
                     batch.update(teamBRefDoc.ref, { wins: increment(teamBResult === 'W' ? 1 : 0), losses: increment(teamBResult === 'L' ? 1 : 0), draws: increment(teamBResult === 'D' ? 1 : 0), recentForm: newRecentForm });
                 }
             }
+
+            // Create MVP vote notifications for all players
+            allGamePlayerIds.forEach(playerId => {
+                const notificationRef = doc(collection(db, "notifications"));
+                const notification: Omit<Notification, 'id'> = {
+                    userId: playerId,
+                    message: "The game has finished! Vote for the MVP now.",
+                    link: `/dashboard/games/${match.id}`,
+                    read: false,
+                    createdAt: serverTimestamp() as any,
+                };
+                batch.set(notificationRef, notification);
+            });
 
             await batch.commit();
             onMatchUpdate({ status: "Finished", scoreA, scoreB });
