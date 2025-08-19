@@ -112,13 +112,11 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                  const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
                  const capacity = getPlayerCapacity(pitch.sport);
 
-                 if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
+                 if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id && !match.teamBRef) {
                      return { status: 'OpenForTeam', match, reservation, price: 0 };
                  }
-                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id)) {
-                     if (totalPlayers < capacity) {
-                        return { status: 'OpenForPlayers', match, reservation, price: 0 };
-                     }
+                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < capacity) {
+                    return { status: 'OpenForPlayers', match, reservation, price: 0 };
                  }
             }
             return { status: 'Booked', reservation, price: reservation.totalAmount };
