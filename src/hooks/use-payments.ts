@@ -147,7 +147,7 @@ export function usePayments(user: AuthUser | null) {
         return () => unsubscribe();
     } catch (error) {
         console.error("Error in fetchData:", error);
-        toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred while fetching data." });
+        toast({ variant: "destructive", title: "An unexpected error occurred while fetching data." });
         setLoading(false);
     }
   }, [user, toast, runConsistencyCheck]);
