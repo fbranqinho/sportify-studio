@@ -47,22 +47,16 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
     // 3. Handle slots that have a reservation/match.
     if (reservation && match) {
       // 3a. Handle definitive, un-interactive states first.
-      if (match.status === 'Finished' || match.status === 'Cancelled' || reservation.status === 'Canceled') {
-        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-      }
       if (match.status === 'InProgress') {
         return { status: 'Live', match, reservation, price: reservation.totalAmount };
       }
-       if (reservation.paymentStatus === 'Paid') {
+      if (match.status === 'Finished' || match.status === 'Cancelled' || reservation.status === 'Canceled') {
         return { status: 'Booked', match, reservation, price: reservation.totalAmount };
       }
-       if (match.teamBRef) { // Already a two-team match
-        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
-      }
-
-      // 3b. Handle potential interactive states (Challenge, Apply).
+     
+      // 3b. Handle potential interactive states (Challenge, Apply). This now takes priority over payment status.
       const isPracticeMatch = !!match.teamARef && !match.teamBRef;
-      
+
       // Opportunity to Challenge
       if (
         isPracticeMatch &&
@@ -84,8 +78,16 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
       ) {
         return { status: 'OpenForPlayers', match, reservation, price: reservation.totalAmount / capacity };
       }
+      
+      // 3c. If no interaction is possible, check for other booking states.
+       if (reservation.paymentStatus === 'Paid') {
+        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+      }
+       if (match.teamBRef) { // Already a two-team match
+        return { status: 'Booked', match, reservation, price: reservation.totalAmount };
+      }
 
-      // 3c. If none of the above, it's booked but not actionable for this specific user.
+      // 3d. If none of the above, it's booked but not actionable for this specific user.
       return { status: 'Booked', match, reservation, price: reservation.totalAmount };
     }
     
