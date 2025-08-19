@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { addDays, format, startOfDay, isBefore, getYear, getMonth, getDate, getHours, getDay, eachDayOfInterval, startOfWeek, endOfWeek } from "date-fns";
-import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo, TeamChallenge } from "@/types";
+import type { Pitch, Reservation, User, Match, Notification, Team, PitchSport, Promo } from "@/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,22 +108,22 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             if (match?.status === 'InProgress') {
                  return { status: 'Live', match, reservation, price: 0 };
             }
+            
+            // This is the source of truth for "is the slot full?"
+            if (match && !match.teamBRef && match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id) {
+                return { status: 'OpenForTeam', match, reservation, price: 0 };
+            }
+
+            const totalPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
+            const capacity = getPlayerCapacity(pitch.sport);
+            if (match && match.allowExternalPlayers && totalPlayers < capacity) {
+                 return { status: 'OpenForPlayers', match, reservation, price: 0 };
+            }
 
             if (isMyGame && user.role !== "OWNER") { // Owners shouldn't see their own bookings as "Booked" by them
                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
             }
 
-            if (match) {
-                 const totalPlayers = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
-                 const capacity = getPlayerCapacity(pitch.sport);
-
-                 if (match.allowChallenges && user.role === 'MANAGER' && match.managerRef !== user.id && !match.teamBRef) {
-                     return { status: 'OpenForTeam', match, reservation, price: 0 };
-                 }
-                 if (match.allowExternalPlayers && !match.teamAPlayers.includes(user.id) && totalPlayers < capacity) {
-                    return { status: 'OpenForPlayers', match, reservation, price: 0 };
-                 }
-            }
             return { status: 'Booked', reservation, price: reservation.totalAmount };
         }
         
@@ -183,7 +183,7 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
             const notification: Omit<Notification, 'id'> = {
                 userId: challengeTarget.managerRef,
                 message: `The team '${challengingTeam.name}' has challenged you to a match!`,
-                link: `/dashboard/games/${challengeTarget.id}`,
+                link: `/dashboard/games/${challengeTarget.id}`, // Corrected link
                 read: false,
                 createdAt: serverTimestamp() as any,
                 type: 'Challenge',
@@ -390,3 +390,5 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         </Card>
     )
 }
+
+    

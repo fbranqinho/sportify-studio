@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, deleteDoc, getDoc } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, deleteDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Notification, Team } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -48,18 +48,13 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
     const handleResponse = async (notification: Notification, accepted: boolean) => {
         const { payload } = notification;
 
-        // Enhanced check to handle and remove corrupted data
         if (!payload || !payload.matchId || !payload.challengerTeamId || !payload.challengerManagerId) {
+            toast({ variant: "destructive", title: "Invalid Challenge Data", description: "This challenge notification is outdated or corrupted. It will be removed." });
             try {
                 await deleteDoc(doc(db, "notifications", notification.id));
-                toast({
-                    title: "Invalid Challenge Removed",
-                    description: "A corrupted challenge notification has been deleted.",
-                });
-                onUpdate(); // Refresh the parent component to update the UI
+                onUpdate(); 
             } catch (error) {
                  console.error("Error deleting invalid notification:", error);
-                 toast({ variant: "destructive", title: "Error", description: "Could not remove the invalid challenge data." });
             }
             return;
         }
@@ -67,11 +62,9 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const batch = writeBatch(db);
         const matchRef = doc(db, "matches", payload.matchId);
         
-        // Delete the original challenge notification
         batch.delete(doc(db, "notifications", notification.id));
 
         if (accepted) {
-            // --- NEW LOGIC: Fetch challenger team to get players ---
             const challengerTeamRef = doc(db, "teams", payload.challengerTeamId);
             const challengerTeamSnap = await getDoc(challengerTeamRef);
 
@@ -80,13 +73,12 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                 return;
             }
             const challengerTeam = challengerTeamSnap.data() as Team;
-            // --- END NEW LOGIC ---
-
 
             batch.update(matchRef, {
                 teamBRef: payload.challengerTeamId,
+                teamBPlayers: [], // Clear team B players as new ones will be invited
                 status: "Scheduled",
-                allowChallenges: false, // Turn off challenges once accepted
+                allowChallenges: false, 
             });
             
             const responseNotification: Omit<Notification, 'id'> = {
@@ -99,7 +91,6 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
             };
             batch.set(doc(collection(db, "notifications")), responseNotification);
 
-            // --- NEW LOGIC: Invite all players from the challenging team ---
             if (challengerTeam.playerIds && challengerTeam.playerIds.length > 0) {
                  for (const playerId of challengerTeam.playerIds) {
                     const invitationRef = doc(collection(db, "matchInvitations"));
@@ -122,7 +113,6 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                     });
                 }
             }
-            // --- END NEW LOGIC ---
 
         } else {
              const responseNotification: Omit<Notification, 'id'> = {
@@ -155,7 +145,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
     }
     
     if (challenges.length === 0) {
-        return null; // Don't show the card if there are no challenges
+        return null;
     }
 
     return (
@@ -192,3 +182,5 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         </Card>
     );
 }
+
+    
