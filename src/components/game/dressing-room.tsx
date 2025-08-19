@@ -209,10 +209,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
       updateData.teamADetails = {
         tactic: tacticA,
         formation: formationA,
-        captainId: captainA,
-        penaltyTakerId: penaltyTakerA,
-        cornerTakerId: cornerTakerA,
-        freeKickTakerId: freeKickTakerA
+        captainId: captainA || null,
+        penaltyTakerId: penaltyTakerA || null,
+        cornerTakerId: cornerTakerA || null,
+        freeKickTakerId: freeKickTakerA || null
       };
       if (isPracticeMatch) updateData.teamAPlayers = Object.values(formationA).filter((id): id is string => !!id);
     }
@@ -220,10 +220,10 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, currentUs
       updateData.teamBDetails = { 
           tactic: tacticB, 
           formation: formationB,
-          captainId: captainB,
-          penaltyTakerId: penaltyTakerB,
-          cornerTakerId: cornerTakerB,
-          freeKickTakerId: freeKickTakerB
+          captainId: captainB || null,
+          penaltyTakerId: penaltyTakerB || null,
+          cornerTakerId: cornerTakerB || null,
+          freeKickTakerId: freeKickTakerB || null
       };
       if (isPracticeMatch) updateData.teamBPlayers = Object.values(formationB).filter((id): id is string => !!id);
     }
