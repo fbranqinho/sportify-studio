@@ -62,96 +62,96 @@ export function usePayments(user: AuthUser | null) {
         setLoading(false);
         return;
     }
-    
-    // Explicitly check for user before proceeding to fix the error.
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (!userDoc.exists()) {
-        setLoading(false);
-        return;
-    }
-    const userData = userDoc.data() as User;
-
-
     setLoading(true);
 
-    let initialQuery;
-
-    if (userData.role === 'PLAYER') {
-        initialQuery = query(collection(db, "payments"), where("playerRef", "==", user.uid));
-    } else if (userData.role === 'MANAGER') {
-        const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.uid));
-        const teamsSnap = await getDocs(teamsQuery);
-        const teamIds = teamsSnap.docs.map(doc => doc.id);
-        
-        if (teamIds.length > 0) {
-            initialQuery = query(collection(db, "payments"), where("teamRef", "in", teamIds));
-        } else {
-             setAllPayments([]);
-             setLoading(false);
-             return;
-        }
-    } else if (userData.role === 'OWNER') {
-        const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.uid));
-        const ownerProfileSnap = await getDocs(ownerProfileQuery);
-        if(!ownerProfileSnap.empty) {
-            const ownerProfileId = ownerProfileSnap.docs[0].id;
-            initialQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
-        } else {
-            setAllPayments([]);
+    try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) {
             setLoading(false);
             return;
         }
-    } else {
-        setLoading(false);
-        return;
-    }
+        const userData = userDoc.data() as User;
 
-    const unsubscribe = onSnapshot(initialQuery, async (snapshot) => {
-        const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-        setAllPayments(paymentsData);
 
-        const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
-        const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean)), ...new Set(paymentsData.map(p => p.managerRef).filter(Boolean))];
+        let initialQuery;
 
-        const reservationsMap = new Map<string, Reservation>();
-        if (reservationIds.length > 0) {
-            const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
-            const reservationsSnap = await getDocs(reservationsQuery);
-            reservationsSnap.forEach(doc => {
-                reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
-            });
-            setReservations(reservationsMap);
-
-            if (userData.role === 'MANAGER') {
-               const updated = await runConsistencyCheck(reservationsMap);
-               if (updated) return;
+        if (userData.role === 'PLAYER') {
+            initialQuery = query(collection(db, "payments"), where("playerRef", "==", user.uid));
+        } else if (userData.role === 'MANAGER') {
+            const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.uid));
+            const teamsSnap = await getDocs(teamsQuery);
+            const teamIds = teamsSnap.docs.map(doc => doc.id);
+            
+            if (teamIds.length > 0) {
+                initialQuery = query(collection(db, "payments"), where("teamRef", "in", teamIds));
+            } else {
+                 setAllPayments([]);
+                 setLoading(false);
+                 return;
             }
+        } else if (userData.role === 'OWNER') {
+            const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.uid));
+            const ownerProfileSnap = await getDocs(ownerProfileQuery);
+            if(!ownerProfileSnap.empty) {
+                const ownerProfileId = ownerProfileSnap.docs[0].id;
+                initialQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
+            } else {
+                setAllPayments([]);
+                setLoading(false);
+                return;
+            }
+        } else {
+            setLoading(false);
+            return;
         }
-        
-        if (playerIds.length > 0) {
-            const usersQuery = query(collection(db, 'users'), where('id', 'in', playerIds.filter(Boolean)));
-            const usersSnap = await getDocs(usersQuery);
-            const usersMap = new Map<string, User>();
-            usersSnap.forEach(doc => {
-                usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
-            });
-            setPlayerUsers(usersMap);
-        }
-        
-        setLoading(false);
-    }, (error) => {
-        console.error("Error fetching payments:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not fetch payments." });
-        setLoading(false);
-    });
 
-    return () => unsubscribe();
+        const unsubscribe = onSnapshot(initialQuery, async (snapshot) => {
+            const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+            setAllPayments(paymentsData);
+
+            const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
+            const playerIds = [...new Set(paymentsData.map(p => p.playerRef).filter(Boolean)), ...new Set(paymentsData.map(p => p.managerRef).filter(Boolean))];
+
+            const reservationsMap = new Map<string, Reservation>();
+            if (reservationIds.length > 0) {
+                const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
+                const reservationsSnap = await getDocs(reservationsQuery);
+                reservationsSnap.forEach(doc => {
+                    reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
+                });
+                setReservations(reservationsMap);
+
+                if (userData.role === 'MANAGER') {
+                   const updated = await runConsistencyCheck(reservationsMap);
+                   if (updated) return;
+                }
+            }
+            
+            if (playerIds.length > 0) {
+                const usersQuery = query(collection(db, 'users'), where('id', 'in', playerIds.filter(Boolean)));
+                const usersSnap = await getDocs(usersQuery);
+                const usersMap = new Map<string, User>();
+                usersSnap.forEach(doc => {
+                    usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+                });
+                setPlayerUsers(usersMap);
+            }
+            
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching payments:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch payments." });
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    } catch (error) {
+        console.error("Error in fetchData:", error);
+        toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred while fetching data." });
+        setLoading(false);
+    }
   }, [user, toast, runConsistencyCheck]);
+
 
   React.useEffect(() => {
     fetchData();
