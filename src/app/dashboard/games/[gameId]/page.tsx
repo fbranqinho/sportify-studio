@@ -159,7 +159,7 @@ export default function GameDetailsPage() {
                 status: "InProgress",
                 startTime: serverTimestamp(),
             });
-            handleMatchUpdate({ status: "InProgress" });
+            handleMatchUpdate({ status: "InProgress", startTime: new Date() as any });
             toast({ title: "Game Started!", description: "The game is now live. Good luck!" });
         } catch (error) {
             console.error("Error starting game: ", error);

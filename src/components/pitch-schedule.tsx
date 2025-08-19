@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, arrayUnion, addDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, CheckCircle, Ban, BookMarked, UserPlus, Send, Tag, Info, ShieldPlus, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateReservationForm } from "./forms/create-reservation-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Label } from "./ui/label";
 import { getPlayerCapacity } from "@/lib/utils";
+import Link from "next/link";
 
 
 const timeSlots = Array.from({ length: 15 }, (_, i) => {
@@ -30,7 +31,7 @@ interface PitchScheduleProps {
 }
 
 interface SlotInfo {
-  status: 'Available' | 'Pending' | 'Booked' | 'OpenForPlayers' | 'OpenForTeam' | 'Past';
+  status: 'Available' | 'Pending' | 'Booked' | 'OpenForPlayers' | 'OpenForTeam' | 'Past' | 'Live';
   match?: Match;
   reservation?: Reservation;
   promotion?: Promo;
@@ -103,6 +104,10 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
         if (reservation && (reservation.status === 'Confirmed' || reservation.status === 'Scheduled')) {
             const match = matches.find(m => m.reservationRef === reservation.id);
             const isMyGame = reservation.actorId === user.id;
+
+            if (match?.status === 'InProgress') {
+                 return { status: 'Live', match, reservation, price: 0 };
+            }
 
             if (isMyGame) {
                 return { status: 'Booked', match, reservation, price: reservation.totalAmount };
@@ -311,6 +316,16 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
                                                         <ShieldPlus className="h-4 w-4 mb-1"/>
                                                         <span className="font-bold">Challenge</span>
                                                         <span className="text-xs">vs Team</span>
+                                                    </Button>
+                                                );
+                                                break;
+                                            case 'Live':
+                                                content = (
+                                                    <Button asChild variant="destructive" className="h-16 flex-col w-full rounded-none border-0 animate-pulse">
+                                                        <Link href={`/live-game/${slotInfo.match?.id}`}>
+                                                            <Eye className="h-4 w-4 mb-1" />
+                                                            <span className="font-bold">View Live</span>
+                                                        </Link>
                                                     </Button>
                                                 );
                                                 break;
