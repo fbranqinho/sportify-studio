@@ -25,8 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { PlayerPosition, DominantFoot } from "@/types";
 
@@ -38,7 +37,7 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   position: z.enum(positions),
   dominantFoot: z.enum(dominantFoots),
-  photo: z.any().optional(),
+  photoUrl: z.string().url({ message: "Please enter a valid URL." }).optional(),
 });
 
 interface PlayerProfileFormProps {
@@ -57,29 +56,21 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
       city: "",
       position: "Midfielder",
       dominantFoot: "right",
+      photoUrl: "",
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsUploading(true);
-    let photoUrl = "";
     
     try {
-        // Step 1: Upload photo if it exists
-        if (values.photo && values.photo.length > 0) {
-            const file = values.photo[0];
-            const storageRef = ref(storage, `profile-pictures/${userId}/${file.name}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            photoUrl = await getDownloadURL(snapshot.ref);
-        }
-
-        // Step 2: Create player profile document in Firestore
+        // Step 1: Create player profile document in Firestore
         await addDoc(collection(db, "playerProfiles"), {
             nickname: values.nickname.toLowerCase(),
             city: values.city,
             position: values.position,
             dominantFoot: values.dominantFoot,
-            photoUrl: photoUrl,
+            photoUrl: values.photoUrl,
             userRef: userId,
             createdAt: serverTimestamp() as Timestamp,
             recentForm: [],
@@ -95,7 +86,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
             suspended: false, availableToPlay: true, availableToJoinTeams: true,
         });
 
-        // Step 3: Update user document
+        // Step 2: Update user document
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, {
             profileCompleted: true,
@@ -201,15 +192,15 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                  <div className="md:col-span-2">
                     <FormField
                         control={form.control}
-                        name="photo"
+                        name="photoUrl"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Photo</FormLabel>
+                                <FormLabel>Photo URL</FormLabel>
                                 <FormControl>
-                                    <Input type="file" accept="image/*" {...form.register("photo")} />
+                                    <Input placeholder="https://example.com/photo.jpg" {...field} />
                                 </FormControl>
                                 <FormDescription>
-                                    Upload a profile picture from your device.
+                                    Paste a link to your profile picture.
                                 </FormDescription>
                                 <FormMessage />
                             </FormItem>
