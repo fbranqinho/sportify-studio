@@ -25,15 +25,16 @@ import { useToast } from "@/hooks/use-toast";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { ManagerProfile, User, ManagerFootballType } from "@/types";
+import type { ManagerProfile, User, ManagerFootballType, Tactic } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
+import { fut5Tactics, fut7Tactics, futsalTactics } from "@/lib/utils";
+
 
 const footballTypes: ManagerFootballType[] = ["fut7", "fut5", "futsal"];
-const tactics = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
 
 const formSchema = z.object({
   typeOfFootball: z.enum(footballTypes),
-  tactics: z.enum(tactics),
+  tactics: z.string().min(1, "You must select a tactic."),
 });
 
 interface EditManagerProfileFormProps {
@@ -49,9 +50,30 @@ export function EditManagerProfileForm({ managerProfile, user }: EditManagerProf
     resolver: zodResolver(formSchema),
     defaultValues: {
       typeOfFootball: managerProfile.typeOfFootball || "fut7",
-      tactics: managerProfile.tactics || "4-4-2",
+      tactics: managerProfile.tactics || fut7Tactics[0],
     },
   });
+
+  const selectedFootballType = form.watch("typeOfFootball");
+
+  const availableTactics = React.useMemo(() => {
+    switch (selectedFootballType) {
+      case "fut5":
+        return fut5Tactics;
+      case "futsal":
+        return futsalTactics;
+      case "fut7":
+      default:
+        return fut7Tactics;
+    }
+  }, [selectedFootballType]);
+
+  React.useEffect(() => {
+    if (!availableTactics.includes(form.getValues("tactics") as Tactic)) {
+      form.setValue("tactics", availableTactics[0]);
+    }
+  }, [selectedFootballType, availableTactics, form]);
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -116,16 +138,16 @@ export function EditManagerProfileForm({ managerProfile, user }: EditManagerProf
                         render={({ field }) => (
                         <FormItem>
                             <FormLabel>Tática Preferida</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                                 <SelectTrigger>
                                 <SelectValue placeholder="Select your preferred tactic" />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {tactics.map((tactic) => (
+                                {availableTactics.map((tactic) => (
                                 <SelectItem key={tactic} value={tactic} className="font-semibold">
-                                    {tactic}
+                                    {tactic.replace(/Fut\d{1,2}_|Futsal_/, '')}
                                 </SelectItem>
                                 ))}
                             </SelectContent>

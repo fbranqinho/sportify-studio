@@ -10,53 +10,57 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Match, Team, User, Formation, Tactic, PlayerProfile, Pitch } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, fut5Tactics, fut7Tactics, futsalTactics } from "@/lib/utils";
 import { Sparkles, Users } from "lucide-react";
 
 // --- TACTICS & POSITIONS ---
-
-const fut7Tactics: Tactic[] = ["Fut7_3-2-1", "Fut7_2-3-1", "Fut7_3-1-2", "Fut7_2-2-2"];
-const futsalTactics: Tactic[] = ["Futsal_1-2-1", "Futsal_2-2"];
-
 const formationPositionsByTactic: { [key in Tactic]: string[] } = {
     // Fut7
     "Fut7_3-2-1": ["GK", "CB1", "CB2", "CB3", "CM1", "CM2", "ST"],
     "Fut7_2-3-1": ["GK", "CB1", "CB2", "LM", "CM", "RM", "ST"],
     "Fut7_3-1-2": ["GK", "CB1", "CB2", "CB3", "CDM", "ST1", "ST2"],
     "Fut7_2-2-2": ["GK", "LB", "RB", "CM1", "CM2", "ST1", "ST2"],
+    // Fut5
+    "Fut5_2-1-1": ["GK", "DEF1", "DEF2", "MID", "FWD"],
+    "Fut5_1-2-1": ["GK", "DEF", "LW", "RW", "PIV"],
     // Futsal
     "Futsal_1-2-1": ["GK", "DEF", "LW", "RW", "PIV"], // Diamond
     "Futsal_2-2":   ["GK", "DEF1", "DEF2", "FWD1", "FWD2"], // Square
+    "Futsal_4-0":   ["GK", "P1", "P2", "P3", "P4"], // All-rounders
 };
 
-const positionStylesFut7: { [key: string]: string } = {
-  "A-GK": "top-[5%] left-1/2 -translate-x-1/2", "A-CB1": "top-[20%] left-1/4 -translate-x-1/2", "A-CB2": "top-[20%] left-1/2 -translate-x-1/2", "A-CB3": "top-[20%] left-3/4 -translate-x-1/2", "A-LB": "top-[20%] left-[15%]", "A-RB": "top-[20%] right-[15%]", "A-CM1": "top-[38%] left-1/4 -translate-x-1/2", "A-CM2": "top-[38%] left-3/4 -translate-x-1/2", "A-LM": "top-[35%] left-[15%]", "A-CM": "top-[35%] left-1/2 -translate-x-1/2", "A-RM": "top-[35%] right-[15%]", "A-CDM": "top-[30%] left-1/2 -translate-x-1/2", "A-ST": "top-[38%] left-1/2 -translate-x-1/2", "A-ST1": "top-[38%] left-1/4 -translate-x-1/2", "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
-  "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2", "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2", "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2", "B-CB3": "bottom-[20%] left-3/4 -translate-x-1/2", "B-LB": "bottom-[20%] left-[15%]", "B-RB": "bottom-[20%] right-[15%]", "B-CM1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-CM2": "bottom-[38%] left-3/4 -translate-x-1/2", "B-LM": "bottom-[35%] left-[15%]", "B-CM": "bottom-[35%] left-1/2 -translate-x-1/2", "B-RM": "bottom-[35%] right-[15%]", "B-CDM": "bottom-[30%] left-1/2 -translate-x-1/2", "B-ST": "bottom-[38%] left-1/2 -translate-x-1/2", "B-ST1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-ST2": "bottom-[38%] left-3/4 -translate-x-1/2",
-};
-
-const positionStylesFutsal: { [key: string]: string } = {
-  // Team A - Futsal
+const positionStyles: { [key: string]: string } = {
+  // Team A
   "A-GK": "top-[5%] left-1/2 -translate-x-1/2",
-  "A-DEF": "top-[25%] left-1/2 -translate-x-1/2", // Diamond
-  "A-LW": "top-[35%] left-[20%]", // Diamond
-  "A-RW": "top-[35%] right-[20%]", // Diamond
-  "A-PIV": "top-[45%] left-1/2 -translate-x-1/2", // Diamond
-  "A-DEF1": "top-[25%] left-[25%]", // Square
-  "A-DEF2": "top-[25%] right-[25%]", // Square
-  "A-FWD1": "top-[40%] left-[25%]", // Square
-  "A-FWD2": "top-[40%] right-[25%]", // Square
+  "A-CB1": "top-[20%] left-1/4 -translate-x-1/2", "A-CB2": "top-[20%] left-1/2 -translate-x-1/2", "A-CB3": "top-[20%] left-3/4 -translate-x-1/2",
+  "A-LB": "top-[20%] left-[15%]", "A-RB": "top-[20%] right-[15%]",
+  "A-CM1": "top-[38%] left-1/4 -translate-x-1/2", "A-CM2": "top-[38%] left-3/4 -translate-x-1/2",
+  "A-LM": "top-[35%] left-[15%]", "A-CM": "top-[35%] left-1/2 -translate-x-1/2", "A-RM": "top-[35%] right-[15%]",
+  "A-CDM": "top-[30%] left-1/2 -translate-x-1/2",
+  "A-ST": "top-[38%] left-1/2 -translate-x-1/2", "A-ST1": "top-[38%] left-1/4 -translate-x-1/2", "A-ST2": "top-[38%] left-3/4 -translate-x-1/2",
+  "A-DEF": "top-[25%] left-1/2 -translate-x-1/2", "A-DEF1": "top-[25%] left-[25%]", "A-DEF2": "top-[25%] right-[25%]",
+  "A-LW": "top-[35%] left-[20%]", "A-RW": "top-[35%] right-[20%]",
+  "A-MID": "top-[35%] left-1/2 -translate-x-1/2",
+  "A-FWD": "top-[45%] left-1/2 -translate-x-1/2", "A-FWD1": "top-[40%] left-[25%]", "A-FWD2": "top-[40%] right-[25%]",
+  "A-PIV": "top-[45%] left-1/2 -translate-x-1/2",
+  "A-P1": "top-[25%] left-[15%]", "A-P2": "top-[25%] right-[15%]", "A-P3": "top-[40%] left-[15%]", "A-P4": "top-[40%] right-[15%]",
 
-  // Team B - Futsal
+  // Team B
   "B-GK": "bottom-[5%] left-1/2 -translate-x-1/2",
-  "B-DEF": "bottom-[25%] left-1/2 -translate-x-1/2", // Diamond
-  "B-LW": "bottom-[35%] left-[20%]", // Diamond
-  "B-RW": "bottom-[35%] right-[20%]", // Diamond
-  "B-PIV": "bottom-[45%] left-1/2 -translate-x-1/2", // Diamond
-  "B-DEF1": "bottom-[25%] left-[25%]", // Square
-  "B-DEF2": "bottom-[25%] right-[25%]", // Square
-  "B-FWD1": "bottom-[40%] left-[25%]", // Square
-  "B-FWD2": "bottom-[40%] right-[25%]", // Square
+  "B-CB1": "bottom-[20%] left-1/4 -translate-x-1/2", "B-CB2": "bottom-[20%] left-1/2 -translate-x-1/2", "B-CB3": "bottom-[20%] left-3/4 -translate-x-1/2",
+  "B-LB": "bottom-[20%] left-[15%]", "B-RB": "bottom-[20%] right-[15%]",
+  "B-CM1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-CM2": "bottom-[38%] left-3/4 -translate-x-1/2",
+  "B-LM": "bottom-[35%] left-[15%]", "B-CM": "bottom-[35%] left-1/2 -translate-x-1/2", "B-RM": "bottom-[35%] right-[15%]",
+  "B-CDM": "bottom-[30%] left-1/2 -translate-x-1/2",
+  "B-ST": "bottom-[38%] left-1/2 -translate-x-1/2", "B-ST1": "bottom-[38%] left-1/4 -translate-x-1/2", "B-ST2": "bottom-[38%] left-3/4 -translate-x-1/2",
+  "B-DEF": "bottom-[25%] left-1/2 -translate-x-1/2", "B-DEF1": "bottom-[25%] left-[25%]", "B-DEF2": "bottom-[25%] right-[25%]",
+  "B-LW": "bottom-[35%] left-[20%]", "B-RW": "bottom-[35%] right-[20%]",
+  "B-MID": "bottom-[35%] left-1/2 -translate-x-1/2",
+  "B-FWD": "bottom-[45%] left-1/2 -translate-x-1/2", "B-FWD1": "bottom-[40%] left-[25%]", "B-FWD2": "bottom-[40%] right-[25%]",
+  "B-PIV": "bottom-[45%] left-1/2 -translate-x-1/2",
+  "B-P1": "bottom-[25%] left-[15%]", "B-P2": "bottom-[25%] right-[15%]", "B-P3": "bottom-[40%] left-[15%]", "B-P4": "bottom-[40%] right-[15%]",
 };
+
 
 // --- COMPONENT ---
 
@@ -88,10 +92,17 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
   
   const { toast } = useToast();
 
-  const isFutsal = pitch?.sport === 'futsal' || pitch?.sport === 'fut5';
-  const availableTactics = isFutsal ? futsalTactics : fut7Tactics;
-  const positionStyles = isFutsal ? positionStylesFutsal : positionStylesFut7;
-  const defaultTactic = isFutsal ? 'Futsal_1-2-1' : 'Fut7_3-2-1';
+  const getTacticsForSport = (sport: Pitch['sport'] | undefined) => {
+    switch (sport) {
+        case 'fut5': return fut5Tactics;
+        case 'futsal': return futsalTactics;
+        case 'fut7':
+        default: return fut7Tactics;
+    }
+  };
+
+  const availableTactics = getTacticsForSport(pitch?.sport);
+  const defaultTactic = availableTactics[0];
 
   const [tacticA, setTacticA] = React.useState<Tactic>(match.teamADetails?.tactic || defaultTactic);
   const [formationA, setFormationA] = React.useState<Formation>(match.teamADetails?.formation || {});
@@ -129,7 +140,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
       // Prefer players for their actual position
       if (pos === "GK") playerToAssign = playersToAssign.find(p => p.profile.position === "Goalkeeper" && !localTakenIds.has(p.id));
       else if (pos.includes("DEF") || pos.includes("CB") || pos.includes("LB") || pos.includes("RB")) playerToAssign = playersToAssign.find(p => p.profile.position === "Defender" && !localTakenIds.has(p.id));
-      else if (pos.includes("CM") || pos.includes("LM") || pos.includes("RM") || pos.includes("CDM")) playerToAssign = playersToAssign.find(p => p.profile.position === "Midfielder" && !localTakenIds.has(p.id));
+      else if (pos.includes("CM") || pos.includes("LM") || pos.includes("RM") || pos.includes("CDM") || pos.includes("MID")) playerToAssign = playersToAssign.find(p => p.profile.position === "Midfielder" && !localTakenIds.has(p.id));
       else if (pos.includes("ST") || pos.includes("FWD") || pos.includes("PIV") || pos.includes("LW") || pos.includes("RW")) playerToAssign = playersToAssign.find(p => p.profile.position === "Forward" && !localTakenIds.has(p.id));
       
       // Fallback to any available player
@@ -372,7 +383,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
                                 <h3 className="text-lg font-bold text-center">{teamA?.name || 'Vests A'}</h3>
                                 <Select value={tacticA} onValueChange={(v) => setTacticA(v as Tactic)} disabled={!(canManageTeamA || canManagePractice)}>
                                     <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d_/, '')}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d{1,2}_|Futsal_/, '')}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                              {(canManageTeamA || canManagePractice) && (
@@ -393,7 +404,7 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
                                 <h3 className="text-lg font-bold text-center">{teamB?.name || 'Vests B'}</h3>
                                 <Select value={tacticB} onValueChange={(v) => setTacticB(v as Tactic)} disabled={!(canManageTeamB || canManagePractice)}>
                                     <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
-                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d_/, '')}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{availableTactics.map(t => <SelectItem key={t} value={t}>{t.replace(/Fut\d{1,2}_|Futsal_/, '')}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                              {(canManageTeamB || canManagePractice) && (

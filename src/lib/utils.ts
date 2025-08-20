@@ -1,6 +1,7 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { PitchSport } from "@/types";
+import type { PitchSport, Tactic } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -47,3 +48,7 @@ export const getPlayerCapacity = (sport?: PitchSport): number => {
             return 0; // Should not happen
     }
 };
+
+export const fut7Tactics: Tactic[] = ["Fut7_3-2-1", "Fut7_2-3-1", "Fut7_3-1-2", "Fut7_2-2-2"];
+export const fut5Tactics: Tactic[] = ["Fut5_2-1-1", "Fut5_1-2-1"];
+export const futsalTactics: Tactic[] = ["Futsal_1-2-1", "Futsal_2-2", "Futsal_4-0"];
