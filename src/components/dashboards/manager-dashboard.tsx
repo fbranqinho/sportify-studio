@@ -29,7 +29,7 @@ export function ManagerDashboard({ data }: ManagerDashboardProps) {
   return (
      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {profile && user && (
-          <ManagerProfileCard user={user} profile={profile} className="lg:col-span-1" />
+          <ManagerProfileCard user={user} profile={profile} teams={teams} className="lg:col-span-1" />
       )}
 
       <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
