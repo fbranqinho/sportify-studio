@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { ManagerProfile, Team, User } from "@/types";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, differenceInYears } from "date-fns";
-import { Calendar, User as UserIcon, Trello, Medal, Shield } from "lucide-react";
+import { Calendar, User as UserIcon, Trello, Medal, Shield, Dribbble } from "lucide-react";
 
 interface ManagerProfileCardProps extends React.ComponentProps<typeof Card> {
     user: User;
@@ -45,10 +45,11 @@ export function ManagerProfileCard({ user, profile, teams, className, ...props }
             </CardHeader>
             <CardContent className="flex-grow flex flex-col justify-center space-y-4">
                 <DetailRow icon={UserIcon} label="Age" value={age} />
-                <DetailRow icon={Trello} label="Preferred Tactic" value={profile.tactics} />
-                <DetailRow icon={Shield} label="Teams Managed" value={teams.length} />
-                <DetailRow icon={Medal} label="Record (W-D-L)" value={record} />
-                <DetailRow icon={Calendar} label="Member Since" value={memberSince} />
+                <DetailRow icon={Dribbble} label="Modalidade Preferida" value={profile.typeOfFootball?.toUpperCase()} />
+                <DetailRow icon={Trello} label="Tática Preferida" value={profile.tactics} />
+                <DetailRow icon={Shield} label="Equipas Geridas" value={teams.length} />
+                <DetailRow icon={Medal} label="Record (V-E-D)" value={record} />
+                <DetailRow icon={Calendar} label="Membro Desde" value={memberSince} />
             </CardContent>
         </Card>
     )

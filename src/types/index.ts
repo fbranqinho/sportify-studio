@@ -89,11 +89,14 @@ export interface PlayerProfile {
   availableToJoinTeams: boolean;
 }
 
+export type ManagerFootballType = 'fut7' | 'fut5' | 'futsal';
+
 export interface ManagerProfile {
     id: string;
     userRef: string; // User ID
     name: string;
     teams: string[]; // Team IDs
+    typeOfFootball?: ManagerFootballType;
     tactics?: string;
     victories: number;
     defeats: number;

@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -24,12 +25,14 @@ import { useToast } from "@/hooks/use-toast";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { ManagerProfile, User } from "@/types";
+import type { ManagerProfile, User, ManagerFootballType } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
 
+const footballTypes: ManagerFootballType[] = ["fut7", "fut5", "futsal"];
 const tactics = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
 
 const formSchema = z.object({
+  typeOfFootball: z.enum(footballTypes),
   tactics: z.enum(tactics),
 });
 
@@ -45,6 +48,7 @@ export function EditManagerProfileForm({ managerProfile, user }: EditManagerProf
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      typeOfFootball: managerProfile.typeOfFootball || "fut7",
       tactics: managerProfile.tactics || "4-4-2",
     },
   });
@@ -53,6 +57,7 @@ export function EditManagerProfileForm({ managerProfile, user }: EditManagerProf
     try {
         const profileRef = doc(db, "managerProfiles", managerProfile.id);
         await updateDoc(profileRef, {
+            typeOfFootball: values.typeOfFootball,
             tactics: values.tactics,
         });
 
@@ -83,10 +88,34 @@ export function EditManagerProfileForm({ managerProfile, user }: EditManagerProf
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <FormField
                         control={form.control}
+                        name="typeOfFootball"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Modalidade Preferida</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Select your preferred football type" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {footballTypes.map((type) => (
+                                <SelectItem key={type} value={type} className="font-semibold">
+                                    {type.toUpperCase()}
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
                         name="tactics"
                         render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Preferred Tactic</FormLabel>
+                            <FormLabel>Tática Preferida</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                                 <SelectTrigger>
