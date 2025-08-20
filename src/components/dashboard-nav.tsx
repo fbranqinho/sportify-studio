@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import Link from "next/link";
@@ -67,15 +68,14 @@ export function DashboardNav({ role }: DashboardNavProps) {
   // A bit of a hack to rename the nav item dynamically without changing the array structure
   const findPitchItem = filteredNavItems.find(item => item.href === "/dashboard/games");
   if (findPitchItem) {
-      if (role === 'PLAYER' || role === 'MANAGER') {
-          findPitchItem.title = "Play Now";
+      if (role === 'PLAYER' || role === 'REFEREE') {
+          findPitchItem.title = "Find a Game";
+          findPitchItem.icon = Gamepad2;
+      }
+       if (role === 'MANAGER') {
+          findPitchItem.title = "Find a Pitch";
           findPitchItem.icon = Map;
       }
-  }
-  const myFieldsNavItem = navItems.find(item => item.title === "My Fields");
-  if (myFieldsNavItem) {
-      myFieldsNavItem.title = "My Pitches";
-      myFieldsNavItem.href = "/dashboard/pitches";
   }
 
 

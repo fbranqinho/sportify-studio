@@ -21,6 +21,7 @@ import { CreatePitchForm } from "@/components/forms/create-pitch-form";
 import { EditPitchForm } from "@/components/forms/edit-pitch-form";
 import { PlusCircle, MapPin, Users, Shield, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 
 export default function PitchesPage() {
   const { user } = useUser();
@@ -113,14 +114,14 @@ export default function PitchesPage() {
       ) : pitches.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {pitches.map((pitch) => (
-            <Card key={pitch.id}>
+            <Card key={pitch.id} className="flex flex-col">
               <CardHeader>
                 <CardTitle className="font-headline">{pitch.name}</CardTitle>
                 <CardDescription className="flex items-center gap-2 pt-1">
                   <MapPin className="h-4 w-4" /> {pitch.address}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
+              <CardContent className="space-y-2 text-sm flex-grow">
                  <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary" />
                     <span>Sport: <span className="font-semibold text-primary">{pitch.sport.toUpperCase()}</span></span>
@@ -134,7 +135,12 @@ export default function PitchesPage() {
                     <span>Base Price: <span className="font-semibold">{pitch.basePrice}€ / hour</span></span>
                  </div>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="flex flex-col gap-2 items-stretch">
+                 <Button variant="default" className="w-full" asChild>
+                    <Link href={`/dashboard/pitches/${pitch.id}`}>
+                        View Schedule & Book
+                    </Link>
+                 </Button>
                  <Button variant="outline" className="w-full" onClick={() => setEditingPitch(pitch)}>Edit Details</Button>
               </CardFooter>
             </Card>
