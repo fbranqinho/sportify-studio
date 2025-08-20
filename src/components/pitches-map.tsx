@@ -41,11 +41,27 @@ export function PitchesMap({
 
   const mapRef = React.useRef<google.maps.Map | null>(null);
 
-  React.useEffect(() => {
-    if (mapRef.current && userLocation) {
-        mapRef.current.panTo(userLocation);
+  const onLoad = React.useCallback(function callback(map: google.maps.Map) {
+    mapRef.current = map;
+    if (pitches.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      pitches.forEach(pitch => {
+        if(pitch.coords) bounds.extend(pitch.coords);
+      });
+      if (userLocation) {
+        bounds.extend(userLocation);
+      }
+      map.fitBounds(bounds);
+
+      // If there's only one pitch, fitting bounds might zoom in too much.
+      if (pitches.length === 1 && userLocation) {
+         const listener = window.google.maps.event.addListener(map, 'idle', () => { 
+            if (map.getZoom()! > 14) map.setZoom(14); 
+            window.google.maps.event.removeListener(listener); 
+        });
+      }
     }
-  }, [userLocation]);
+  }, [pitches, userLocation]);
 
 
   if (!isLoaded) {
@@ -58,9 +74,8 @@ export function PitchesMap({
     <GoogleMap
       mapContainerStyle={containerStyle}
       center={center}
-      zoom={13}
       options={mapOptions}
-      onLoad={(map) => {mapRef.current = map}}
+      onLoad={onLoad}
     >
       {/* User Location Marker */}
       {userLocation && (
