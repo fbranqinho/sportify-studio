@@ -120,8 +120,6 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
     }
   }
 
-  const photoRef = form.register("photo");
-
   return (
      <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -206,14 +204,14 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                         name="photo"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Photo</FormLabel>
-                            <FormControl>
-                                <Input type="file" accept="image/*" {...photoRef} />
-                            </FormControl>
-                            <FormDescription>
-                                Upload a profile picture from your device.
-                            </FormDescription>
-                            <FormMessage />
+                                <FormLabel>Photo</FormLabel>
+                                <FormControl>
+                                    <Input type="file" accept="image/*" {...form.register("photo")} />
+                                </FormControl>
+                                <FormDescription>
+                                    Upload a profile picture from your device.
+                                </FormDescription>
+                                <FormMessage />
                             </FormItem>
                         )}
                     />
