@@ -38,7 +38,7 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   position: z.enum(positions),
   dominantFoot: z.enum(dominantFoots),
-  photo: z.instanceof(FileList).optional(),
+  photo: z.any().optional(),
 });
 
 interface PlayerProfileFormProps {
@@ -186,7 +186,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder="Select your dominant foot" />
-                            </SelectTrigger>
+                            </Trigger>
                         </FormControl>
                         <SelectContent>
                             {dominantFoots.map((f) => (
@@ -224,5 +224,5 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
             </Button>
         </form>
     </Form>
-  )
+  );
 }
