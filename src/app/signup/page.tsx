@@ -46,7 +46,16 @@ const formSchema = z.object({
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   role: z.enum(roles),
   mobile: z.string().optional(),
-  birthDate: z.string().optional(),
+  birthDate: z.string().refine((val) => val, { message: "Date of birth is required." }).refine((val) => {
+    const today = new Date();
+    const birthDate = new Date(val);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 18;
+  }, { message: "You must be at least 18 years old to register." }),
 });
 
 export default function SignupPage() {
