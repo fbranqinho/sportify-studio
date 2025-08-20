@@ -38,7 +38,7 @@ const dominantFoots: DominantFoot[] = ["left", "right", "both"];
 const experiences: PlayerExperience[] = ["Amateur", "Ex-Federated", "Federated"];
 
 const formSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
+  nickname: z.string().min(2, { message: "Nickname must be at least 2 characters." }),
   city: z.string().min(2, { message: "City is required." }),
   photo: z.any().optional(),
   position: z.enum(positions),
@@ -63,7 +63,7 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: user.name || "",
+      nickname: user.name || "",
       city: playerProfile.city || "",
       position: playerProfile.position || "Midfielder",
       dominantFoot: playerProfile.dominantFoot || "right",
@@ -92,7 +92,7 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
 
         // Update player profile
         batch.update(profileRef, {
-            nickname: values.name.toLowerCase(), // Keep nickname for any legacy needs
+            nickname: values.nickname.toLowerCase(),
             city: values.city,
             photoUrl: photoUrl || null,
             position: values.position,
@@ -106,8 +106,8 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
 
         // Update user document
         batch.update(userRef, {
-            name: values.name,
-            name_lowercase: values.name.toLowerCase(),
+            name: values.nickname,
+            name_lowercase: values.nickname.toLowerCase(),
         });
         
         await batch.commit();
@@ -161,10 +161,10 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField
                             control={form.control}
-                            name="name"
+                            name="nickname"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Nome</FormLabel>
+                                <FormLabel>Nickname</FormLabel>
                                 <FormControl>
                                     <Input placeholder="e.g. Cristiano Ronaldo" {...field} />
                                 </FormControl>
@@ -309,5 +309,3 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
     </Card>
   );
 }
-
-    

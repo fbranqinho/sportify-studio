@@ -28,6 +28,7 @@ const DetailRow = ({ icon: Icon, label, value }: { icon: React.ElementType, labe
 export function PlayerProfileCard({ user, profile, className, ...props }: PlayerProfileCardProps) {
     const age = user.birthDate ? differenceInYears(new Date(), new Date(user.birthDate)) : "N/A";
     const memberSince = profile.createdAt ? formatDistanceToNow(new Date(profile.createdAt.seconds * 1000), { addSuffix: true }) : "recently";
+    const displayName = profile.nickname.charAt(0).toUpperCase() + profile.nickname.slice(1);
 
     return (
         <Card className={cn("flex flex-col", className)} {...props}>
@@ -36,7 +37,8 @@ export function PlayerProfileCard({ user, profile, className, ...props }: Player
                     <AvatarImage src={profile.photoUrl || "https://placehold.co/128x128.png"} alt={user.name} data-ai-hint="male profile"/>
                     <AvatarFallback className="text-3xl">{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
-                <CardTitle className="font-headline text-2xl">{user.name}</CardTitle>
+                <CardTitle className="font-headline text-2xl">{displayName}</CardTitle>
+                <CardDescription>@{profile.nickname}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col justify-center space-y-6">
                 <DetailRow icon={UserIcon} label="Age" value={age} />
@@ -46,5 +48,3 @@ export function PlayerProfileCard({ user, profile, className, ...props }: Player
         </Card>
     )
 }
-
-    
