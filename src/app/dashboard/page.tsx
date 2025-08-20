@@ -4,7 +4,7 @@
 import * as React from "react";
 import { collection, query, where, getDocs, Timestamp, limit, orderBy, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile, Reservation } from "@/types";
+import type { UserRole, Match, Team, Pitch, Promo, PlayerProfile, Reservation, ManagerProfile } from "@/types";
 import { PlayerDashboard } from "@/components/dashboards/player-dashboard";
 import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
@@ -98,7 +98,11 @@ export default function DashboardPage() {
                 }
                 case "MANAGER": {
                     const teamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
-                    const teamsSnap = await getDocs(teamsQuery);
+                    const managerProfileQuery = query(collection(db, "managerProfiles"), where("userRef", "==", user.id), limit(1));
+                    
+                    const [teamsSnap, profileSnap] = await Promise.all([getDocs(teamsQuery), getDocs(managerProfileQuery)]);
+
+                    const profile = profileSnap.empty ? null : {id: profileSnap.docs[0].id, ...profileSnap.docs[0].data()} as ManagerProfile;
                     const teams = teamsSnap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Team);
                     const teamIds = teams.map(t => t.id);
 
@@ -165,7 +169,7 @@ export default function DashboardPage() {
                         }
                     }
 
-                    setDashboardData({ teams, upcomingMatches, unavailablePlayers, pendingPayments });
+                    setDashboardData({ user, profile, teams, upcomingMatches, unavailablePlayers, pendingPayments });
                     break;
                 }
                  case "OWNER": {
