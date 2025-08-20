@@ -188,8 +188,8 @@ export default function DashboardPage() {
 
                     const [pitchesSnap, reservationsSnap, promosSnap] = await Promise.all([
                         getDocs(pitchesQuery),
-                        getDocs(reservationsSnap),
-                        getDocs(promosSnap),
+                        getDocs(reservationsQuery),
+                        getDocs(promosQuery),
                     ]);
 
                     const todayStart = new Date();
