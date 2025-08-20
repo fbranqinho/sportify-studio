@@ -111,20 +111,6 @@ export function PlayerGamesView() {
   return (
     <div className="h-[calc(100vh-10rem)] grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-1 flex flex-col gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Find a Game</CardTitle>
-            <CardDescription>Search for open games that need more players.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input 
-              placeholder="Search by field, city, sport, or team..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-        
         <div className="flex flex-col flex-grow min-h-0">
           <h2 className="text-xl font-bold font-headline px-1 pb-2">Open Games ({filteredMatches.length})</h2>
           <ScrollArea className="flex-grow">
