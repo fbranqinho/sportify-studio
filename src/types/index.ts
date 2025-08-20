@@ -21,6 +21,7 @@ export interface User {
 
 export type DominantFoot = "left" | "right" | "both";
 export type PlayerPosition = "Goalkeeper" | "Defender" | "Midfielder" | "Forward";
+export type PlayerExperience = "Amateur" | "Federated" | "Ex-Federated";
 
 export interface PlayerProfile {
   id: string;
@@ -32,6 +33,9 @@ export interface PlayerProfile {
   photoUrl?: string;
   recentForm: ("W" | "D" | "L")[];
   createdAt?: Timestamp;
+  experience?: PlayerExperience;
+  height?: number; // in cm
+  weight?: number; // in kg
 
   // Attributes
   finishing: number;
