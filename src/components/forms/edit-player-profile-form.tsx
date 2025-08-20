@@ -164,7 +164,7 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Name</FormLabel>
+                                <FormLabel>Nome</FormLabel>
                                 <FormControl>
                                     <Input placeholder="e.g. Cristiano Ronaldo" {...field} />
                                 </FormControl>
@@ -309,3 +309,5 @@ export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfile
     </Card>
   );
 }
+
+    

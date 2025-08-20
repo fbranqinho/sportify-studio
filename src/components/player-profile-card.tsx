@@ -37,7 +37,6 @@ export function PlayerProfileCard({ user, profile, className, ...props }: Player
                     <AvatarFallback className="text-3xl">{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <CardTitle className="font-headline text-2xl">{user.name}</CardTitle>
-                <CardDescription>@{profile.nickname}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow flex flex-col justify-center space-y-6">
                 <DetailRow icon={UserIcon} label="Age" value={age} />
@@ -47,3 +46,5 @@ export function PlayerProfileCard({ user, profile, className, ...props }: Player
         </Card>
     )
 }
+
+    
