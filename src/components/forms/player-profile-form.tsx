@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -35,6 +36,7 @@ const formSchema = z.object({
   city: z.string().min(2, { message: "City is required." }),
   position: z.enum(positions),
   dominantFoot: z.enum(dominantFoots),
+  photoUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
 });
 
 interface PlayerProfileFormProps {
@@ -52,6 +54,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
       city: "",
       position: "Midfielder",
       dominantFoot: "right",
+      photoUrl: "",
     },
   });
 
@@ -102,82 +105,102 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
 
   return (
      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-            control={form.control}
-            name="nickname"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel>Nickname</FormLabel>
-                <FormControl>
-                    <Input placeholder="e.g. The Rocket" {...field} />
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
-            <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel>City</FormLabel>
-                <FormControl>
-                    <Input placeholder="e.g. Lisbon" {...field} />
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
-             <FormField
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
                 control={form.control}
-                name="position"
+                name="nickname"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>I play as a...</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your position" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {positions.map((p) => (
-                          <SelectItem key={p} value={p} className="font-semibold">
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormItem>
+                    <FormLabel>Nickname</FormLabel>
+                    <FormControl>
+                        <Input placeholder="e.g. The Rocket" {...field} />
+                    </FormControl>
                     <FormMessage />
-                  </FormItem>
+                    </FormItem>
                 )}
-              />
-              <FormField
+                />
+                <FormField
                 control={form.control}
-                name="dominantFoot"
+                name="city"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>My dominant foot is...</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your dominant foot" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {dominantFoots.map((f) => (
-                          <SelectItem key={f} value={f} className="font-semibold">
-                            {f.charAt(0).toUpperCase() + f.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                        <Input placeholder="e.g. Lisbon" {...field} />
+                    </FormControl>
                     <FormMessage />
-                  </FormItem>
+                    </FormItem>
                 )}
-              />
-            <Button type="submit" className="w-full font-semibold md:col-span-2" disabled={form.formState.isSubmitting}>
+                />
+                <FormField
+                    control={form.control}
+                    name="position"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>I play as a...</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="Select your position" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {positions.map((p) => (
+                            <SelectItem key={p} value={p} className="font-semibold">
+                                {p}
+                            </SelectItem>
+                            ))}
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="dominantFoot"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>My dominant foot is...</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="Select your dominant foot" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {dominantFoots.map((f) => (
+                            <SelectItem key={f} value={f} className="font-semibold">
+                                {f.charAt(0).toUpperCase() + f.slice(1)}
+                            </SelectItem>
+                            ))}
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                 <div className="md:col-span-2">
+                    <FormField
+                        control={form.control}
+                        name="photoUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Photo URL</FormLabel>
+                            <FormControl>
+                                <Input placeholder="https://example.com/your-photo.png" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                                You can paste a link to a profile picture from the web.
+                            </FormDescription>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                 </div>
+            </div>
+            <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Saving..." : "Save and Continue"}
             </Button>
         </form>

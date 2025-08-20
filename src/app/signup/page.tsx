@@ -45,6 +45,8 @@ const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   role: z.enum(roles),
+  mobile: z.string().optional(),
+  birthDate: z.string().optional(),
 });
 
 export default function SignupPage() {
@@ -59,6 +61,8 @@ export default function SignupPage() {
       email: "",
       password: "",
       role: "PLAYER",
+      mobile: "",
+      birthDate: "",
     },
   });
 
@@ -79,6 +83,8 @@ export default function SignupPage() {
         name_lowercase: values.name.toLowerCase(),
         email: values.email,
         role: values.role,
+        mobile: values.mobile,
+        birthDate: values.birthDate,
         profileCompleted: false,
         createdAt: serverTimestamp() as Timestamp,
       });
@@ -149,6 +155,32 @@ export default function SignupPage() {
                     <FormLabel>Password</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="birthDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Birth</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="mobile"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mobile Contact</FormLabel>
+                    <FormControl>
+                      <Input placeholder="+351 9..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
