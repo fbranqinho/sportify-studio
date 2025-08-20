@@ -26,7 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { doc, updateDoc, writeBatch } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { PlayerPosition, DominantFoot, PlayerExperience, PlayerProfile, User } from "@/types";
 import { Switch } from "../ui/switch";
@@ -58,8 +58,7 @@ interface EditPlayerProfileFormProps {
 export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfileFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const storage = getStorage();
-
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
