@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -80,6 +80,7 @@ export default function SignupPage() {
         email: values.email,
         role: values.role,
         profileCompleted: false,
+        createdAt: serverTimestamp() as Timestamp,
       });
 
       toast({

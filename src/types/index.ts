@@ -16,6 +16,7 @@ export interface User {
   birthDate?: string; // ISO 8601 string
   premiumPlan?: string;
   premiumPlanExpireDate?: string; // ISO 8601 string
+  createdAt: Timestamp;
 }
 
 export type DominantFoot = "left" | "right" | "both";
@@ -30,6 +31,7 @@ export interface PlayerProfile {
   dominantFoot: DominantFoot;
   photoUrl?: string;
   recentForm: ("W" | "D" | "L")[];
+  createdAt?: Timestamp;
 
   // Attributes
   finishing: number;

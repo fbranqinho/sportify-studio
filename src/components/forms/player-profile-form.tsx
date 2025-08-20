@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { PlayerPosition, DominantFoot } from "@/types";
@@ -62,6 +62,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
             ...values,
             nickname: values.nickname.toLowerCase(), // Save nickname in lowercase
             userRef: userId,
+            createdAt: serverTimestamp() as Timestamp,
             // Add default values for all other player stats
             recentForm: [],
             finishing: 50, shotPower: 50, longShots: 50, heading: 50, curve: 50,
@@ -183,5 +184,3 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
     </Form>
   )
 }
-
-    

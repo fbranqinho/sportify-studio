@@ -93,7 +93,7 @@ export default function DashboardPage() {
                     const paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id), where("status", "==", "Pending"));
                     const paymentsSnap = await getDocs(paymentsQuery);
 
-                    setDashboardData({ profile, upcomingGames, pendingPayments: paymentsSnap.size });
+                    setDashboardData({ user, profile, upcomingGames, pendingPayments: paymentsSnap.size });
                     break;
                 }
                 case "MANAGER": {
@@ -184,8 +184,8 @@ export default function DashboardPage() {
 
                     const [pitchesSnap, reservationsSnap, promosSnap] = await Promise.all([
                         getDocs(pitchesQuery),
-                        getDocs(reservationsQuery),
-                        getDocs(promosQuery),
+                        getDocs(reservationsSnap),
+                        getDocs(promosSnap),
                     ]);
 
                     const todayStart = new Date();
