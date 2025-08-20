@@ -33,7 +33,7 @@ export interface PlayerProfile {
   photoUrl?: string;
   recentForm: ("W" | "D" | "L")[];
   createdAt?: Timestamp;
-  experience?: PlayerExperience;
+  experience: PlayerExperience;
   height?: number; // in cm
   weight?: number; // in kg
 

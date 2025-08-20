@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,16 +26,24 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { PlayerPosition, DominantFoot } from "@/types";
+import type { PlayerPosition, DominantFoot, PlayerExperience } from "@/types";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
 
 const positions: PlayerPosition[] = ["Goalkeeper", "Defender", "Midfielder", "Forward"];
 const dominantFoots: DominantFoot[] = ["left", "right", "both"];
+const experiences: PlayerExperience[] = ["Amateur", "Ex-Federated", "Federated"];
 
 const formSchema = z.object({
   nickname: z.string().min(2, { message: "Nickname must be at least 2 characters." }),
   city: z.string().min(2, { message: "City is required." }),
   position: z.enum(positions),
   dominantFoot: z.enum(dominantFoots),
+  experience: z.enum(experiences),
+  height: z.coerce.number().optional(),
+  weight: z.coerce.number().optional(),
+  availableToPlay: z.boolean().default(true),
+  availableToJoinTeams: z.boolean().default(true),
 });
 
 interface PlayerProfileFormProps {
@@ -52,6 +61,9 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
       city: "",
       position: "Midfielder",
       dominantFoot: "right",
+      experience: "Amateur",
+      availableToPlay: true,
+      availableToJoinTeams: true,
     },
   });
 
@@ -62,6 +74,11 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
             city: values.city,
             position: values.position,
             dominantFoot: values.dominantFoot,
+            experience: values.experience,
+            height: values.height || null,
+            weight: values.weight || null,
+            availableToPlay: values.availableToPlay,
+            availableToJoinTeams: values.availableToJoinTeams,
             userRef: userId,
             createdAt: serverTimestamp() as Timestamp,
             recentForm: [],
@@ -73,10 +90,8 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
             ballControl: 50, firstTouch: 50, dribbling: 50, defending: 50,
             attacking: 50, pace: 50, overall: 50, yellowCards: 0, redCards: 0,
             injuries: 0, goals: 0, assists: 0, victories: 0, defeats: 0,
-            draws: 0, mvps: 0, playerOfYear: 0, injured: false,
-            suspended: false, 
-            availableToPlay: true, 
-            availableToJoinTeams: true,
+            draws: 0, mvps: 0, teamOfWeek: 0, playerOfYear: 0, injured: false,
+            suspended: false,
         });
 
         const userDocRef = doc(db, "users", userId);
@@ -167,8 +182,85 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                     </FormItem>
                     )}
                 />
+                 <FormField
+                    control={form.control}
+                    name="experience"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Experience</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select your experience level" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {experiences.map((e) => (<SelectItem key={e} value={e}>{e}</SelectItem>))}
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="height"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Height (cm)</FormLabel>
+                        <FormControl>
+                            <Input type="number" placeholder="e.g. 180" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="weight"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Weight (kg)</FormLabel>
+                        <FormControl>
+                            <Input type="number" placeholder="e.g. 75" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
             </div>
             
+            <div className="space-y-4">
+                 <FormField
+                    control={form.control}
+                    name="availableToPlay"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <FormLabel className="text-base">Available to Play</FormLabel>
+                                <FormDescription>Enable if you are available to be invited to games.</FormDescription>
+                            </div>
+                            <FormControl>
+                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="availableToJoinTeams"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <FormLabel className="text-base">Available to Join Teams</FormLabel>
+                                <FormDescription>Enable if you are looking to join a new team.</FormDescription>
+                            </div>
+                            <FormControl>
+                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                        </FormItem>
+                    )}
+                />
+            </div>
+
             <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Saving..." : "Save and Continue"}
             </Button>
