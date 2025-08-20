@@ -3,7 +3,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, ShieldCheck, DollarSign, Goal, Award, ArrowRight } from "lucide-react";
+import { Calendar, ShieldCheck, DollarSign, Goal, Award, ArrowRight, Square } from "lucide-react";
 import type { PlayerProfile, User } from "@/types";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
@@ -83,6 +83,45 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
                   <p className="text-xs text-muted-foreground mt-2">Last 5 matches</p>
               </CardContent>
           </Card>
+
+           <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Discipline</CardTitle>
+                  <Square className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                  <div className="flex items-center gap-4">
+                      <div>
+                        <div className="text-2xl font-bold">{profile?.yellowCards || 0}</div>
+                        <p className="text-xs text-muted-foreground">Yellows</p>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{profile?.redCards || 0}</div>
+                        <p className="text-xs text-muted-foreground">Reds</p>
+                      </div>
+                  </div>
+              </CardContent>
+          </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Awards</CardTitle>
+                  <Award className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                 <div className="flex items-center gap-4">
+                      <div>
+                        <div className="text-2xl font-bold">{profile?.mvps || 0}</div>
+                        <p className="text-xs text-muted-foreground">MVPs</p>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{profile?.teamOfWeek || 0}</div>
+                        <p className="text-xs text-muted-foreground">Team of Week</p>
+                      </div>
+                  </div>
+              </CardContent>
+          </Card>
+
       </div>
     </div>
   )
