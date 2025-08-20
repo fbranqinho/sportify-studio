@@ -25,11 +25,13 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { doc, updateDoc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { PlayerPosition, DominantFoot, PlayerExperience, PlayerProfile } from "@/types";
 import { Switch } from "../ui/switch";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 
 const positions: PlayerPosition[] = ["Goalkeeper", "Defender", "Midfielder", "Forward"];
 const dominantFoots: DominantFoot[] = ["left", "right", "both"];
@@ -38,6 +40,7 @@ const experiences: PlayerExperience[] = ["Amateur", "Ex-Federated", "Federated"]
 const formSchema = z.object({
   nickname: z.string().min(2, { message: "Nickname must be at least 2 characters." }),
   city: z.string().min(2, { message: "City is required." }),
+  photo: z.any().optional(),
   position: z.enum(positions),
   dominantFoot: z.enum(dominantFoots),
   experience: z.enum(experiences),
@@ -54,6 +57,7 @@ interface EditPlayerProfileFormProps {
 export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const storage = getStorage();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -73,9 +77,20 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
         const profileRef = doc(db, "playerProfiles", playerProfile.id);
+        let photoUrl = playerProfile.photoUrl;
+
+        // Handle file upload
+        if (values.photo && values.photo.length > 0) {
+            const file = values.photo[0] as File;
+            const storageRef = ref(storage, `profile-pictures/${playerProfile.userRef}/${file.name}`);
+            await uploadBytes(storageRef, file);
+            photoUrl = await getDownloadURL(storageRef);
+        }
+
         await updateDoc(profileRef, {
             nickname: values.nickname.toLowerCase(),
             city: values.city,
+            photoUrl,
             position: values.position,
             dominantFoot: values.dominantFoot,
             experience: values.experience,
@@ -111,6 +126,27 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
         <CardContent>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <div className="flex items-center gap-6">
+                        <Avatar className="h-24 w-24 border-2 border-muted">
+                            <AvatarImage src={playerProfile.photoUrl || "https://placehold.co/128x128.png"} alt={playerProfile.nickname} data-ai-hint="male profile"/>
+                            <AvatarFallback>{playerProfile.nickname?.[0] || 'P'}</AvatarFallback>
+                        </Avatar>
+                        <FormField
+                            control={form.control}
+                            name="photo"
+                            render={() => (
+                                <FormItem className="flex-1">
+                                    <FormLabel>Profile Photo</FormLabel>
+                                    <FormControl>
+                                        <Input type="file" {...form.register("photo")} />
+                                    </FormControl>
+                                    <FormDescription>Upload a new photo to update your profile.</FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField
                             control={form.control}
