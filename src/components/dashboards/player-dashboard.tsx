@@ -3,7 +3,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Calendar, ShieldCheck, DollarSign, Goal, Foot, Award } from "lucide-react";
+import { Calendar, ShieldCheck, DollarSign, Goal, Award, ArrowRight } from "lucide-react";
 import type { PlayerProfile } from "@/types";
 import Link from "next/link";
 import { Skeleton } from "../ui/skeleton";
@@ -23,20 +23,48 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Upcoming Games</CardTitle>
-          <Calendar className="h-4 w-4 text-muted-foreground" />
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="font-headline">Next Game</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{upcomingGames}</div>
-          <p className="text-xs text-muted-foreground">games on your schedule</p>
-          <Button size="sm" className="mt-2" asChild>
-            <Link href="/dashboard/my-games">View Games</Link>
+        <CardContent className="flex flex-col items-center justify-center text-center p-6">
+          <p className="text-6xl font-bold font-headline text-primary">{upcomingGames}</p>
+          <p className="text-muted-foreground mt-2">upcoming games on your schedule</p>
+          <Button size="lg" className="mt-6 font-bold" asChild>
+            <Link href="/dashboard/my-games">
+                View Games <ArrowRight className="ml-2"/>
+            </Link>
           </Button>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">Accolades</CardTitle>
+          <Award className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+           <div className="text-2xl font-bold">{profile?.mvps ?? 0} <span className="text-sm font-normal text-muted-foreground">MVPs</span></div>
+           <div className="text-2xl font-bold">{profile?.teamOfWeek ?? 0} <span className="text-sm font-normal text-muted-foreground">Team of the Week</span></div>
+        </CardContent>
+      </Card>
       
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+          <DollarSign className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+           <div className="text-2xl font-bold">{pendingPayments}</div>
+           <p className="text-xs text-muted-foreground">{pendingPayments === 1 ? 'payment required' : 'payments required'}</p>
+           <Button size="sm" variant={pendingPayments > 0 ? "destructive" : "secondary"} className="mt-2" asChild>
+            <Link href="/dashboard/payments">
+              {pendingPayments > 0 ? 'Pay Now' : 'View History'}
+            </Link>
+           </Button>
+        </CardContent>
+      </Card>
+
        <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Offensive Performance</CardTitle>
@@ -50,17 +78,7 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
             </Button>
         </CardContent>
       </Card>
-       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Accolades</CardTitle>
-          <Award className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-           <div className="text-2xl font-bold">{profile?.mvps ?? 0} <span className="text-sm font-normal">MVPs</span></div>
-           <p className="text-xs text-muted-foreground">{profile?.teamOfWeek ?? 0} Team of the Week</p>
-        </CardContent>
-      </Card>
-
+      
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium">Recent Form</CardTitle>
@@ -83,22 +101,7 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
            <p className="text-xs text-muted-foreground mt-2">Last 5 matches</p>
         </CardContent>
       </Card>
-      
-      <Card className="lg:col-span-4">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-           <div className="text-2xl font-bold">{pendingPayments}</div>
-           <p className="text-xs text-muted-foreground">{pendingPayments === 1 ? 'payment required' : 'payments required'}</p>
-           <Button size="sm" variant={pendingPayments > 0 ? "destructive" : "secondary"} className="mt-2" asChild>
-            <Link href="/dashboard/payments">
-              {pendingPayments > 0 ? 'Pay Now' : 'View History'}
-            </Link>
-           </Button>
-        </CardContent>
-      </Card>
+
     </div>
   )
 }
