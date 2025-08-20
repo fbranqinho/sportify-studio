@@ -46,14 +46,14 @@ export default function SettingsPage() {
     }, [user]);
 
     const renderSettings = () => {
-        if (loading) {
+        if (loading || !user) {
             return <Skeleton className="h-48 w-full" />;
         }
 
         switch (user?.role) {
             case 'PLAYER':
                 return playerProfile ? (
-                    <EditPlayerProfileForm playerProfile={playerProfile} />
+                    <EditPlayerProfileForm playerProfile={playerProfile} user={user} />
                 ) : (
                     <Card>
                         <CardHeader>

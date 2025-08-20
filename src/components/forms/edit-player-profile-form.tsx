@@ -24,11 +24,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, writeBatch } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { PlayerPosition, DominantFoot, PlayerExperience, PlayerProfile } from "@/types";
+import type { PlayerPosition, DominantFoot, PlayerExperience, PlayerProfile, User } from "@/types";
 import { Switch } from "../ui/switch";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
@@ -38,7 +38,7 @@ const dominantFoots: DominantFoot[] = ["left", "right", "both"];
 const experiences: PlayerExperience[] = ["Amateur", "Ex-Federated", "Federated"];
 
 const formSchema = z.object({
-  nickname: z.string().min(2, { message: "Nickname must be at least 2 characters." }),
+  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   city: z.string().min(2, { message: "City is required." }),
   photo: z.any().optional(),
   position: z.enum(positions),
@@ -52,9 +52,10 @@ const formSchema = z.object({
 
 interface EditPlayerProfileFormProps {
     playerProfile: PlayerProfile;
+    user: User;
 }
 
-export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormProps) {
+export function EditPlayerProfileForm({ playerProfile, user }: EditPlayerProfileFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const storage = getStorage();
@@ -62,7 +63,7 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      nickname: playerProfile.nickname || "",
+      name: user.name || "",
       city: playerProfile.city || "",
       position: playerProfile.position || "Midfielder",
       dominantFoot: playerProfile.dominantFoot || "right",
@@ -76,10 +77,12 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+        const batch = writeBatch(db);
         const profileRef = doc(db, "playerProfiles", playerProfile.id);
+        const userRef = doc(db, "users", user.id);
+
         let photoUrl = playerProfile.photoUrl;
 
-        // Handle file upload
         if (values.photo && values.photo.length > 0) {
             const file = values.photo[0] as File;
             const storageRef = ref(storage, `profile-pictures/${playerProfile.userRef}/${file.name}`);
@@ -87,8 +90,9 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
             photoUrl = await getDownloadURL(storageRef);
         }
 
-        await updateDoc(profileRef, {
-            nickname: values.nickname.toLowerCase(),
+        // Update player profile
+        batch.update(profileRef, {
+            nickname: values.name.toLowerCase(), // Keep nickname for any legacy needs
             city: values.city,
             photoUrl: photoUrl || null,
             position: values.position,
@@ -100,12 +104,19 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
             availableToJoinTeams: values.availableToJoinTeams,
         });
 
+        // Update user document
+        batch.update(userRef, {
+            name: values.name,
+            name_lowercase: values.name.toLowerCase(),
+        });
+        
+        await batch.commit();
+
         toast({
             title: "Profile Updated!",
             description: "Your profile details have been successfully saved.",
         });
         
-        // Optional: refresh server components if needed
         router.refresh();
 
     } catch (error: any) {
@@ -128,8 +139,8 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <div className="flex items-center gap-6">
                         <Avatar className="h-24 w-24 border-2 border-muted">
-                            <AvatarImage src={playerProfile.photoUrl || "https://placehold.co/128x128.png"} alt={playerProfile.nickname} data-ai-hint="male profile"/>
-                            <AvatarFallback>{playerProfile.nickname?.[0] || 'P'}</AvatarFallback>
+                            <AvatarImage src={playerProfile.photoUrl || "https://placehold.co/128x128.png"} alt={user.name} data-ai-hint="male profile"/>
+                            <AvatarFallback>{user.name?.[0] || 'P'}</AvatarFallback>
                         </Avatar>
                         <FormField
                             control={form.control}
@@ -150,12 +161,12 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField
                             control={form.control}
-                            name="nickname"
+                            name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Nickname</FormLabel>
+                                <FormLabel>Name</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="e.g. The Rocket" {...field} />
+                                    <Input placeholder="e.g. Cristiano Ronaldo" {...field} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>
