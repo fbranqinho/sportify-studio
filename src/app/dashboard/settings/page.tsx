@@ -5,44 +5,56 @@ import * as React from "react";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc } from "firebase/firestore";
-import type { PlayerProfile } from "@/types";
+import type { PlayerProfile, ManagerProfile, OwnerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditPlayerProfileForm } from "@/components/forms/edit-player-profile-form";
+import { EditManagerProfileForm } from "@/components/forms/edit-manager-profile-form";
+import { EditOwnerProfileForm } from "@/components/forms/edit-owner-profile-form";
 
 export default function SettingsPage() {
     const { user } = useUser();
-    const [playerProfile, setPlayerProfile] = React.useState<PlayerProfile | null>(null);
+    const [profileData, setProfileData] = React.useState<PlayerProfile | ManagerProfile | OwnerProfile | null>(null);
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
-        if (!user || user.role !== 'PLAYER') {
+        if (!user) {
             setLoading(false);
             return;
         }
 
-        const fetchPlayerProfile = async () => {
+        const fetchProfile = async () => {
             setLoading(true);
             try {
-                const q = query(collection(db, "playerProfiles"), where("userRef", "==", user.id));
+                let profileCollection = "";
+                switch (user.role) {
+                    case 'PLAYER': profileCollection = "playerProfiles"; break;
+                    case 'MANAGER': profileCollection = "managerProfiles"; break;
+                    case 'OWNER': profileCollection = "ownerProfiles"; break;
+                    default:
+                        setLoading(false);
+                        return;
+                }
+
+                const q = query(collection(db, profileCollection), where("userRef", "==", user.id));
                 const querySnapshot = await getDocs(q);
 
                 if (!querySnapshot.empty) {
-                    const docData = querySnapshot.docs[0].data() as PlayerProfile;
-                    setPlayerProfile({ id: querySnapshot.docs[0].id, ...docData });
+                    const docData = querySnapshot.docs[0].data();
+                    setProfileData({ id: querySnapshot.docs[0].id, ...docData });
                 } else {
-                    console.log(`SettingsPage: No player profile found for userId: ${user.id}`);
-                    setPlayerProfile(null);
+                    console.log(`SettingsPage: No profile found for userId: ${user.id} in ${profileCollection}`);
+                    setProfileData(null);
                 }
             } catch (error) {
-                console.error("SettingsPage: Error fetching player profile:", error);
-                setPlayerProfile(null);
+                console.error("SettingsPage: Error fetching profile:", error);
+                setProfileData(null);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPlayerProfile();
+        fetchProfile();
     }, [user]);
 
     const renderSettings = () => {
@@ -50,21 +62,26 @@ export default function SettingsPage() {
             return <Skeleton className="h-48 w-full" />;
         }
 
-        switch (user?.role) {
+        if (!profileData) {
+            return (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Settings</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>Your profile data could not be loaded. Please try again later.</p>
+                    </CardContent>
+                </Card>
+            );
+        }
+
+        switch (user.role) {
             case 'PLAYER':
-                return playerProfile ? (
-                    <EditPlayerProfileForm playerProfile={playerProfile} user={user} />
-                ) : (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Player Settings</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p>No player profile found to configure.</p>
-                        </CardContent>
-                    </Card>
-                );
-            // Add cases for other roles like MANAGER, OWNER, etc. in the future
+                return <EditPlayerProfileForm playerProfile={profileData as PlayerProfile} user={user} />;
+            case 'MANAGER':
+                return <EditManagerProfileForm managerProfile={profileData as ManagerProfile} user={user} />;
+            case 'OWNER':
+                return <EditOwnerProfileForm ownerProfile={profileData as OwnerProfile} user={user} />;
             default:
                 return (
                      <Card>

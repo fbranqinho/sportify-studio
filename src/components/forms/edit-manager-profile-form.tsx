@@ -1,0 +1,116 @@
+"use client";
+
+import * as React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
+import type { ManagerProfile, User } from "@/types";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
+
+const tactics = ["4-4-2", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"];
+
+const formSchema = z.object({
+  tactics: z.enum(tactics),
+});
+
+interface EditManagerProfileFormProps {
+    managerProfile: ManagerProfile;
+    user: User;
+}
+
+export function EditManagerProfileForm({ managerProfile, user }: EditManagerProfileFormProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      tactics: managerProfile.tactics || "4-4-2",
+    },
+  });
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+        const profileRef = doc(db, "managerProfiles", managerProfile.id);
+        await updateDoc(profileRef, {
+            tactics: values.tactics,
+        });
+
+        toast({
+            title: "Profile Updated!",
+            description: "Your manager profile details have been successfully saved.",
+        });
+        
+        router.refresh();
+
+    } catch (error: any) {
+         toast({
+            variant: "destructive",
+            title: "Something went wrong",
+            description: error.message,
+        });
+    }
+  }
+
+  return (
+    <Card>
+        <CardHeader>
+            <CardTitle>Edit Your Manager Profile</CardTitle>
+            <CardDescription>Update your preferred tactical approach.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <FormField
+                        control={form.control}
+                        name="tactics"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Preferred Tactic</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Select your preferred tactic" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {tactics.map((tactic) => (
+                                <SelectItem key={tactic} value={tactic} className="font-semibold">
+                                    {tactic}
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full font-semibold" disabled={form.formState.isSubmitting}>
+                        {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
+                    </Button>
+                </form>
+            </Form>
+        </CardContent>
+    </Card>
+  );
+}
