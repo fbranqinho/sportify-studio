@@ -90,7 +90,7 @@ export function EditPlayerProfileForm({ playerProfile }: EditPlayerProfileFormPr
         await updateDoc(profileRef, {
             nickname: values.nickname.toLowerCase(),
             city: values.city,
-            photoUrl,
+            photoUrl: photoUrl || null,
             position: values.position,
             dominantFoot: values.dominantFoot,
             experience: values.experience,
