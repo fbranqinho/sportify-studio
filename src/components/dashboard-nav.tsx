@@ -28,7 +28,7 @@ import {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
-  { title: "Play Now", href: "/dashboard/games", icon: Map, roles: ["PLAYER", "MANAGER", "REFEREE"] },
+  { title: "Play Now", href: "/dashboard/games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
@@ -64,20 +64,6 @@ export function DashboardNav({ role }: DashboardNavProps) {
   } else {
       filteredNavItems = navItems.filter(item => item.roles.includes(role));
   }
-
-  // A bit of a hack to rename the nav item dynamically without changing the array structure
-  const findPitchItem = filteredNavItems.find(item => item.href === "/dashboard/games");
-  if (findPitchItem) {
-      if (role === 'PLAYER' || role === 'REFEREE') {
-          findPitchItem.title = "Find a Game";
-          findPitchItem.icon = Gamepad2;
-      }
-       if (role === 'MANAGER') {
-          findPitchItem.title = "Find a Pitch";
-          findPitchItem.icon = Map;
-      }
-  }
-
 
   return (
     <nav className="p-2">
