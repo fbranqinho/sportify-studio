@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import type { Team, EnrichedPlayerSearchResult } from "@/types";
+import type { Team, EnrichedPlayerSearchResult, PlayerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, documentId } from "firebase/firestore";
@@ -12,30 +12,53 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, UserPlus, Users, Search, X } from "lucide-react";
+import { Trash2, UserPlus, Users, Search, X, Footprints, Square, Goal, Save } from "lucide-react";
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+
 
 interface EnrichedTeamPlayer {
     playerId: string;
     number: number | null;
-    profile?: { nickname?: string };
-    user?: { name?: string, email?: string };
+    profile: PlayerProfile;
+    user: { name?: string, email?: string };
 }
 
-export function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdated, onPlayerInvited }: { 
+export function ManagerTeamView({ team, players, onPlayerRemoved, onBulkNumberUpdate, onPlayerInvited }: { 
     team: Team, 
     players: EnrichedTeamPlayer[],
     onPlayerRemoved: (playerId: string) => void,
-    onNumberUpdated: (playerId: string, newNumber: number | null) => void,
+    onBulkNumberUpdate: (numberChanges: Map<string, number | null>) => Promise<void>,
     onPlayerInvited: (player: EnrichedPlayerSearchResult) => void,
 }) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isSearching, setIsSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<EnrichedPlayerSearchResult[]>([]);
   const { toast } = useToast();
+  
+  const [numberChanges, setNumberChanges] = React.useState<Map<string, number | null>>(new Map());
 
-  const assignedNumbers = React.useMemo(() => 
-    players.map(p => p.number).filter((n): n is number => n !== null),
-  [players]);
+  const handleLocalNumberChange = (playerId: string, newNumber: number | null) => {
+    setNumberChanges(prev => new Map(prev).set(playerId, newNumber));
+  };
+  
+  const handleSaveChanges = async () => {
+    await onBulkNumberUpdate(numberChanges);
+    setNumberChanges(new Map());
+  };
+
+  const isSaveDisabled = numberChanges.size === 0;
+
+  const assignedNumbers = React.useMemo(() => {
+    const currentNumbers = new Map<string, number | null>();
+    players.forEach(p => {
+        currentNumbers.set(p.playerId, p.number);
+    });
+    numberChanges.forEach((value, key) => {
+        currentNumbers.set(key, value);
+    });
+    return Array.from(currentNumbers.values()).filter((n): n is number => n !== null);
+  }, [players, numberChanges]);
+
 
   const getAvailableNumbers = (currentNumber: number | null) => {
     const available = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -100,11 +123,17 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdate
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline flex items-center justify-between">
-                <span>Manage Roster</span>
-                <div className="flex items-center gap-2 text-base font-medium text-muted-foreground">
-                    <Users className="h-5 w-5" />
-                    <span>{players.length} Players</span>
+                <div className="flex items-center gap-4">
+                    <span>Manage Roster</span>
+                    <div className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+                        <Users className="h-5 w-5" />
+                        <span>{players.length} Players</span>
+                    </div>
                 </div>
+                <Button onClick={handleSaveChanges} disabled={isSaveDisabled}>
+                    <Save className="mr-2 h-4 w-4"/>
+                    Save Numbers
+                </Button>
                 </CardTitle>
                 <CardDescription>Invite players, edit their numbers, and view their status.</CardDescription>
             </CardHeader>
@@ -112,34 +141,72 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdate
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Player Name</TableHead>
-                            <TableHead className="w-[120px]">Number</TableHead>
-                            <TableHead className="w-[180px]">Payment Status</TableHead>
-                            <TableHead className="text-right w-[100px]">Actions</TableHead>
+                            <TableHead>Player</TableHead>
+                            <TableHead className="w-[100px]">#</TableHead>
+                            <TableHead>Position</TableHead>
+                            <TableHead>Foot</TableHead>
+                            <TableHead>Form</TableHead>
+                            <TableHead>Games</TableHead>
+                            <TableHead>Goals</TableHead>
+                            <TableHead>Asst</TableHead>
+                            <TableHead>Cards</TableHead>
+                            <TableHead className="text-right w-[60px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {players.length > 0 ? players.map(({ playerId, number, profile, user }) => (
+                        {players.length > 0 ? players.map(({ playerId, number, profile, user }) => {
+                          const currentNumber = numberChanges.get(playerId) ?? number;
+                          const gamesPlayed = (profile.victories || 0) + (profile.defeats || 0) + (profile.draws || 0);
+                          return(
                             <TableRow key={playerId}>
                                 <TableCell className="font-medium">{profile?.nickname ? capitalize(profile.nickname) : (user?.name || "Unknown Player")}</TableCell>
                                 <TableCell>
                                     <Select
-                                        value={number?.toString() ?? "unassigned"}
-                                        onValueChange={(value) => onNumberUpdated(playerId, value === "unassigned" ? null : parseInt(value))}
+                                        value={currentNumber?.toString() ?? "unassigned"}
+                                        onValueChange={(value) => handleLocalNumberChange(playerId, value === "unassigned" ? null : parseInt(value))}
                                     >
-                                        <SelectTrigger className="h-8">
+                                        <SelectTrigger className="h-8 w-[60px]">
                                             <SelectValue placeholder="-" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="unassigned">-</SelectItem>
-                                            {getAvailableNumbers(number).map(n => (
+                                            {getAvailableNumbers(currentNumber).map(n => (
                                                 <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </TableCell>
+                                <TableCell>{profile.position}</TableCell>
                                 <TableCell>
-                                    <Badge variant="outline">Up to date</Badge>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Footprints className="h-5 w-5" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{capitalize(profile.dominantFoot)}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell>
+                                   <div className="flex gap-1">
+                                      {profile.recentForm?.slice(-5).map((f, i) => (
+                                          <Badge key={i} variant={f === 'W' ? 'default' : f === 'L' ? 'destructive' : 'secondary'}
+                                           className={cn(f === 'W' && 'bg-green-500 hover:bg-green-600')}>{f}</Badge>
+                                      ))}
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-center font-mono">{gamesPlayed}</TableCell>
+                                <TableCell className="text-center font-mono">{profile.goals || 0}</TableCell>
+                                <TableCell className="text-center font-mono">{profile.assists || 0}</TableCell>
+                                <TableCell>
+                                    <div className="flex gap-1 items-center">
+                                      <span className="font-mono">{profile.yellowCards || 0}</span>
+                                      <Square className="h-4 w-4 text-yellow-400 fill-current" />
+                                      <span className="font-mono">{profile.redCards || 0}</span>
+                                      <Square className="h-4 w-4 text-red-500 fill-current" />
+                                    </div>
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => onPlayerRemoved(playerId)}>
@@ -147,9 +214,10 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onNumberUpdate
                                     </Button>
                                 </TableCell>
                             </TableRow>
-                        )) : (
+                          )
+                        }) : (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
+                                <TableCell colSpan={10} className="h-24 text-center">
                                     No players on this team yet.
                                 </TableCell>
                             </TableRow>

@@ -12,8 +12,8 @@ import { useUser } from "./use-user";
 interface EnrichedTeamPlayer {
     playerId: string;
     number: number | null;
-    profile?: PlayerProfile;
-    user?: User;
+    profile: PlayerProfile;
+    user: User;
 }
 
 export function useTeamDetails() {
@@ -67,13 +67,16 @@ export function useTeamDetails() {
               const profile = playerProfilesMap.get(userId);
               const userInfo = usersMap.get(userId);
               const teamPlayerInfo = teamData.players.find(p => p.playerId === userId);
+              
+              if (!profile || !userInfo) return null;
+
               return {
                   playerId: userId,
                   number: teamPlayerInfo?.number ?? null,
                   profile: profile,
                   user: userInfo,
               };
-          }).filter((p): p is EnrichedTeamPlayer => !!p.user && !!p.profile)
+          }).filter((p): p is EnrichedTeamPlayer => !!p)
             .sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
           
           setPlayers(enrichedPlayers);
@@ -93,33 +96,31 @@ export function useTeamDetails() {
     fetchTeamData();
   }, [fetchTeamData]);
 
-  const handleUpdateNumber = async (playerId: string, newNumber: number | null) => {
-    if (!team) return;
-    const updatedPlayers = team.players.map(p => 
-      p.playerId === playerId ? { ...p, number: newNumber } : p
-    );
-
-    if (!updatedPlayers.some(p => p.playerId === playerId)) {
-        updatedPlayers.push({ playerId, number: newNumber });
-    }
+  const handleBulkUpdateNumbers = async (numberChanges: Map<string, number | null>) => {
+    if (!team || numberChanges.size === 0) return;
+    
+    const updatedPlayers = team.players.map(p => {
+        if(numberChanges.has(p.playerId)) {
+            return { ...p, number: numberChanges.get(p.playerId)! };
+        }
+        return p;
+    });
 
     try {
-      const teamDocRef = doc(db, "teams", teamId);
-      await updateDoc(teamDocRef, { players: updatedPlayers });
-      
-      setPlayers(current => {
-          const newPlayers = current.map(p => p.playerId === playerId ? { ...p, number: newNumber } : p);
-          return newPlayers.sort((a,b) => (a.number ?? 999) - (b.number ?? 999));
-      });
-      setTeam(prev => prev ? { ...prev, players: updatedPlayers } : null);
+        const teamDocRef = doc(db, "teams", teamId);
+        await updateDoc(teamDocRef, { players: updatedPlayers });
+        
+        toast({ title: "Success", description: "Player numbers updated successfully." });
+        
+        // Refetch data to ensure UI is consistent with backend, especially sorting
+        await fetchTeamData();
 
-      toast({ title: "Success", description: "Player number updated." });
     } catch (error) {
-      console.error("Error updating player number:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to update player number." });
-      fetchTeamData();
+        console.error("Error updating player numbers:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to update player numbers." });
     }
   };
+
 
   const handleRemovePlayer = async (playerIdToRemove: string) => {
      if (!team) return;
@@ -194,7 +195,7 @@ export function useTeamDetails() {
       team,
       players,
       loading,
-      handleUpdateNumber,
+      handleBulkUpdateNumbers,
       handleRemovePlayer,
       handleInvitePlayer
   }

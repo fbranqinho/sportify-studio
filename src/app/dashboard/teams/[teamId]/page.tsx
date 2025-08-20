@@ -18,7 +18,7 @@ export default function TeamDetailsPage() {
   const { user } = useUser();
   const {
       team, players, loading,
-      handleRemovePlayer, handleUpdateNumber, handleInvitePlayer
+      handleRemovePlayer, handleBulkUpdateNumbers, handleInvitePlayer
   } = useTeamDetails();
 
   if (loading) {
@@ -61,7 +61,7 @@ export default function TeamDetailsPage() {
             team={team} 
             players={players} 
             onPlayerRemoved={handleRemovePlayer} 
-            onNumberUpdated={handleUpdateNumber}
+            onBulkNumberUpdate={handleBulkUpdateNumbers}
             onPlayerInvited={handleInvitePlayer}
         />
       ) : (
