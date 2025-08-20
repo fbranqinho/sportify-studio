@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -32,7 +33,7 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
     const isPaid = reservation?.paymentStatus === 'Paid';
 
     const capacity = pitch ? getPlayerCapacity(pitch.sport) : 0;
-    const isFull = capacity > 0 && (match.teamAPlayers.length + match.teamBPlayers.length) >= capacity;
+    const isFull = capacity > 0 && (match.teamAPlayers.length + (match.teamBPlayers?.length || 0)) >= capacity;
 
     const handleToggleExternalPlayers = async (checked: boolean) => {
         const matchRef = doc(db, "matches", match.id);
@@ -187,5 +188,5 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                  )}
             </CardContent>
         </Card>
-    )
+    );
 }

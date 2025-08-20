@@ -5,207 +5,174 @@
 import * as React from "react";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query } from "firebase/firestore";
-import type { Pitch } from "@/types";
+import { collection, onSnapshot, query, where, documentId, getDocs } from "firebase/firestore";
+import type { Pitch, Match, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Users, Shield, CalendarPlus, Star } from "lucide-react";
+import { MapPin, Users, Shield, CalendarPlus, Star, Gamepad2 } from "lucide-react";
 import { PitchesMap } from "@/components/pitches-map";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { haversineDistance } from "@/lib/utils";
+import { haversineDistance, getPlayerCapacity } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
+import { format } from "date-fns";
+import { OpenGameCard } from "@/components/game/open-game-card";
 
-// It's important to read the environment variable here
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+interface EnrichedMatch extends Match {
+    pitch?: Pitch;
+    team?: Team;
+}
 
 export default function GamesPage() {
   const { user } = useUser();
-  const [pitches, setPitches] = React.useState<Pitch[]>([]);
+  const [openMatches, setOpenMatches] = React.useState<EnrichedMatch[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [userLocation, setUserLocation] = React.useState<{ lat: number; lng: number } | null>(null);
-  const [nearestPitchId, setNearestPitchId] = React.useState<string | null>(null);
-  const [hoveredPitchId, setHoveredPitchId] = React.useState<string | null>(null);
+  const [hoveredMatchId, setHoveredMatchId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // Get user location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error("Error getting user location:", error);
-           // Fallback location (e.g., center of Lisbon) if user denies permission
-          setUserLocation({ lat: 38.7223, lng: -9.1393 });
-        }
+        (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
+        () => setUserLocation({ lat: 38.7223, lng: -9.1393 }) // Lisbon fallback
       );
     } else {
-       // Fallback location if geolocation is not supported
-       setUserLocation({ lat: 38.7223, lng: -9.1393 });
+      setUserLocation({ lat: 38.7223, lng: -9.1393 });
     }
 
-    // Fetch pitches
-    const q = query(collection(db, "pitches"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const pitchesData: Pitch[] = [];
-      querySnapshot.forEach((doc) => {
-        pitchesData.push({ id: doc.id, ...doc.data() } as Pitch);
+    const q = query(
+      collection(db, "matches"),
+      where("status", "==", "Collecting players"),
+      where("allowExternalPlayers", "==", true)
+    );
+
+    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+      const matchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+      
+      const pitchIds = [...new Set(matchesData.map(m => m.pitchRef))];
+      const teamIds = [...new Set(matchesData.map(m => m.teamARef).filter(Boolean))];
+
+      const pitchesMap = new Map<string, Pitch>();
+      if (pitchIds.length > 0) {
+        const pitchesQuery = query(collection(db, "pitches"), where(documentId(), "in", pitchIds));
+        const pitchesSnap = await getDocs(pitchesQuery);
+        pitchesSnap.forEach(doc => pitchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Pitch));
+      }
+
+      const teamsMap = new Map<string, Team>();
+      if (teamIds.length > 0) {
+        const teamsQuery = query(collection(db, "teams"), where(documentId(), "in", teamIds));
+        const teamsSnap = await getDocs(teamsQuery);
+        teamsSnap.forEach(doc => teamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team));
+      }
+
+      const enrichedMatches = matchesData.map(match => ({
+          ...match,
+          pitch: pitchesMap.get(match.pitchRef),
+          team: match.teamARef ? teamsMap.get(match.teamARef) : undefined
+      })).filter(m => {
+          if (!m.pitch) return false;
+          const capacity = getPlayerCapacity(m.pitch.sport);
+          const currentPlayers = m.teamAPlayers.length + m.teamBPlayers.length;
+          return currentPlayers < capacity;
       });
-      setPitches(pitchesData);
+
+      setOpenMatches(enrichedMatches);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching pitches:", error);
+      console.error("Error fetching open matches:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
+
+  const filteredMatches = openMatches.filter(match => {
+    const term = searchTerm.toLowerCase();
+    return (
+        match.pitch?.name.toLowerCase().includes(term) ||
+        match.pitch?.city.toLowerCase().includes(term) ||
+        match.pitch?.sport.toLowerCase().includes(term) ||
+        match.team?.name.toLowerCase().includes(term)
+    )
+  });
   
-  React.useEffect(() => {
-    if (userLocation && pitches.length > 0) {
-      let closestPitchId: string | null = null;
-      let minDistance = Infinity;
+  const mapPitches = React.useMemo(() => {
+    return filteredMatches.map(m => m.pitch).filter((p): p is Pitch => !!p);
+  }, [filteredMatches]);
 
-      pitches.forEach(pitch => {
-        if (pitch.coords) {
-          const distance = haversineDistance(userLocation, pitch.coords);
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestPitchId = pitch.id;
-          }
-        }
-      });
-      setNearestPitchId(closestPitchId);
-    }
-  }, [userLocation, pitches]);
-
-
-  const filteredPitches = pitches.filter(pitch =>
-    pitch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pitch.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pitch.sport.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  
-  // Explicitly check if the API key is missing.
   if (!googleMapsApiKey) {
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-destructive">Configuration Error</CardTitle>
-                <CardDescription>
-                    The Google Maps API key is missing. Please add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to your environment variables.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <p>If you have already added the key, please restart the development server for the changes to take effect.</p>
-            </CardContent>
-        </Card>
-    )
+        <Card><CardHeader><CardTitle className="text-destructive">Configuration Error</CardTitle><CardDescription>The Google Maps API key is missing.</CardDescription></CardHeader></Card>
+    );
   }
 
   return (
     <div className="h-[calc(100vh-10rem)] grid grid-cols-1 lg:grid-cols-3 gap-6">
-    {/* Left Column: Search and List */}
-    <div className="lg:col-span-1 flex flex-col gap-6">
+      <div className="lg:col-span-1 flex flex-col gap-6">
         <Card>
-        <CardHeader>
+          <CardHeader>
             <CardTitle className="font-headline">Find a Game</CardTitle>
-            <CardDescription>Use the search below to filter the list and map.</CardDescription>
-        </CardHeader>
-        <CardContent>
+            <CardDescription>Search for open games that need more players.</CardDescription>
+          </CardHeader>
+          <CardContent>
             <Input 
-            placeholder="Search by field name, city, or sport..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by field, city, sport, or team..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
-        </CardContent>
+          </CardContent>
         </Card>
         
         <div className="flex flex-col flex-grow min-h-0">
-            <h2 className="text-xl font-bold font-headline px-1 pb-2">Results</h2>
-            <ScrollArea className="flex-grow">
-                {loading ? (
-                    <div className="space-y-4 pr-4">
-                        <Skeleton className="h-44" />
-                        <Skeleton className="h-44" />
-                        <Skeleton className="h-44" />
-                    </div>
-                ) : filteredPitches.length > 0 ? (
-                    <div className="space-y-4 pr-4">
-                        {filteredPitches.map((pitch) => (
-                            <Card 
-                                key={pitch.id} 
-                                className="flex flex-col cursor-pointer transition-all border-2 border-transparent hover:border-primary"
-                                onMouseEnter={() => setHoveredPitchId(pitch.id)}
-                                onMouseLeave={() => setHoveredPitchId(null)}
-                            >
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle className="font-headline text-lg">{pitch.name}</CardTitle>
-                                            <CardDescription className="flex items-center gap-2 pt-1">
-                                                <MapPin className="h-4 w-4" /> {pitch.address}
-                                            </CardDescription>
-                                        </div>
-                                        {pitch.id === nearestPitchId && (
-                                            <div className="flex items-center gap-1 text-xs font-bold text-green-600">
-                                                <Star className="h-4 w-4" /> Nearest
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="flex-grow space-y-2 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <Shield className="h-4 w-4 text-primary" />
-                                        <span>Sport: <span className="font-semibold text-primary">{pitch.sport.toUpperCase()}</span></span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4 text-primary" />
-                                        <span>Capacity: <span className="font-semibold">{pitch.capacity} people</span></span>
-                                    </div>
-                                </CardContent>
-                                <CardFooter>
-                                    <Button asChild className="w-full font-semibold">
-                                        <Link href={`/dashboard/pitches/${pitch.id}`}>
-                                            <CalendarPlus className="mr-2" /> View Schedule & Book
-                                        </Link>
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        ))}
-                    </div>
-                ) : (
-                    <Card className="flex flex-col items-center justify-center p-12 text-center h-full">
-                        <CardHeader>
-                            <CardTitle className="font-headline">No Fields Found</CardTitle>
-                            <CardDescription>No fields match your search criteria. Try a different search.</CardDescription>
-                        </CardHeader>
-                    </Card>
-                )}
-            </ScrollArea>
+          <h2 className="text-xl font-bold font-headline px-1 pb-2">Open Games ({filteredMatches.length})</h2>
+          <ScrollArea className="flex-grow">
+            {loading ? (
+              <div className="space-y-4 pr-4">
+                <Skeleton className="h-56" /><Skeleton className="h-56" />
+              </div>
+            ) : filteredMatches.length > 0 ? (
+              <div className="space-y-4 pr-4">
+                {filteredMatches.map((match) => (
+                  <OpenGameCard 
+                      key={match.id} 
+                      match={match} 
+                      user={user}
+                      onMouseEnter={() => setHoveredMatchId(match.id)}
+                      onMouseLeave={() => setHoveredMatchId(null)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Card className="flex flex-col items-center justify-center p-12 text-center h-full">
+                <CardHeader>
+                  <Gamepad2 className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <CardTitle className="font-headline mt-4">No Open Games Found</CardTitle>
+                  <CardDescription>There are no games looking for players right now. Check back later!</CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+          </ScrollArea>
         </div>
-    </div>
+      </div>
     
-    {/* Right Column: Map */}
-    <div className="lg:col-span-2 rounded-lg overflow-hidden border">
+      <div className="lg:col-span-2 rounded-lg overflow-hidden border">
         {loading ? (
-        <Skeleton className="w-full h-full" />
+          <Skeleton className="w-full h-full" />
         ) : (
-            <PitchesMap 
-                apiKey={googleMapsApiKey}
-                pitches={filteredPitches} 
-                userLocation={userLocation}
-                nearestPitchId={nearestPitchId}
-                hoveredPitchId={hoveredPitchId}
-            />
+          <PitchesMap 
+            apiKey={googleMapsApiKey}
+            pitches={mapPitches} 
+            userLocation={userLocation}
+            hoveredPitchId={hoveredMatchId ? (openMatches.find(m => m.id === hoveredMatchId)?.pitch?.id || null) : null}
+            nearestPitchId={null} // Nearest logic needs to be adapted for matches
+          />
         )}
-    </div>
+      </div>
     </div>
   );
 }

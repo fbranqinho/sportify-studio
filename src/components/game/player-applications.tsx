@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -156,5 +157,5 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
                 )}
             </CardContent>
         </Card>
-    )
+    );
 }
