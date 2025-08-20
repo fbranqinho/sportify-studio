@@ -62,6 +62,8 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
       position: "Midfielder",
       dominantFoot: "right",
       experience: "Amateur",
+      height: undefined,
+      weight: undefined,
       availableToPlay: true,
       availableToJoinTeams: true,
     },
@@ -207,7 +209,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                         <FormItem>
                         <FormLabel>Height (cm)</FormLabel>
                         <FormControl>
-                            <Input type="number" placeholder="e.g. 180" {...field} />
+                            <Input type="number" placeholder="e.g. 180" {...field} value={field.value ?? ""} />
                         </FormControl>
                         <FormMessage />
                         </FormItem>
@@ -220,7 +222,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
                         <FormItem>
                         <FormLabel>Weight (kg)</FormLabel>
                         <FormControl>
-                            <Input type="number" placeholder="e.g. 75" {...field} />
+                            <Input type="number" placeholder="e.g. 75" {...field} value={field.value ?? ""} />
                         </FormControl>
                         <FormMessage />
                         </FormItem>
