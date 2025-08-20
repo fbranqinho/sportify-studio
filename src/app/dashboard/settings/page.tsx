@@ -8,7 +8,7 @@ import { collection, query, where, getDocs, doc } from "firebase/firestore";
 import type { PlayerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlayerSettingsForm } from "@/components/forms/player-settings-form";
+import { EditPlayerProfileForm } from "@/components/forms/edit-player-profile-form";
 
 export default function SettingsPage() {
     const { user } = useUser();
@@ -53,7 +53,7 @@ export default function SettingsPage() {
         switch (user?.role) {
             case 'PLAYER':
                 return playerProfile ? (
-                    <PlayerSettingsForm playerProfile={playerProfile} />
+                    <EditPlayerProfileForm playerProfile={playerProfile} />
                 ) : (
                     <Card>
                         <CardHeader>
