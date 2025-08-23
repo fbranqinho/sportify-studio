@@ -35,23 +35,34 @@ export function usePayments(user: User | null) {
             const paymentsData = paymentsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Payment));
             
             if (reservationsSnapshot) {
-                 reservationsSnapshot.docs.forEach((doc: any) => {
-                     const res = { id: doc.id, ...doc.data() } as Reservation;
-                     if (!paymentsData.some(p => p.reservationRef === res.id && p.type === 'booking')) {
-                        paymentsData.push({
-                            id: `temp-${res.id}`,
-                            reservationRef: res.id,
-                            type: 'booking',
-                            amount: res.totalAmount,
-                            status: 'Pending',
-                            date: new Date().toISOString(),
-                            pitchName: res.pitchName,
-                            teamName: 'Initial Booking',
-                            managerRef: res.managerRef,
-                            ownerRef: res.ownerProfileId,
-                        } as Payment);
-                     }
-                 });
+                 const reservationIds = reservationsSnapshot.docs.map((d:any) => d.id);
+                 if (reservationIds.length > 0) {
+                     const matchesQuery = query(collection(db, "matches"), where("reservationRef", "in", reservationIds));
+                     const matchesSnap = await getDocs(matchesQuery);
+                     const matchesMap = new Map(matchesSnap.docs.map(d => [d.data().reservationRef, d.data() as Match]));
+
+                     reservationsSnapshot.docs.forEach((doc: any) => {
+                         const res = { id: doc.id, ...doc.data() } as Reservation;
+                         const match = matchesMap.get(res.id);
+                         const confirmedPlayers = (match?.teamAPlayers?.length || 0) + (match?.teamBPlayers?.length || 0);
+
+                         // Only show the manager's initial booking payment if there are players to split with.
+                         if (confirmedPlayers > 0 && !paymentsData.some(p => p.reservationRef === res.id && p.type === 'booking')) {
+                            paymentsData.push({
+                                id: `temp-${res.id}`,
+                                reservationRef: res.id,
+                                type: 'booking',
+                                amount: res.totalAmount,
+                                status: 'Pending',
+                                date: new Date().toISOString(),
+                                pitchName: res.pitchName,
+                                teamName: 'Initial Booking',
+                                managerRef: res.managerRef,
+                                ownerRef: res.ownerProfileId,
+                            } as Payment);
+                         }
+                     });
+                 }
             }
 
             setAllPayments(paymentsData);
