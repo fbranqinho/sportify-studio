@@ -39,121 +39,121 @@ export function useMyGames(user: User | null) {
       return newMap;
   };
 
-  const fetchGameDetails = React.useCallback(async () => {
-    if (!user) {
-        setLoading(false);
-        return;
-    }
-     setLoading(true);
-     try {
-        const matchesMap = new Map<string, Match>();
+  const fetchGameData = React.useCallback(async () => {
+      if (!user) {
+          setLoading(false);
+          return;
+      }
+      setLoading(true);
 
-        // Base queries for all roles
-        if (user.role === 'PLAYER') {
-            const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
-            const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
-            const userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
-            
-            if (userTeamIds.length > 0) {
-                 const teamMatchesQuery = query(collection(db, "matches"), or(where("teamARef", "in", userTeamIds), where("teamBRef", "in", userTeamIds)));
-                 const teamMatchesSnap = await getDocs(teamMatchesQuery);
-                 teamMatchesSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            }
+      try {
+          let finalMatches: Match[] = [];
+          
+          if (user.role === 'PLAYER') {
+              const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
+              const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
+              const userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
 
-            const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
-            const invSnapshot = await getDocs(invQuery);
-            const invs = invSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
-            const matchIdsFromInvs = invs.map(inv => inv.matchId).filter(id => id);
+              const matchQueries = [];
+              if (userTeamIds.length > 0) {
+                  matchQueries.push(where("teamARef", "in", userTeamIds));
+                  matchQueries.push(where("teamBRef", "in", userTeamIds));
+              }
+              matchQueries.push(where("teamAPlayers", "array-contains", user.id));
+              matchQueries.push(where("teamBPlayers", "array-contains", user.id));
 
-            if (matchIdsFromInvs.length > 0) {
-                const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
-                matchesFromInvsMap.forEach((match, id) => matchesMap.set(id, match));
-            }
-             const validInvs = new Map(invs.filter(inv => matchesMap.has(inv.matchId)).map(inv => [inv.matchId, inv]));
-             setInvitations(validInvs);
-            
-            const confirmedAQuery = query(collection(db, "matches"), where("teamAPlayers", "array-contains", user.id));
-            const confirmedBQuery = query(collection(db, "matches"), where("teamBPlayers", "array-contains", user.id));
-            const [confirmedASnap, confirmedBSnap] = await Promise.all([getDocs(confirmedAQuery), getDocs(confirmedBQuery)]);
-            confirmedASnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            confirmedBSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+              if (matchQueries.length > 0) {
+                  const finalMatchQuery = query(collection(db, "matches"), or(...matchQueries));
+                  const matchesSnapshot = await getDocs(finalMatchQuery);
+                  finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+              }
 
-        } else if (user.role === 'MANAGER') {
-            const managerTeamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
-            const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
-            const userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
+              const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
+              const invSnapshot = await getDocs(invQuery);
+              const invs = invSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as MatchInvitation);
+              const matchIdsFromInvs = invs.map(inv => inv.matchId).filter(id => id);
 
-            const matchQueries = [];
-            // Matches where user is the direct manager
-            matchQueries.push(getDocs(query(collection(db, "matches"), where("managerRef", "==", user.id))));
-            
-            // Matches involving the user's teams
-            if (userTeamIds.length > 0) {
-                matchQueries.push(getDocs(query(collection(db, "matches"), where("teamARef", "in", userTeamIds))));
-                matchQueries.push(getDocs(query(collection(db, "matches"), where("teamBRef", "in", userTeamIds))));
-                const teamInvQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds), where("status", "==", "Collecting players"));
-                const teamInvSnap = await getDocs(teamInvQuery);
-                const teamInvites = new Map(teamInvSnap.docs.map(doc => [doc.id, {id: doc.id, ...doc.data()} as Match]));
-                setTeamMatchInvitations(teamInvites);
-            }
-            
-            const snapshots = await Promise.all(matchQueries);
-            snapshots.forEach(snapshot => {
-                snapshot.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
-            });
-        }
-        
-        const allMatches = Array.from(matchesMap.values());
-        setMatches(allMatches);
-        
-        // --- Fetch supporting details for all collected matches ---
-        const teamIdsToFetch = new Set<string>();
-        const pitchIdsToFetch = new Set<string>();
-        const reservationIdsToFetch = new Set<string>();
-        
-        allMatches.forEach((match: Match) => {
-            if (match.teamARef) teamIdsToFetch.add(match.teamARef);
-            if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
-            if (match.invitedTeamId) teamIdsToFetch.add(match.invitedTeamId);
-            if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
-            if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
-        });
+              if (matchIdsFromInvs.length > 0) {
+                  const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
+                  matchesFromInvsMap.forEach(match => {
+                      if (!finalMatches.some(m => m.id === match.id)) {
+                          finalMatches.push(match);
+                      }
+                  });
+              }
+              const validInvs = new Map(invs.filter(inv => finalMatches.some(m => m.id === inv.matchId)).map(inv => [inv.matchId, inv]));
+              setInvitations(validInvs);
 
-        if (teamIdsToFetch.size > 0) {
-            const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
-            setTeams(teamsMap);
-        }
-        
-        if (pitchIdsToFetch.size > 0) {
-            const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
-            setPitches(pitchesMap);
+          } else if (user.role === 'MANAGER') {
+              const managerTeamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
+              const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
+              const userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
 
-            const ownerProfileIdsToFetch = new Set<string>();
-            pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
+              const matchConditions = [where("managerRef", "==", user.id)];
+              if (userTeamIds.length > 0) {
+                  matchConditions.push(where("teamARef", "in", userTeamIds));
+                  matchConditions.push(where("teamBRef", "in", userTeamIds));
+                  matchConditions.push(where("invitedTeamId", "in", userTeamIds));
+              }
+              
+              const finalMatchQuery = query(collection(db, "matches"), or(...matchConditions));
+              const matchesSnapshot = await getDocs(finalMatchQuery);
+              finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+          }
+          
+          setMatches(finalMatches);
+          
+          // --- Fetch supporting details for all collected matches ---
+          const teamIdsToFetch = new Set<string>();
+          const pitchIdsToFetch = new Set<string>();
+          const reservationIdsToFetch = new Set<string>();
+          
+          finalMatches.forEach((match: Match) => {
+              if (match.teamARef) teamIdsToFetch.add(match.teamARef);
+              if (match.teamBRef) teamIdsToFetch.add(match.teamBRef);
+              if (match.invitedTeamId) teamIdsToFetch.add(match.invitedTeamId);
+              if (match.pitchRef) pitchIdsToFetch.add(match.pitchRef);
+              if (match.reservationRef) reservationIdsToFetch.add(match.reservationRef);
+          });
 
-            if(ownerProfileIdsToFetch.size > 0){
-                const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
-                setOwners(ownersMap);
-            }
-        }
-        
-        if(reservationIdsToFetch.size > 0) {
-            const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
-            setReservations(reservationsMap);
-        }
+          if (teamIdsToFetch.size > 0) {
+              const teamsMap = await fetchDetails('teams', Array.from(teamIdsToFetch));
+              setTeams(teamsMap);
+          }
+          
+          if (pitchIdsToFetch.size > 0) {
+              const pitchesMap = await fetchDetails('pitches', Array.from(pitchIdsToFetch));
+              setPitches(pitchesMap);
 
-     } catch (error) {
-        console.error("Error setting up listeners: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
-     } finally {
-        setLoading(false);
-     }
+              const ownerProfileIdsToFetch = new Set<string>();
+              pitchesMap.forEach(pitch => { if (pitch.ownerRef) ownerProfileIdsToFetch.add(pitch.ownerRef); });
+
+              if(ownerProfileIdsToFetch.size > 0){
+                  const ownersMap = await fetchDetails('ownerProfiles', Array.from(ownerProfileIdsToFetch));
+                  setOwners(ownersMap);
+              }
+          }
+          
+          if(reservationIdsToFetch.size > 0) {
+              const reservationsMap = await fetchDetails('reservations', Array.from(reservationIdsToFetch));
+              setReservations(reservationsMap);
+          }
+
+      } catch (error) {
+          console.error("Error fetching game data:", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not load page data." });
+      } finally {
+          setLoading(false);
+      }
   }, [user, toast]);
 
 
   React.useEffect(() => {
-    fetchGameDetails();
-  }, [fetchGameDetails]);
+      const unsub = onSnapshot(collection(db, 'matches'), (snapshot) => {
+          fetchGameData();
+      });
+      return () => unsub();
+  }, [fetchGameData]);
 
   const handlePlayerInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
      if (!user) return;
@@ -199,7 +199,7 @@ export function useMyGames(user: User | null) {
             toast({ title: `Invitation Declined` });
         }
         
-        fetchGameDetails();
+        fetchGameData();
      } catch (error: any) {
         console.error("Error responding to invitation:", error);
         toast({ variant: "destructive", title: "Error", description: `Could not save your response: ${error.message}` });
@@ -223,7 +223,7 @@ export function useMyGames(user: User | null) {
               });
               toast({ title: "Match Declined", description: "The match invitation has been declined."});
           }
-          fetchGameDetails();
+          fetchGameData();
       } catch (error) {
           console.error("Error responding to team invitation:", error);
           toast({ variant: "destructive", title: "Error", description: "Could not save your response." });
@@ -303,7 +303,7 @@ export function useMyGames(user: User | null) {
         try {
             await batch.commit();
             toast({ title: "Payment Initiated", description: `Each of the ${confirmedPlayers.length} players has been notified.`});
-            fetchGameDetails();
+            fetchGameData();
         } catch(error) {
             console.error("Error starting split payment: ", error);
             toast({ variant: "destructive", title: "Error", description: "Could not initiate payments." });
@@ -325,6 +325,6 @@ export function useMyGames(user: User | null) {
       user, loading,
       matches, teams, pitches, owners, reservations, invitations, teamMatchInvitations,
       upcomingMatches, pastMatches,
-      fetchGameDetails, handlePlayerInvitationResponse, handleTeamInvitationResponse, handleStartSplitPayment
+      fetchGameData, handlePlayerInvitationResponse, handleTeamInvitationResponse, handleStartSplitPayment
   }
 }
