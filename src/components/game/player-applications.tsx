@@ -3,7 +3,7 @@
 "use client";
 
 import * as React from "react";
-import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, arrayRemove, arrayUnion, documentId, getDoc } from "firebase/firestore";
+import { doc, getDocs, collection, query, where, writeBatch, serverTimestamp, arrayRemove, arrayUnion, documentId, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, User, Notification, Pitch } from "@/types";
 import { useToast } from "@/hooks/use-toast";
