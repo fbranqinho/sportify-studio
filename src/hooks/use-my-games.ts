@@ -61,7 +61,7 @@ export function useMyGames(user: User | null) {
         }
         
         if (user.role === 'MANAGER') {
-            const managerResQuery = query(collection(db, "reservations"), where("managerRef", "==", user.id));
+            const managerResQuery = query(collection(db, "reservations"), where("actorId", "==", user.id), where("actorRole", "==", "MANAGER"));
             const managerResSnap = await getDocs(managerResQuery);
             managerResSnap.forEach(doc => reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation));
         }
