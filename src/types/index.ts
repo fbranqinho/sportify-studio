@@ -294,6 +294,7 @@ export interface Match {
     managerRef: string | null;
     allowExternalPlayers?: boolean;
     allowChallenges?: boolean;
+    allowCancellations?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
     finishTime?: Timestamp | null;

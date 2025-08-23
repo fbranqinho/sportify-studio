@@ -147,6 +147,7 @@ export default function SchedulePage() {
             refereeId: null,
             managerRef: reservation.actorId || null,
             allowExternalPlayers: true,
+            allowCancellations: false, // Default to not allowing cancellations after payment
             reservationRef: reservation.id,
         };
         batch.set(newMatchRef, matchData);

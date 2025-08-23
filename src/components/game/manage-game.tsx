@@ -58,6 +58,18 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
             toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
         }
     }
+
+    const handleToggleAllowCancellations = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowCancellations: checked });
+            onMatchUpdate({ allowCancellations: checked });
+            toast({ title: "Settings updated", description: `Cancellations after payment are now ${checked ? 'allowed' : 'disallowed'}.`});
+        } catch (error) {
+            console.error("Error updating cancellation settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update cancellation settings." });
+        }
+    };
     
     const handleDeleteGame = async () => {
         const batch = writeBatch(db);
@@ -154,38 +166,51 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                         disabled={isFull || !!match.teamBRef}
                     />
                 </div>
-                 {!isPaid && (
-                    <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
-                        <div className="space-y-0.5">
-                            <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
-                                Delete Game
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                            This will permanently delete the game and its associated field reservation. This action cannot be undone.
-                            </p>
-                        </div>
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive">
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the game
-                                    and its associated reservation, and refund/cancel any related payments.
-                                </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
+                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-cancellations" className="text-base font-semibold">
+                            Allow Cancellation After Payment
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                           Permit this game to be cancelled even after it has been fully paid.
+                        </p>
                     </div>
-                 )}
+                    <Switch
+                        id="allow-cancellations"
+                        checked={!!match.allowCancellations}
+                        onCheckedChange={handleToggleAllowCancellations}
+                    />
+                </div>
+                <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
+                            Delete Game
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                        This will permanently delete the game and its associated field reservation. This action cannot be undone.
+                        </p>
+                    </div>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={isPaid && !match.allowCancellations}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the game
+                                and its associated reservation, and refund/cancel any related payments.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
             </CardContent>
         </Card>
     );
