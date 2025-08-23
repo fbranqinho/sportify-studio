@@ -145,7 +145,7 @@ export default function SchedulePage() {
             status: reservation.teamRef ? "Collecting players" : "Scheduled",
             attendance: 0,
             refereeId: null,
-            managerRef: reservation.managerRef || null,
+            managerRef: reservation.actorId || null,
             allowExternalPlayers: true,
             reservationRef: reservation.id,
         };
