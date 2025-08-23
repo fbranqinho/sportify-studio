@@ -78,6 +78,14 @@ export function useMyGames(user: User | null) {
             const matchesFromResSnap = await getDocs(matchesFromResQuery);
             matchesFromResSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
         }
+        
+        // Also fetch matches created by the manager directly, not via reservation (if applicable)
+        if (user.role === 'MANAGER') {
+            const directManagerMatchQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
+            const directManagerMatchSnap = await getDocs(directManagerMatchQuery);
+            directManagerMatchSnap.forEach(doc => matchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Match));
+        }
+        
         setReservations(reservationsMap);
 
         if (userTeamIds.length > 0) {
