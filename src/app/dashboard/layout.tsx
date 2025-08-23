@@ -59,6 +59,7 @@ function NotificationBell() {
 
     const handleSnapshot = (snapshot: any) => {
         const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
+        // Sort in the client to avoid composite indexes
         notifs.sort((a, b) => {
           const aTime = a.createdAt?.seconds || 0;
           const bTime = b.createdAt?.seconds || 0;
@@ -80,8 +81,8 @@ function NotificationBell() {
             notifQuery = query(
                 collection(db, "notifications"),
                 where("ownerProfileId", "==", ownerProfile.id),
-                orderBy("createdAt", "desc"),
-                limit(10)
+                // Order by is removed to avoid needing a composite index. We will sort on the client.
+                limit(50) // Fetch more to sort client-side
             );
         }
     } else {
@@ -141,7 +142,7 @@ function NotificationBell() {
             <CardContent className="max-h-96 overflow-y-auto">
                  {notifications.length > 0 ? (
                     <div className="space-y-4">
-                        {notifications.map(n => (
+                        {notifications.slice(0,10).map(n => (
                             <Link href={n.link} key={n.id} className="block hover:bg-muted -mx-2 px-2 py-2 rounded-md" onClick={() => handleMarkAsRead(n.id)}>
                                 <div className="flex items-start gap-3">
                                     <div className={`mt-1 h-2 w-2 rounded-full ${!n.read ? 'bg-primary' : 'bg-transparent'}`} />
