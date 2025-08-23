@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -36,7 +37,6 @@ const formSchema = z.object({
   capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
   basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
   allowPostGamePayments: z.boolean().default(false),
-  allowCancellationsAfterPayment: z.boolean().default(false),
 });
 
 interface EditPitchFormProps {
@@ -55,7 +55,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
       capacity: pitch.capacity,
       basePrice: pitch.basePrice || 50,
       allowPostGamePayments: pitch.allowPostGamePayments || false,
-      allowCancellationsAfterPayment: pitch.allowCancellationsAfterPayment || false,
     },
   });
 
@@ -68,7 +67,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
         capacity: values.capacity,
         basePrice: values.basePrice,
         allowPostGamePayments: values.allowPostGamePayments,
-        allowCancellationsAfterPayment: values.allowCancellationsAfterPayment,
       });
 
       toast({
@@ -166,28 +164,6 @@ export function EditPitchForm({ pitch, onPitchUpdated }: EditPitchFormProps) {
                 </FormLabel>
                 <FormDescription>
                   Permit games to start before all players have paid.
-                </FormDescription>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="allowCancellationsAfterPayment"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">
-                  Allow Cancellations After Payment
-                </FormLabel>
-                <FormDescription>
-                  Permit users to cancel their reservation even after it has been fully paid.
                 </FormDescription>
               </div>
               <FormControl>

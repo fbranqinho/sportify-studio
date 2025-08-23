@@ -24,6 +24,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function SchedulePage() {
   const { user } = useUser();
@@ -32,6 +34,7 @@ export default function SchedulePage() {
   const [pitches, setPitches] = React.useState<Map<string, Pitch>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [ownerProfileId, setOwnerProfileId] = React.useState<string | null>(null);
+   const [allowCancellationMap, setAllowCancellationMap] = React.useState<Map<string, boolean>>(new Map());
 
   // Effect to get Owner Profile ID if user is an OWNER
   React.useEffect(() => {
@@ -128,8 +131,11 @@ export default function SchedulePage() {
         const actorId = reservation.managerRef || reservation.playerRef;
         if (!actorId) throw new Error("Reservation is missing a manager or player reference.");
         
-        // 1. Update Reservation status to Confirmed (awaiting payment initiation by manager)
-        batch.update(reservationRef, { status: "Confirmed" });
+        // 1. Update Reservation status and cancellation policy
+        batch.update(reservationRef, { 
+          status: "Confirmed",
+          allowCancellationsAfterPayment: allowCancellationMap.get(reservation.id) || false
+        });
         
         // 2. Create the Match document immediately
         const newMatchRef = doc(collection(db, "matches"));
@@ -147,7 +153,6 @@ export default function SchedulePage() {
             refereeId: null,
             managerRef: reservation.actorId || null,
             allowExternalPlayers: true,
-            allowCancellations: false, // Default to not allowing cancellations after payment
             reservationRef: reservation.id,
         };
         batch.set(newMatchRef, matchData);
@@ -243,7 +248,7 @@ export default function SchedulePage() {
     
     const canCancel = user?.role === 'MANAGER' &&
                       user?.id === reservation.actorId &&
-                      (reservation.paymentStatus !== 'Paid' || pitch?.allowCancellationsAfterPayment);
+                      (reservation.paymentStatus !== 'Paid' || reservation.allowCancellationsAfterPayment);
 
     return (
         <Card>
@@ -262,15 +267,30 @@ export default function SchedulePage() {
                     {getStatusIcon(reservation.status)}
                     <span>Status: <span className="font-semibold">{reservation.status}</span></span>
                 </div>
+                 {reservation.allowCancellationsAfterPayment && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
+                    <CheckCircle className="h-3 w-3 text-green-500"/> Cancellation allowed after payment
+                  </div>
+                )}
             </CardContent>
             {user?.role === 'OWNER' && reservation.status === 'Pending' && (
-                <CardFooter className="gap-2">
-                <Button size="sm" onClick={() => handleUpdateStatus(reservation, 'Confirmed')}>
-                    <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(reservation, 'Canceled')}>
-                    <XCircle className="mr-2 h-4 w-4" /> Reject
-                </Button>
+                <CardFooter className="flex flex-col items-stretch gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id={`cancel-switch-${reservation.id}`}
+                      checked={allowCancellationMap.get(reservation.id) || false}
+                      onCheckedChange={(checked) => setAllowCancellationMap(prev => new Map(prev).set(reservation.id, checked))}
+                    />
+                    <Label htmlFor={`cancel-switch-${reservation.id}`} className="text-sm">Allow cancellation after payment</Label>
+                  </div>
+                  <div className="flex w-full gap-2">
+                    <Button size="sm" className="flex-1" onClick={() => handleUpdateStatus(reservation, 'Confirmed')}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                    </Button>
+                    <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleUpdateStatus(reservation, 'Canceled')}>
+                        <XCircle className="mr-2 h-4 w-4" /> Reject
+                    </Button>
+                  </div>
                 </CardFooter>
             )}
              {canCancel && (

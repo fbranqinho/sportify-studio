@@ -215,7 +215,6 @@ export interface Pitch {
   basePrice: number;
   coords: { lat: number; lng: number };
   allowPostGamePayments?: boolean;
-  allowCancellationsAfterPayment?: boolean;
 }
 
 export type ReservationStatus = "Pending" | "Confirmed" | "Scheduled" | "Canceled";
@@ -233,6 +232,7 @@ export interface Reservation {
   paymentRefs: string[]; 
   totalAmount: number;
   promoRef?: string; 
+  allowCancellationsAfterPayment?: boolean;
   
   // Actor details - denormalized for easier display
   actorId: string;
@@ -294,7 +294,6 @@ export interface Match {
     managerRef: string | null;
     allowExternalPlayers?: boolean;
     allowChallenges?: boolean;
-    allowCancellations?: boolean;
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
     finishTime?: Timestamp | null;
