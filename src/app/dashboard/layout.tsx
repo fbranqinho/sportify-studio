@@ -80,6 +80,7 @@ function NotificationBell() {
             notifQuery = query(
                 collection(db, "notifications"),
                 where("ownerProfileId", "==", ownerProfile.id),
+                orderBy("createdAt", "desc"),
                 limit(10)
             );
         }
