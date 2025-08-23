@@ -3,12 +3,13 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, doc, writeBatch, serverTimestamp, getDocs, updateDoc } from "firebase/firestore";
-import type { Payment, Reservation } from "@/types";
+import { collection, query, where, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc } from "firebase/firestore";
+import type { Payment, Reservation, Pitch, Match } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard } from "lucide-react";
 import { format } from "date-fns";
+import { getPlayerCapacity } from "@/lib/utils";
 
 export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }: { payment: Payment, reservation: Reservation | null, onPaymentProcessed: () => void }) => {
     const { toast } = useToast();
@@ -68,12 +69,23 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
             });
 
             if (allPlayersPaid) {
-                batch.update(reservationRef, { paymentStatus: "Paid", status: "Scheduled" });
+                batch.update(reservationRef, { paymentStatus: "Paid" });
                 
                 const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
                 const matchSnap = await getDocs(matchQuery);
                 if (!matchSnap.empty) {
-                    batch.update(matchSnap.docs[0].ref, { status: 'Scheduled' });
+                    const matchRef = matchSnap.docs[0].ref;
+                    const matchData = matchSnap.docs[0].data() as Match;
+                    
+                    const pitchSnap = await getDoc(doc(db, "pitches", matchData.pitchRef));
+                    const pitchData = pitchSnap.data() as Pitch;
+                    const capacity = getPlayerCapacity(pitchData.sport);
+                    const currentPlayers = (matchData.teamAPlayers?.length || 0) + (matchData.teamBPlayers?.length || 0);
+
+                    // Only set to scheduled if the game is full
+                    if (currentPlayers >= capacity) {
+                        batch.update(matchRef, { status: 'Scheduled' });
+                    }
                 }
                 
                 const ownerNotificationRef = doc(collection(db, "notifications"));
@@ -89,7 +101,7 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
                     const managerNotificationRef = doc(collection(db, "notifications"));
                     batch.set(managerNotificationRef, {
                         userId: reservation.managerRef,
-                        message: `The payment for your game at ${reservation.pitchName} is complete. The match is confirmed!`,
+                        message: `The payment for your game at ${reservation.pitchName} is complete.`,
                         link: `/dashboard/games/${matchSnap.docs[0].id}`,
                         read: false,
                         createdAt: serverTimestamp() as any,

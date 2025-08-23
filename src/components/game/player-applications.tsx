@@ -85,7 +85,7 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
                     await updateDoc(matchRef, { status: 'Scheduled' });
                     toast({ title: "Team is ready!", description: "Minimum player count reached. The game is now scheduled." });
                 } else {
-                    toast({ title: `Application ${accepted ? 'Accepted' : 'Declined'}`, description: `The player has been notified.` });
+                     toast({ title: `Application ${accepted ? 'Accepted' : 'Declined'}`, description: `The player has been notified.` });
                 }
             } else {
                  toast({ title: "Application Declined", description: `The player has been notified.` });
