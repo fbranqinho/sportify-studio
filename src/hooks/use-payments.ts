@@ -3,9 +3,26 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc, or } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc, or, deleteDoc } from "firebase/firestore";
 import type { Payment, Notification, PaymentStatus, Reservation, User, UserRole, OwnerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+
+async function clearPaymentsCollection() {
+    console.log("Attempting to clear payments collection...");
+    try {
+        const paymentsQuery = query(collection(db, "payments"));
+        const snapshot = await getDocs(paymentsQuery);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        console.log(`${snapshot.size} payments deleted successfully.`);
+    } catch (error) {
+        console.error("Error clearing payments collection:", error);
+    }
+}
+
 
 export function usePayments(user: User | null) {
   const { toast } = useToast();
@@ -21,10 +38,14 @@ export function usePayments(user: User | null) {
   }, []);
 
   React.useEffect(() => {
+    // TEMPORARY: Clear payments collection on hook mount
+    // clearPaymentsCollection();
+
+
     if (!user) {
       setLoading(false);
       setAllPayments([]);
-      return; // No user, do nothing.
+      return () => {}; 
     }
 
     setLoading(true);
@@ -77,59 +98,47 @@ export function usePayments(user: User | null) {
 
     let unsubscribe = () => {}; 
     
-    const setupListener = async () => {
-        let paymentsQuery;
-        try {
-            if (user.role === 'PLAYER') {
-                paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
-            } else if (user.role === 'MANAGER') {
-                const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.id));
-                const teamsSnap = await getDocs(teamsQuery);
-                const teamRefs = teamsSnap.docs.map(doc => doc.id);
-                
-                const queries = [where("managerRef", "==", user.id)];
-                if (teamRefs.length > 0) {
-                    queries.push(where("teamRef", "in", teamRefs));
-                }
-                paymentsQuery = query(collection(db, "payments"), or(...queries));
-            } else if (user.role === 'OWNER') {
-                const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
-                const ownerProfileSnap = await getDocs(ownerProfileQuery);
-                if (!ownerProfileSnap.empty) {
-                    const ownerProfileId = ownerProfileSnap.docs[0].id;
-                    paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
-                } else {
-                    setAllPayments([]);
+    let paymentsQuery;
+
+    if (user.role === 'PLAYER') {
+        paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+    } else if (user.role === 'MANAGER') {
+        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+    } else if (user.role === 'OWNER') {
+        const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+        getDocs(ownerProfileQuery).then(ownerProfileSnap => {
+            if (!ownerProfileSnap.empty) {
+                const ownerProfileId = ownerProfileSnap.docs[0].id;
+                paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
+                 unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
+                    const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+                    processData(paymentsData).catch(console.error);
+                }, (error) => {
+                    console.error("Error in payments listener:", error);
                     setLoading(false);
-                    return;
-                }
-            } else {
-                setAllPayments([]);
-                setLoading(false);
-                return;
-            }
-            
-            unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
-                const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-                processData(paymentsData).catch(err => {
-                    console.error("Error processing snapshot data:", err);
-                    toast({ variant: "destructive", title: "Data Error", description: "Failed to process payments data." });
                 });
-            }, (error) => {
-                console.error("Error in payments listener:", error);
-                 if (error.code !== 'permission-denied') {
-                    toast({ variant: "destructive", title: "Error", description: "Lost connection to payments data." });
-                 }
-                 setLoading(false);
-            });
-        } catch (error) {
-            console.error("Error setting up payments query:", error);
+            } else {
+                setLoading(false);
+            }
+        }).catch(err => {
+            console.error("Error fetching owner profile:", err);
             setLoading(false);
-        }
+        })
     }
     
-    setupListener();
-
+    if (paymentsQuery) {
+        unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
+            const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+            processData(paymentsData).catch(console.error);
+        }, (error) => {
+            console.error("Error in payments listener:", error);
+            setLoading(false);
+        });
+    } else if (user.role !== 'OWNER') {
+        setAllPayments([]);
+        setLoading(false);
+    }
+    
     return () => {
       unsubscribe();
     };
