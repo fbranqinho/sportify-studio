@@ -2,82 +2,137 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isUserAuthenticated() {
+    
+    // Helper function to check if a user is authenticated
+    function isAuthenticated() {
       return request.auth != null;
     }
-
-    function isOwner(docData) {
-      return request.auth.uid == docData.userRef;
+    
+    // Helper function to check if the user is the owner of a document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
     
-    function isManager(teamData) {
-        return request.auth.uid == teamData.managerId;
+    // Helper function to check if a user is a specific role
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
 
+    // Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow authenticated users to read most data, as it's needed for the app to function
     match /users/{userId} {
-      allow read: if isUserAuthenticated();
-      allow update: if isOwner(resource.data);
-      allow create: if isUserAuthenticated();
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated();
+      allow update, create: if isOwner(userId);
     }
     
-    match /{profileCollection}/{profileId} where profileCollection in ['playerProfiles', 'managerProfiles', 'ownerProfiles'] {
-        allow read: if isUserAuthenticated();
-        allow create: if isUserAuthenticated();
-        allow update: if isOwner(resource.data);
+    match /playerProfiles/{profileId} {
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated();
+      // Only the user associated with the profile can edit it
+      allow update, create: if isOwner(request.resource.data.userRef);
+    }
+
+    match /managerProfiles/{profileId} {
+        allow get: if isAuthenticated();
+        allow list: if isAuthenticated();
+        allow update, create: if isOwner(request.resource.data.userRef);
+    }
+    
+    match /ownerProfiles/{profileId} {
+        allow get: if isAuthenticated();
+        allow list: if isAuthenticated();
+        allow update, create: if isOwner(request.resource.data.userRef);
     }
 
     match /teams/{teamId} {
-      allow read, create: if isUserAuthenticated();
-      allow update: if isManager(resource.data);
-    }
-
-    match /matches/{matchId} {
-      allow read, get: if isUserAuthenticated();
-      // A manager can create/update their own matches.
-      allow create, delete: if request.auth.uid == request.resource.data.managerRef;
-      // Allow a player to add themselves to the applications list or a manager to update it
-      allow update: if request.auth.uid == resource.data.managerRef || request.auth.uid in request.resource.data.playerApplications;
-    }
-
-    match /reservations/{reservationId} {
-      allow read, create: if isUserAuthenticated();
-      // Only the user who made the reservation or the owner can update it
-      allow update: if request.auth.uid == resource.data.actorId || get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid;
+      allow read: if isAuthenticated();
+      // Only the manager can create or update a team
+      allow create, update: if hasRole('MANAGER') && isOwner(request.resource.data.managerId);
     }
     
     match /pitches/{pitchId} {
-      allow read, create: if isUserAuthenticated();
-      allow update: if get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef == request.auth.uid;
-    }
-
-    match /teamInvitations/{invitationId} {
-      allow read, create: if isUserAuthenticated();
-      // The invited player can update their own invitation
-      allow update: if request.auth.uid == resource.data.playerId;
-    }
-
-    match /matchInvitations/{invitationId} {
-      allow read, create: if isUserAuthenticated();
-      // The invited player can update their own invitation
-      allow update: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
-    }
-
-    match /notifications/{notificationId} {
-      allow read, write, create: if isUserAuthenticated();
-    }
-
-    match /payments/{paymentId} {
-      allow read: if isUserAuthenticated();
-      allow write: if request.auth.uid == resource.data.actorId || request.auth.uid == resource.data.playerRef || request.auth.uid == resource.data.managerRef;
+      allow read: if isAuthenticated();
+      // Only the owner can create or update a pitch
+      allow create, update: if hasRole('OWNER');
     }
     
     match /promos/{promoId} {
-        allow read, create, update, delete: if isUserAuthenticated();
+        allow read: if isAuthenticated();
+        allow create, update: if hasRole('OWNER');
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      // A user can create a reservation for themselves
+      allow create: if isOwner(request.resource.data.actorId);
+      // The owner of the pitch can update the reservation (e.g., confirm/cancel)
+      allow update: if hasRole('OWNER');
     }
     
-    match /matches/{matchId}/mvpVotes/{voteId} {
-        allow read, create: if isUserAuthenticated();
+    match /teamInvitations/{invitationId} {
+      allow read: if isAuthenticated();
+      // The manager can create an invitation
+      allow create: if isOwner(request.resource.data.managerId);
+      // The invited player can update (accept/decline)
+      allow update: if isOwner(request.resource.data.playerId);
+    }
+    
+    match /matchInvitations/{invitationId} {
+      allow read: if isAuthenticated();
+      // The manager can create an invitation
+      allow create: if isOwner(request.resource.data.managerId);
+      // The invited player can update (accept/decline)
+      allow update: if isOwner(request.resource.data.playerId);
+    }
+
+    match /matches/{matchId} {
+      allow read: if isAuthenticated();
+      
+      // A manager can create a match
+      allow create: if hasRole('MANAGER') && isOwner(request.resource.data.managerRef);
+      
+      // A manager can update/delete their own match
+      allow update, delete: if hasRole('MANAGER') && isOwner(resource.data.managerRef);
+      
+      // This is the key rule:
+      // Allow an update if the user is adding themselves to playerApplications or team(A/B)Players list.
+      // This prevents users from removing others but allows them to join.
+      allow update: if isAuthenticated() && (
+        (request.resource.data.playerApplications == resource.data.playerApplications.concat([request.auth.uid])) ||
+        (request.resource.data.teamAPlayers == resource.data.teamAPlayers.concat([request.auth.uid])) ||
+        (request.resource.data.teamBPlayers == resource.data.teamBPlayers.concat([request.auth.uid]))
+      );
+
+      // Subcollection for MVP votes
+      match /mvpVotes/{voteId} {
+        // A user can only vote once and must be a participant
+        allow create: if isAuthenticated() && 
+                      (request.auth.uid in resource.data.teamAPlayers || request.auth.uid in resource.data.teamBPlayers) &&
+                      !exists(/databases/$(database)/documents/matches/$(matchId)/mvpVotes/$(request.auth.uid));
+        allow read: if isAuthenticated();
+      }
+    }
+
+    match /notifications/{notificationId} {
+        allow read, write: if isAuthenticated() && (
+          isOwner(resource.data.userId) || isOwner(resource.data.ownerProfileId)
+        );
+        allow create: if isAuthenticated();
+    }
+    
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      // Allow write if the user is the player, manager or owner associated with the payment
+      allow write: if isAuthenticated() && (
+        isOwner(resource.data.playerRef) || 
+        isOwner(resource.data.managerRef) ||
+        isOwner(get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef)
+      );
     }
   }
 }
