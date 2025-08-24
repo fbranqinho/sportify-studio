@@ -7,22 +7,6 @@ import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp,
 import type { Payment, Notification, PaymentStatus, Reservation, User, UserRole, OwnerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
-async function clearPaymentsCollection() {
-    console.log("Attempting to clear payments collection...");
-    try {
-        const paymentsQuery = query(collection(db, "payments"));
-        const snapshot = await getDocs(paymentsQuery);
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-        console.log(`${snapshot.size} payments deleted successfully.`);
-    } catch (error) {
-        console.error("Error clearing payments collection:", error);
-    }
-}
-
 
 export function usePayments(user: User | null) {
   const { toast } = useToast();
@@ -32,20 +16,16 @@ export function usePayments(user: User | null) {
   const [owners, setOwners] = React.useState<Map<string, OwnerProfile>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
-  // This function is kept for any potential external refresh calls, but the main logic is in useEffect.
   const fetchData = React.useCallback(async () => {
-    // Intentionally left blank as useEffect handles the data fetching lifecycle.
+    // This function is intentionally left blank as useEffect handles the data fetching lifecycle.
+    // It can be used for manual refetching if needed in the future.
   }, []);
 
   React.useEffect(() => {
-    // TEMPORARY: Clear payments collection on hook mount
-    // clearPaymentsCollection();
-
-
     if (!user) {
       setLoading(false);
       setAllPayments([]);
-      return () => {}; 
+      return; // Early return if there's no user
     }
 
     setLoading(true);
@@ -96,9 +76,8 @@ export function usePayments(user: User | null) {
         setLoading(false);
     };
 
-    let unsubscribe = () => {}; 
-    
     let paymentsQuery;
+    let unsubscribe = () => {};
 
     if (user.role === 'PLAYER') {
         paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
@@ -106,6 +85,7 @@ export function usePayments(user: User | null) {
         paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else if (user.role === 'OWNER') {
         const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+        // This is an async operation within the effect, so we handle it carefully.
         getDocs(ownerProfileQuery).then(ownerProfileSnap => {
             if (!ownerProfileSnap.empty) {
                 const ownerProfileId = ownerProfileSnap.docs[0].id;
@@ -114,16 +94,26 @@ export function usePayments(user: User | null) {
                     const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
                     processData(paymentsData).catch(console.error);
                 }, (error) => {
-                    console.error("Error in payments listener:", error);
+                    console.error("Error in payments listener for Owner:", error);
                     setLoading(false);
                 });
             } else {
                 setLoading(false);
+                 setAllPayments([]);
             }
         }).catch(err => {
             console.error("Error fetching owner profile:", err);
             setLoading(false);
         })
+        // Since the query for OWNER is async, we return the cleanup function from the outer scope.
+        return () => {
+          unsubscribe();
+        };
+    } else {
+        // For roles with no payments page or other roles
+        setAllPayments([]);
+        setLoading(false);
+        return;
     }
     
     if (paymentsQuery) {
@@ -134,16 +124,15 @@ export function usePayments(user: User | null) {
             console.error("Error in payments listener:", error);
             setLoading(false);
         });
-    } else if (user.role !== 'OWNER') {
-        setAllPayments([]);
-        setLoading(false);
     }
     
+    // This is the cleanup function that will be called when the component unmounts
+    // or when the dependencies (user) change.
     return () => {
       unsubscribe();
     };
 
-  }, [user, toast]);
+  }, [user]); // Rerun effect if user changes
 
   return { allPayments, reservations, playerUsers, owners, loading, fetchData };
 }
