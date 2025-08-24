@@ -75,9 +75,9 @@ export function usePayments(user: User | null) {
         setLoading(false);
     };
 
-    let unsubscribe = () => {}; // Initialize unsubscribe as a no-op function
-
-    (async () => {
+    let unsubscribe = () => {}; 
+    
+    const setupListener = async () => {
         let paymentsQuery;
         try {
             if (user.role === 'PLAYER') {
@@ -126,10 +126,10 @@ export function usePayments(user: User | null) {
             console.error("Error setting up payments query:", error);
             setLoading(false);
         }
-    })();
+    }
+    
+    setupListener();
 
-    // This is the crucial cleanup function. It will be called when the component
-    // unmounts OR when the dependencies (in this case, `user`) change.
     return () => {
       unsubscribe();
     };
