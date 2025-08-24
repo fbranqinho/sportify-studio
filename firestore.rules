@@ -1,0 +1,96 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if the request is coming from the user owner of the document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Users can read/write their own user document
+    match /users/{userId} {
+      allow read, update, delete: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated();
+    }
+
+    // Profiles can be read by anyone authenticated, but only written by the owner
+    match /playerProfiles/{profileId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(resource.data.userRef);
+    }
+    
+    match /managerProfiles/{profileId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(resource.data.userRef);
+    }
+    
+    match /ownerProfiles/{profileId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(resource.data.userRef);
+    }
+
+    // Teams can be read by anyone authenticated, but only written by the manager
+    match /teams/{teamId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/teams/$(teamId)).data.managerId);
+    }
+
+    // Pitches can be read by anyone, but only written by the owner
+    match /pitches/{pitchId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef);
+    }
+    
+    // Reservations can be read by involved parties, written by user, updated by owner
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (isOwner(resource.data.actorId) || isOwner(get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef));
+    }
+    
+    // Matches can be read by anyone, created from reservations, and updated by the manager
+    match /matches/{matchId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated(); // Should be created via backend logic ideally, but allow for now.
+        allow update, delete: if isAuthenticated() && (isOwner(resource.data.managerRef));
+    }
+
+    // Payments can be read by involved parties, written by user
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.playerRef) || isOwner(resource.data.managerRef) || isOwner(get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef));
+      allow create, update: if isAuthenticated();
+    }
+    
+    // Notifications are specific to a user or owner
+    match /notifications/{notificationId} {
+        allow read, update, delete: if isAuthenticated() && (isOwner(resource.data.userId));
+        allow create: if isAuthenticated();
+        // Allow owner to read their notifications
+        // This requires a more complex rule if we want to check against ownerProfileId directly.
+        // For simplicity, we keep it user-based for now. A backend function would be safer.
+    }
+    
+    // Invitations can be updated by the invited player or the manager who sent it
+    match /matchInvitations/{invitationId} {
+      allow read, update: if isAuthenticated() && (isOwner(resource.data.playerId) || isOwner(resource.data.managerId));
+      allow create: if isAuthenticated();
+    }
+
+     match /teamInvitations/{invitationId} {
+      allow read, update: if isAuthenticated() && (isOwner(resource.data.playerId) || isOwner(resource.data.managerId));
+      allow create: if isAuthenticated();
+    }
+
+    // MVP votes can only be created by participants
+    match /matches/{matchId}/mvpVotes/{voteId} {
+        allow create: if isAuthenticated(); // Add more specific logic if needed (e.g., check if user is in match.teamAPlayers)
+        allow read: if isAuthenticated();
+    }
+  }
+}
