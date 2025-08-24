@@ -3,103 +3,107 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
   
-    // Helper function to check if a user is authenticated
+    // Helper functions to keep rules DRY
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Helper function to check if a user is the owner of a document
-    function isOwner(userId) {
+
+    function isUser(userId) {
       return request.auth.uid == userId;
     }
     
-    // Users can read their own document and other users' public data.
-    // Only the user can update their own document.
+    // --- GENERAL ACCESS RULES ---
+    // By default, allow read access to any authenticated user for most collections.
+    // This is simpler and often necessary for apps where data from multiple sources
+    // needs to be displayed (e.g., seeing a team's name on a match card).
+    // Write access is restricted on a per-collection basis below.
+    match /{collection}/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Deny writes by default, override below.
+    }
+
+    // --- COLLECTION-SPECIFIC WRITE RULES ---
+
+    // Users can only create their own user document and can only update their own.
+    // No one can delete user documents.
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow create: if isUser(userId);
+      allow update: if isUser(userId);
+      allow delete: if false; 
     }
     
-    // Allow broad read access for authenticated users to public-facing profiles
-    // Restrict writes to the user who owns the profile
+    // Profiles can only be created/updated by the linked user.
     match /playerProfiles/{profileId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(resource.data.userRef);
+        allow write: if isUser(request.resource.data.userRef) || isUser(resource.data.userRef);
     }
-    
     match /managerProfiles/{profileId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(resource.data.userRef);
+         allow write: if isUser(request.resource.data.userRef) || isUser(resource.data.userRef);
     }
-    
     match /ownerProfiles/{profileId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(resource.data.userRef);
+         allow write: if isUser(request.resource.data.userRef) || isUser(resource.data.userRef);
     }
-    
-    // Teams can be read by anyone authenticated, but only managed by the manager.
+
+    // Teams can only be created/updated by the assigned manager.
     match /teams/{teamId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(resource.data.managerId);
+      allow create: if isUser(request.resource.data.managerId);
+      allow update: if isUser(resource.data.managerId);
+      // Add delete rule if managers should be able to delete teams
     }
-    
-    // Pitches can be read by anyone, but only managed by the owner.
+
+    // Pitches can only be created/updated by the assigned owner.
     match /pitches/{pitchId} {
-      allow read: if isAuthenticated();
-      allow write: if get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef == request.auth.uid;
+        allow create: if get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerRef)).data.userRef == request.auth.uid;
+        allow update: if get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef == request.auth.uid;
+       // Add delete rule if owners should be able to delete pitches
     }
 
-    // Reservations can be read by involved parties and created by any authenticated user.
-    // Updates/deletes are more restricted.
+    // Reservations can be created by any authenticated user.
+    // They can only be updated/cancelled by the user who created it OR the owner of the pitch.
     match /reservations/{reservationId} {
-      allow read: if isAuthenticated(); // Allow general read
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (
-        isOwner(resource.data.actorId) || // The user who made the reservation
-        get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid // The owner of the pitch
-      );
+      allow update, delete: if isUser(resource.data.actorId) || 
+                               get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid;
     }
     
-    // Matches can be read by anyone, but writes are restricted to the manager.
-    match /matches/{matchId} {
-      allow read: if isAuthenticated();
-      // Manager of the game can update it. Allow creation by any authenticated user via reservation flow.
-      allow create: if isAuthenticated(); 
-      allow update: if isAuthenticated() && (isOwner(resource.data.managerRef));
-      allow delete: if isAuthenticated() && (isOwner(resource.data.managerRef));
-    }
-    
-    // Invitations can be read by involved parties, and updated by the recipient.
-    match /{collectionName}/{invitationId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.playerId) || isOwner(resource.data.managerId));
-      allow create: if isAuthenticated() && isOwner(request.resource.data.managerId);
-      allow update: if isAuthenticated() && (isOwner(resource.data.playerId) || isOwner(resource.data.managerId));
-    }
-    
-    // Payments can be read/written by involved parties.
-    match /payments/{paymentId} {
-      allow read, write: if isAuthenticated() && (isOwner(resource.data.playerRef) || isOwner(resource.data.managerRef));
-      allow create: if isAuthenticated();
-    }
-    
-    // Notifications are specific to a user or an owner profile.
+    // Notifications can be created by anyone (server-side logic usually handles this).
+    // A user can only update their own notifications (e.g., to mark as read).
     match /notifications/{notificationId} {
-      allow read, write: if isAuthenticated() && (
-         (resource.data.userId != null && isOwner(resource.data.userId)) ||
-         (resource.data.ownerProfileId != null && get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid)
-      );
-      allow create: if isAuthenticated();
-    }
-    
-    // Promos can be read by anyone, written by owner.
-    match /promos/{promoId} {
-        allow read: if isAuthenticated();
-        allow create, update, delete: if isAuthenticated() && 
-            get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerProfileId)).data.userRef == request.auth.uid;
+        allow create: if isAuthenticated();
+        allow update: if isUser(resource.data.userId);
+        allow delete: if isUser(resource.data.userId);
     }
 
-    match /matches/{matchId}/mvpVotes/{voteId} {
-      allow read, create: if isAuthenticated();
+    // Matches are complex. Let's allow creation/update by the manager for simplicity for now.
+    match /matches/{matchId} {
+      allow write: if isUser(resource.data.managerRef) || isUser(request.resource.data.managerRef);
     }
+    
+    // Payments are created by server/app logic, updated by the payer or manager.
+    match /payments/{paymentId} {
+      allow create: if isAuthenticated();
+      allow update: if isUser(resource.data.playerRef) || isUser(resource.data.managerRef);
+    }
+
+    // Invitations can be written by the manager, updated by the invited player.
+    match /teamInvitations/{invitationId} {
+        allow create: if isUser(request.resource.data.managerId);
+        allow update: if isUser(resource.data.playerId);
+    }
+    match /matchInvitations/{invitationId} {
+        allow create: if isUser(request.resource.data.managerId);
+        allow update: if isUser(resource.data.playerId);
+    }
+    
+    // MVP votes can be created by a participant, but not read individually
+    // to preserve anonymity until finalization.
+    match /matches/{matchId}/mvpVotes/{voteId} {
+        allow read: if false; // Nobody reads individual votes
+        allow create: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/matches/$(matchId)) &&
+                       (request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.teamAPlayers ||
+                        request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.teamBPlayers) &&
+                       request.resource.data.voterId == request.auth.uid;
+    }
+
   }
 }
