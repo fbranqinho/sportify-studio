@@ -16,129 +16,125 @@ export function usePayments(user: User | null) {
   const [loading, setLoading] = React.useState(true);
 
   const fetchData = React.useCallback(async () => {
-    if (!user?.id) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    
-    // This function will be called by the onSnapshot listeners.
-    // It's designed to be idempotent and handle fetching all related data.
-    const processData = async (paymentsData: Payment[]) => {
-        setAllPayments(paymentsData);
-
-        const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
-        const playerIds = [...new Set([...paymentsData.map(p => p.playerRef), ...paymentsData.map(p => p.managerRef)].filter(Boolean))];
-        const ownerIds = [...new Set(paymentsData.map(p => p.ownerRef).filter(Boolean))];
-
-        if (reservationIds.length > 0) {
-            const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
-            const fetchedReservationsSnap = await getDocs(reservationsQuery);
-            const reservationsMap = new Map<string, Reservation>();
-            fetchedReservationsSnap.forEach(doc => {
-                reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
-            });
-            setReservations(reservationsMap);
-        }
-        
-        if (playerIds.length > 0) {
-            const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
-            const usersSnap = await getDocs(usersQuery);
-            const usersMap = new Map<string, User>();
-            usersSnap.forEach(doc => {
-                usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
-            });
-            setPlayerUsers(usersMap);
-        }
-        
-        if (ownerIds.length > 0) {
-             const ownersQuery = query(collection(db, 'ownerProfiles'), where(documentId(), 'in', ownerIds));
-             const ownersSnap = await getDocs(ownersQuery);
-             const ownersMap = new Map<string, OwnerProfile>();
-             ownersSnap.forEach(doc => {
-                 ownersMap.set(doc.id, { id: doc.id, ...doc.data() } as OwnerProfile);
-             });
-             setOwners(ownersMap);
-        }
-        
-        setLoading(false);
-    };
-
-    // Determine the base query based on user role
-    let paymentsQuery;
-    if (user.role === 'PLAYER') {
-        paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
-    } else if (user.role === 'MANAGER') {
-        // Simplification: Fetch all payments where the manager is directly involved.
-        // We will filter further on the client-side if needed, but this avoids complex OR queries
-        // that often cause permission issues if not indexed perfectly.
-        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
-    } else if (user.role === 'OWNER') {
-        const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
-        const ownerProfileSnap = await getDocs(ownerProfileQuery);
-        if (!ownerProfileSnap.empty) {
-            const ownerProfileId = ownerProfileSnap.docs[0].id;
-            paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
-        } else {
-            setAllPayments([]);
-            setLoading(false);
-            return () => {}; // Return a no-op function for cleanup
-        }
-    } else {
-        setAllPayments([]);
-        setLoading(false);
-        return () => {}; // Return a no-op function for cleanup
-    }
-
-    const unsubscribe = onSnapshot(paymentsQuery, async (paymentsSnapshot) => {
-        try {
-            const paymentsData = paymentsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Payment));
-
-            // For managers, we also need to fetch payments for their teams' players
-            if (user.role === 'MANAGER') {
-                const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.id));
-                const teamsSnap = await getDocs(teamsQuery);
-                const teamRefs = teamsSnap.docs.map(doc => doc.id);
-
-                if (teamRefs.length > 0) {
-                    const teamPaymentsQuery = query(collection(db, 'payments'), where('teamRef', 'in', teamRefs));
-                    const teamPaymentsSnap = await getDocs(teamPaymentsQuery);
-                    teamPaymentsSnap.forEach(doc => {
-                        // Avoid duplicates if the manager is also the payer
-                        if (!paymentsData.some(p => p.id === doc.id)) {
-                             paymentsData.push({ id: doc.id, ...doc.data() } as Payment);
-                        }
-                    });
-                }
-            }
-
-            await processData(paymentsData);
-        } catch (error) {
-            console.error("Error processing payment snapshots:", error);
-            toast({ variant: "destructive", title: "Error", description: "Failed to update payments data." });
-        }
-    }, (error) => {
-        console.error("Error in payments listener:", error);
-        toast({ variant: "destructive", title: "Error", description: "Lost connection to payments data." });
-        setLoading(false);
-    });
-
-    return () => unsubscribe(); // Return the cleanup function for useEffect
-  }, [toast, user]);
+    // This function will be re-created if the user changes, which is fine.
+    // The key change is that the `onSnapshot` listener will now be managed inside
+    // a `useEffect` that correctly handles its lifecycle.
+  }, [user]); // We keep this for external calls, though the primary logic moves to useEffect.
 
 
   React.useEffect(() => {
-    let unsubscribe = () => {};
-    if (user?.id) {
-      fetchData().then(cleanup => {
-          if (cleanup) unsubscribe = cleanup;
-      });
-    } else if (user === null) { 
+    if (!user) {
       setLoading(false);
       setAllPayments([]);
+      return; // No user, do nothing.
     }
-    return () => unsubscribe();
-  }, [user, fetchData]);
 
-  return { allPayments, reservations, playerUsers, owners, loading, fetchData: () => fetchData() };
+    setLoading(true);
+
+    const processData = async (paymentsData: Payment[]) => {
+      setAllPayments(paymentsData);
+
+      const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
+      const playerIds = [...new Set([...paymentsData.map(p => p.playerRef), ...paymentsData.map(p => p.managerRef)].filter(Boolean))];
+      const ownerIds = [...new Set(paymentsData.map(p => p.ownerRef).filter(Boolean))];
+
+      if (reservationIds.length > 0) {
+        const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds));
+        const fetchedReservationsSnap = await getDocs(reservationsQuery);
+        const reservationsMap = new Map<string, Reservation>();
+        fetchedReservationsSnap.forEach(doc => {
+          reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
+        });
+        setReservations(reservationsMap);
+      } else {
+        setReservations(new Map());
+      }
+      
+      if (playerIds.length > 0) {
+        const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds));
+        const usersSnap = await getDocs(usersQuery);
+        const usersMap = new Map<string, User>();
+        usersSnap.forEach(doc => {
+          usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+        });
+        setPlayerUsers(usersMap);
+      } else {
+        setPlayerUsers(new Map());
+      }
+      
+      if (ownerIds.length > 0) {
+           const ownersQuery = query(collection(db, 'ownerProfiles'), where(documentId(), 'in', ownerIds));
+           const ownersSnap = await getDocs(ownersQuery);
+           const ownersMap = new Map<string, OwnerProfile>();
+           ownersSnap.forEach(doc => {
+               ownersMap.set(doc.id, { id: doc.id, ...doc.data() } as OwnerProfile);
+           });
+           setOwners(ownersMap);
+      } else {
+        setOwners(new Map());
+      }
+      
+      setLoading(false);
+    };
+
+    let paymentsQuery;
+    let unsubscribe = () => {}; // Initialize unsubscribe as a no-op function
+
+    (async () => {
+      if (user.role === 'PLAYER') {
+          paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+      } else if (user.role === 'MANAGER') {
+          const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.id));
+          const teamsSnap = await getDocs(teamsQuery);
+          const teamRefs = teamsSnap.docs.map(doc => doc.id);
+          
+          const queries = [where("managerRef", "==", user.id)];
+          if (teamRefs.length > 0) {
+            queries.push(where("teamRef", "in", teamRefs));
+          }
+          paymentsQuery = query(collection(db, "payments"), or(...queries));
+      } else if (user.role === 'OWNER') {
+          const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
+          const ownerProfileSnap = await getDocs(ownerProfileQuery);
+          if (!ownerProfileSnap.empty) {
+              const ownerProfileId = ownerProfileSnap.docs[0].id;
+              paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
+          } else {
+              setAllPayments([]);
+              setLoading(false);
+              return;
+          }
+      } else {
+          setAllPayments([]);
+          setLoading(false);
+          return;
+      }
+      
+      unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
+        const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+        processData(paymentsData).catch(err => {
+            console.error("Error processing snapshot data:", err);
+            toast({ variant: "destructive", title: "Data Error", description: "Failed to process payments data." });
+        });
+      }, (error) => {
+          console.error("Error in payments listener:", error);
+          if (error.code === 'permission-denied') {
+             // Don't show toast on permission denied, as it can happen on logout.
+          } else {
+            toast({ variant: "destructive", title: "Error", description: "Lost connection to payments data." });
+          }
+          setLoading(false);
+      });
+
+    })(); // IIFE to run the async logic within the sync useEffect
+
+    // This is the crucial cleanup function. It will be called when the component
+    // unmounts OR when the dependencies (in this case, `user`) change.
+    return () => {
+      unsubscribe();
+    };
+
+  }, [user, toast]);
+
+  return { allPayments, reservations, playerUsers, owners, loading, fetchData };
 }
