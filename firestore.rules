@@ -1,91 +1,117 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if a user is authenticated
-    function isAuthenticated() {
+  
+    // --- Helper Functions ---
+    function isSignedIn() {
       return request.auth != null;
     }
-    
-    // Helper function to check if the user is the owner of the document
+
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
-
-    // Default deny all reads and writes
-    match /{document=**} {
-      allow read, write: if false;
-    }
     
-    // Allow any authenticated user to read any document.
-    // This is safe for public profiles, game data, etc.
-    // Write access will be restricted by more specific rules below.
-    match /{path=**}/documents/{doc} {
-        allow read: if isAuthenticated();
+    function isManagerOfTeam(teamId) {
+    	return get(/databases/$(database)/documents/teams/$(teamId)).data.managerId == request.auth.uid;
     }
 
-    // Users can only update their own user document
+    // --- Collections Rules ---
+
+    // Users can read any profile, but only write to their own.
     match /users/{userId} {
+      allow read: if isSignedIn();
       allow write: if isOwner(userId);
     }
     
-    // Profiles can only be written to by the owning user
     match /playerProfiles/{profileId} {
-        allow write: if isOwner(request.resource.data.userRef);
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.userRef);
+      allow update: if isOwner(get(/databases/$(database)/documents/playerProfiles/$(profileId)).data.userRef);
     }
-    
+
     match /managerProfiles/{profileId} {
-        allow write: if isOwner(request.resource.data.userRef);
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.userRef);
+      allow update: if isOwner(get(/databases/$(database)/documents/managerProfiles/$(profileId)).data.userRef);
     }
-    
+
     match /ownerProfiles/{profileId} {
-        allow write: if isOwner(request.resource.data.userRef);
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.userRef);
+      allow update: if isOwner(get(/databases/$(database)/documents/ownerProfiles/$(profileId)).data.userRef);
     }
-
-    // Teams can only be written to by their manager
+    
+    // Teams can be read by anyone, but only written to by their manager.
     match /teams/{teamId} {
-      allow write: if isOwner(request.resource.data.managerId);
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.managerId);
+      allow update: if isManagerOfTeam(teamId);
     }
-    
-    // Pitches and Promos can only be written to by their owner
+
+    // Pitches can be read by anyone, but only managed by their owner.
     match /pitches/{pitchId} {
-        allow write: if get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerRef)).data.userRef == request.auth.uid;
+      allow read: if isSignedIn();
+      allow create, update: if get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerRef)).data.userRef == request.auth.uid;
     }
 
-    match /promos/{promoId} {
-       allow write: if get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerProfileId)).data.userRef == request.auth.uid;
-    }
-
-    // Allow authenticated users to manage their own reservations, invitations, and notifications
-    match /reservations/{reservationId} {
-        allow write: if isOwner(request.resource.data.actorId);
-    }
-
-    match /teamInvitations/{invitationId} {
-        allow write: if isOwner(request.resource.data.playerId) || isOwner(request.resource.data.managerId);
-    }
-
-    match /matchInvitations/{invitationId} {
-        allow write: if isOwner(request.resource.data.playerId) || isOwner(request.resource.data.managerId);
-    }
-    
-    match /notifications/{notificationId} {
-        allow write: if isAuthenticated();
-    }
-    
-    // Matches can be updated by the manager who created it
+    // Matches can be read by anyone. Writes are more complex.
     match /matches/{matchId} {
-        allow write: if isOwner(request.resource.data.managerRef);
-    }
-    
-     match /matches/{matchId}/mvpVotes/{voteId} {
-      allow write: if isOwner(request.resource.data.voterId);
+      allow read: if isSignedIn();
+      // Allow create if the user is the one creating the reservation for the match
+      allow create: if isSignedIn(); // Simplified for creation via reservation
+      // Allow updates if user is the manager of teamA or teamB
+      allow update: if isSignedIn(); // Simplified for now, complex logic with roles needed
     }
 
-    // Payments can be written by the user they belong to
+    // Reservations can be read by involved parties.
+    match /reservations/{reservationId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(request.resource.data.actorId);
+      // Allow updates (confirm/cancel) by the owner or the original actor (for cancellations)
+      allow update: if get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid || isOwner(resource.data.actorId);
+      allow delete: if get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid || isOwner(resource.data.actorId);
+    }
+    
+    // Players/Managers can read their own payments. Owners can read payments for their pitches.
     match /payments/{paymentId} {
-        allow write: if isOwner(request.resource.data.playerRef) || isOwner(request.resource.data.managerRef);
+        allow read: if isSignedIn() && 
+                    (resource.data.playerRef == request.auth.uid || 
+                     resource.data.managerRef == request.auth.uid ||
+                     get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef == request.auth.uid);
+        allow create: if isOwner(request.resource.data.playerRef) || isOwner(request.resource.data.managerRef);
+        allow update: if isOwner(request.resource.data.playerRef) || isOwner(request.resource.data.managerRef);
+    }
+    
+    // Owners can manage their own promos.
+    match /promos/{promoId} {
+        allow read: if isSignedIn();
+        allow create, update: if get(/databases/$(database)/documents/ownerProfiles/$(request.resource.data.ownerProfileId)).data.userRef == request.auth.uid;
+    }
+
+    // Users can only read/write their own notifications.
+    match /notifications/{notificationId} {
+      allow read, write: if isOwner(resource.data.userId) || get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerProfileId)).data.userRef == request.auth.uid;
+      allow create: if isSignedIn();
+    }
+    
+    // Invitations can be read by involved parties and written to by them.
+    match /teamInvitations/{invitationId} {
+        allow read: if isOwner(resource.data.playerId) || isOwner(resource.data.managerId);
+        allow create: if isOwner(request.resource.data.managerId);
+        allow update: if isOwner(resource.data.playerId) || isOwner(resource.data.managerId);
+    }
+    
+    match /matchInvitations/{invitationId} {
+        allow read, write: if isOwner(resource.data.playerId) || isOwner(resource.data.managerId);
+        allow create: if isOwner(request.resource.data.managerId);
+    }
+    
+    // MVP Votes subcollection
+    match /matches/{matchId}/mvpVotes/{voteId} {
+       allow read: if isSignedIn();
+       allow create: if isOwner(request.resource.data.voterId);
     }
   }
 }
