@@ -69,14 +69,10 @@ export function usePayments(user: User | null) {
     if (user.role === 'PLAYER') {
         paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
     } else if (user.role === 'MANAGER') {
-        const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.id));
-        const teamsSnap = await getDocs(teamsQuery);
-        const teamIds = teamsSnap.docs.map(doc => doc.id);
-        const queries = [where("managerRef", "==", user.id)];
-        if (teamIds.length > 0) {
-            queries.push(where("teamRef", "in", teamIds));
-        }
-        paymentsQuery = query(collection(db, "payments"), or(...queries));
+        // Simplification: Fetch all payments where the manager is directly involved.
+        // We will filter further on the client-side if needed, but this avoids complex OR queries
+        // that often cause permission issues if not indexed perfectly.
+        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else if (user.role === 'OWNER') {
         const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
         const ownerProfileSnap = await getDocs(ownerProfileQuery);
@@ -97,6 +93,25 @@ export function usePayments(user: User | null) {
     const unsubscribe = onSnapshot(paymentsQuery, async (paymentsSnapshot) => {
         try {
             const paymentsData = paymentsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Payment));
+
+            // For managers, we also need to fetch payments for their teams' players
+            if (user.role === 'MANAGER') {
+                const teamsQuery = query(collection(db, 'teams'), where('managerId', '==', user.id));
+                const teamsSnap = await getDocs(teamsQuery);
+                const teamRefs = teamsSnap.docs.map(doc => doc.id);
+
+                if (teamRefs.length > 0) {
+                    const teamPaymentsQuery = query(collection(db, 'payments'), where('teamRef', 'in', teamRefs));
+                    const teamPaymentsSnap = await getDocs(teamPaymentsQuery);
+                    teamPaymentsSnap.forEach(doc => {
+                        // Avoid duplicates if the manager is also the payer
+                        if (!paymentsData.some(p => p.id === doc.id)) {
+                             paymentsData.push({ id: doc.id, ...doc.data() } as Payment);
+                        }
+                    });
+                }
+            }
+
             await processData(paymentsData);
         } catch (error) {
             console.error("Error processing payment snapshots:", error);
