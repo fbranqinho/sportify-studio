@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isUserAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(docData) {
+      return request.auth.uid == docData.userRef;
+    }
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isOwner(resource.data);
+    }
+    
+    match /playerProfiles/{profileId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isOwner(resource.data);
+    }
+    
+    match /managerProfiles/{profileId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isOwner(resource.data);
+    }
+
+    match /ownerProfiles/{profileId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isOwner(resource.data);
+    }
+    
+    match /teams/{teamId} {
+      allow read: if isUserAuthenticated();
+      allow create, update: if request.auth.uid == request.resource.data.managerId;
+    }
+    
+    match /matches/{matchId} {
+      // Allow any authenticated user to read.
+      allow read: if isUserAuthenticated();
+      
+      // Allow manager to create their own matches.
+      // Allow players to apply or accept invitations (which involves updating the match document).
+      // Allow managers to accept applications.
+      allow write: if request.auth.uid == resource.data.managerRef || request.auth.uid == resource.data.actorId || isUserAuthenticated();
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if isUserAuthenticated();
+      allow create: if request.auth.uid == request.resource.data.actorId;
+      allow update: if request.resource.data.ownerProfileId != null; // Simplified rule
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isUserAuthenticated();
+      allow write: if request.auth.uid == resource.data.actorId || request.auth.uid == resource.data.playerRef || request.auth.uid == resource.data.managerRef || isUserAuthenticated();
+    }
+    
+    match /promos/{promoId} {
+      allow read: if isUserAuthenticated();
+      allow write: if isUserAuthenticated();
+    }
+
+    match /teamInvitations/{invitationId} {
+      allow read, write: if isUserAuthenticated();
+    }
+    
+    match /matchInvitations/{invitationId} {
+      allow read, write: if isUserAuthenticated();
+    }
+    
+    match /notifications/{notificationId} {
+      allow read, write, create: if isUserAuthenticated();
+    }
+    
+    match /matches/{matchId}/mvpVotes/{voteId} {
+      allow read, write: if isUserAuthenticated();
+    }
+  }
+}

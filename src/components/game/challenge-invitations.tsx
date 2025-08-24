@@ -73,7 +73,7 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                 toast({ variant: "destructive", title: "Error", description: "Challenging team not found." });
                 return;
             }
-            const challengerTeam = challengerTeamSnap.data() as Team;
+            const challengerTeam = {id: challengerTeamSnap.id, ...challengerTeamSnap.data()} as Team;
 
             batch.update(matchRef, {
                 teamBRef: challengerTeamId,
