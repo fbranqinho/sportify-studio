@@ -149,11 +149,16 @@ export function useMyGames(user: User | null) {
 
 
   React.useEffect(() => {
-      const unsub = onSnapshot(collection(db, 'matches'), (snapshot) => {
-          fetchGameData();
-      });
-      return () => unsub();
-  }, [fetchGameData]);
+    if (!user) {
+        setLoading(false);
+        return;
+    }
+    const q = query(collection(db, 'matches'));
+    const unsub = onSnapshot(q, (snapshot) => {
+        fetchGameData();
+    });
+    return () => unsub();
+  }, [user, fetchGameData]);
 
   const handlePlayerInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
      if (!user) return;

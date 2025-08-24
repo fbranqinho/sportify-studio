@@ -38,24 +38,34 @@ export function PitchSchedule({ pitch, user }: PitchScheduleProps) {
 
     React.useEffect(() => {
         setLoading(true);
-        const qReservations = query(collection(db, "reservations"), where("pitchId", "==", pitch.id));
-        const qMatches = query(collection(db, "matches"), where("pitchRef", "==", pitch.id));
-        const qPromos = query(collection(db, "promos"), where("ownerProfileId", "==", pitch.ownerRef));
 
         const unsubs: (()=>void)[] = [];
-        
+
+        const qReservations = query(collection(db, "reservations"), where("pitchId", "==", pitch.id));
         unsubs.push(onSnapshot(qReservations, (snap) => setReservations(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Reservation))));
+        
+        const qMatches = query(collection(db, "matches"), where("pitchRef", "==", pitch.id));
         unsubs.push(onSnapshot(qMatches, (snap) => setMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match))));
+
+        const qPromos = query(collection(db, "promos"), where("ownerProfileId", "==", pitch.ownerRef));
         unsubs.push(onSnapshot(qPromos, (snap) => setPromos(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Promo))));
 
-        if (user.role === 'MANAGER') {
+        if (user?.role === 'MANAGER') {
             const qPlayerTeams = query(collection(db, "teams"), where("managerId", "==", user.id));
             unsubs.push(onSnapshot(qPlayerTeams, (snap) => setUserTeams(snap.docs.map(doc => ({id: doc.id, ...doc.data()}) as Team))));
         }
 
-        Promise.all([getDocs(qReservations), getDocs(qMatches), getDocs(qPromos)])
-          .then(() => setLoading(false))
-          .catch(() => setLoading(false));
+        const fetchInitialData = async () => {
+             await Promise.all([
+                getDocs(qReservations),
+                getDocs(qMatches),
+                getDocs(qPromos),
+                user?.role === 'MANAGER' ? getDocs(query(collection(db, "teams"), where("managerId", "==", user.id))) : Promise.resolve(),
+            ]).catch(console.error);
+            setLoading(false);
+        };
+        
+        fetchInitialData();
 
         return () => { unsubs.forEach(unsub => unsub()); };
     }, [pitch.id, pitch.ownerRef, user.id, user.role]);

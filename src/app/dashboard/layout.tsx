@@ -57,47 +57,31 @@ function NotificationBell() {
 
     let unsubscribe: (() => void) | undefined;
 
-    const handleSnapshot = (snapshot: any) => {
-        const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
-        // Sort in the client to avoid composite indexes
-        notifs.sort((a, b) => {
-          const aTime = a.createdAt?.seconds || 0;
-          const bTime = b.createdAt?.seconds || 0;
-          return bTime - aTime;
-        });
-        setNotifications(notifs);
-        const unread = notifs.filter(n => !n.read).length;
-        setUnreadCount(unread);
-    };
-
-    const handleError = (error: any) => {
-         console.error("Error fetching notifications (check Firestore indexes):", error);
+    const setupListener = (q: any) => {
+        return onSnapshot(q, 
+            (snapshot) => {
+                const notifs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as Notification));
+                notifs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                setNotifications(notifs);
+                setUnreadCount(notifs.filter(n => !n.read).length);
+            },
+            (error) => {
+                 console.error("Error fetching notifications (check Firestore indexes):", error);
+            }
+        );
     };
     
     let notifQuery;
     if (user.role === 'OWNER') {
-        // Wait for profile to be loaded
         if (ownerProfile) {
-            notifQuery = query(
-                collection(db, "notifications"),
-                where("ownerProfileId", "==", ownerProfile.id),
-                // Order by is removed to avoid needing a composite index. We will sort on the client.
-                limit(50) // Fetch more to sort client-side
-            );
+            notifQuery = query(collection(db, "notifications"), where("ownerProfileId", "==", ownerProfile.id), limit(50));
+            unsubscribe = setupListener(notifQuery);
         }
     } else {
-        notifQuery = query(
-          collection(db, "notifications"),
-          where("userId", "==", user.id),
-          orderBy("createdAt", "desc"),
-          limit(10)
-        );
+        notifQuery = query(collection(db, "notifications"), where("userId", "==", user.id), orderBy("createdAt", "desc"), limit(10));
+        unsubscribe = setupListener(notifQuery);
     }
     
-    if (notifQuery) {
-        unsubscribe = onSnapshot(notifQuery, handleSnapshot, handleError);
-    }
-
     return () => {
         if (unsubscribe) {
             unsubscribe();

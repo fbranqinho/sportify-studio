@@ -34,7 +34,10 @@ export default function LiveGamePage() {
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
-        if (!gameId) return;
+        if (!gameId) {
+            setLoading(false);
+            return;
+        };
 
         const unsubMatch = onSnapshot(doc(db, "matches", gameId), async (matchSnap) => {
             if (matchSnap.exists()) {

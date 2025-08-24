@@ -152,18 +152,13 @@ function PlayerTeamsView() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || user.role !== 'PLAYER') {
+        setLoading(false);
+        return;
+    }
     
     setLoading(true);
-    let activeSubscriptions = 2; // We have two listeners
-
-    const onDataLoaded = () => {
-        activeSubscriptions -= 1;
-        if (activeSubscriptions === 0) {
-            setLoading(false);
-        }
-    };
-
+    
     // Fetch Invitations
     const invitationsQuery = query(
       collection(db, "teamInvitations"),
@@ -172,21 +167,21 @@ function PlayerTeamsView() {
     );
     const unsubscribeInvitations = onSnapshot(invitationsQuery, (snapshot) => {
       setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamInvitation)));
-      onDataLoaded();
-    }, () => { onDataLoaded(); });
+      if (loading) setLoading(false);
+    }, (error) => { console.error(error); setLoading(false); });
 
     // Fetch Teams
     const teamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
     const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-      onDataLoaded();
-    }, () => { onDataLoaded(); });
+      if (loading) setLoading(false);
+    }, (error) => { console.error(error); setLoading(false); });
     
     return () => {
         unsubscribeInvitations();
         unsubscribeTeams();
     };
-  }, [user]);
+  }, [user, loading]);
 
 
   const handleInvitationResponse = async (invitation: TeamInvitation, accepted: boolean) => {

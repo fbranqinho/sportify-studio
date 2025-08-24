@@ -37,7 +37,10 @@ export default function PromosPage() {
   const [editingPromo, setEditingPromo] = React.useState<Promo | null>(null);
 
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || user.role !== 'OWNER') {
+        setLoading(false);
+        return;
+    }
 
     const fetchOwnerProfileAndPitches = async () => {
       try {
@@ -62,7 +65,11 @@ export default function PromosPage() {
   }, [user]);
 
   React.useEffect(() => {
-    if (!ownerProfile) return;
+    if (!ownerProfile) {
+        if(user?.role === 'OWNER') setLoading(true);
+        else setLoading(false);
+        return;
+    };
 
     setLoading(true);
     const q = query(collection(db, "promos"), where("ownerProfileId", "==", ownerProfile.id));
@@ -78,7 +85,7 @@ export default function PromosPage() {
     });
 
     return () => unsubscribe();
-  }, [ownerProfile]);
+  }, [ownerProfile, user?.role]);
   
   const handlePromoCreated = () => {
     setIsCreateDialogOpen(false);

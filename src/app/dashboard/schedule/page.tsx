@@ -65,10 +65,9 @@ export default function SchedulePage() {
     
     setLoading(true);
 
-    let unsubscribe = () => {};
-    let reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+    const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
     
-    unsubscribe = onSnapshot(reservationsQuery, async (querySnapshot) => {
+    const unsubscribe = onSnapshot(reservationsQuery, async (querySnapshot) => {
       const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
       setReservations(reservationsData);
 
