@@ -96,9 +96,11 @@ export function useMyGames(user: User | null) {
                   matchConditions.push(where("invitedTeamId", "in", userTeamIds));
               }
               
-              const finalMatchQuery = query(collection(db, "matches"), or(...matchConditions));
-              const matchesSnapshot = await getDocs(finalMatchQuery);
-              finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+              if (matchConditions.length > 0) {
+                const finalMatchQuery = query(collection(db, "matches"), or(...matchConditions));
+                const matchesSnapshot = await getDocs(finalMatchQuery);
+                finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+              }
           }
           
           setMatches(finalMatches);
@@ -153,11 +155,7 @@ export function useMyGames(user: User | null) {
         setLoading(false);
         return;
     }
-    const q = query(collection(db, 'matches'));
-    const unsub = onSnapshot(q, (snapshot) => {
-        fetchGameData();
-    });
-    return () => unsub();
+    fetchGameData();
   }, [user, fetchGameData]);
 
   const handlePlayerInvitationResponse = async (invitation: MatchInvitation, accepted: boolean) => {
