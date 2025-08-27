@@ -33,7 +33,7 @@ import { UserProvider, useUser } from "@/hooks/use-user";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
-import { Badge } from "../ui/badge";
+import { Badge } from "@/components/ui/badge";
 
 function NotificationBell() {
   const { user } = useUser();
