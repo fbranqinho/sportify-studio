@@ -17,6 +17,7 @@ export interface User {
   premiumPlan?: string;
   premiumPlanExpireDate?: string; // ISO 8601 string
   createdAt: Timestamp;
+  stripeRole?: string; // Added for Stripe subscription role
 }
 
 export type DominantFoot = "left" | "right" | "both";
