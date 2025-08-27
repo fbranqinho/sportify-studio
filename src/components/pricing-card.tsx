@@ -10,11 +10,9 @@ import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements, useStripe } from "@stripe/react-stripe-js";
 
-interface PricingCardProps {
-    user: User | null;
-}
 
 const premiumFeatures = [
     "Advanced Statistics Analysis",
@@ -25,10 +23,11 @@ const premiumFeatures = [
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-export function PricingCard({ user }: PricingCardProps) {
+const UpgradeButton = () => {
     const { firebaseUser } = useUser();
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = React.useState(false);
+    const stripe = useStripe();
 
     const handleUpgrade = async () => {
         setIsProcessing(true);
@@ -36,6 +35,10 @@ export function PricingCard({ user }: PricingCardProps) {
             if (!firebaseUser) {
                 throw new Error("User not authenticated.");
             }
+            if (!stripe) {
+                throw new Error("Stripe.js has not loaded yet.");
+            }
+
             const token = await firebaseUser.getIdToken();
 
             const res = await fetch("/api/create-checkout-session", {
@@ -44,18 +47,15 @@ export function PricingCard({ user }: PricingCardProps) {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ priceId: process.env.STRIPE_PRO_PRICE_ID }),
+                body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID }),
             });
 
             if (!res.ok) {
-                throw new Error(`Failed to create checkout session: ${res.statusText}`);
+                const errorBody = await res.text();
+                throw new Error(`Failed to create checkout session: ${res.statusText} - ${errorBody}`);
             }
 
             const { sessionId } = await res.json();
-            const stripe = await stripePromise;
-            if (!stripe) {
-                throw new Error("Stripe.js has not loaded yet.");
-            }
             
             const { error } = await stripe.redirectToCheckout({ sessionId });
             if (error) {
@@ -71,7 +71,15 @@ export function PricingCard({ user }: PricingCardProps) {
             setIsProcessing(false);
         }
     }
+     return (
+         <Button onClick={handleUpgrade} className="w-full font-bold" disabled={isProcessing || !stripe}>
+            {isProcessing ? "Processing..." : "Upgrade to Premium"}
+        </Button>
+     )
+}
 
+
+export function PricingCard({ user }: { user: User | null }) {
     if (!user) {
         return null;
     }
@@ -112,9 +120,9 @@ export function PricingCard({ user }: PricingCardProps) {
             </CardContent>
             <CardFooter>
                  {!user.premiumPlan && (
-                    <Button onClick={handleUpgrade} className="w-full font-bold" disabled={isProcessing}>
-                        {isProcessing ? "Processing..." : "Upgrade to Premium"}
-                    </Button>
+                    <Elements stripe={stripePromise}>
+                       <UpgradeButton />
+                    </Elements>
                 )}
                  {user.premiumPlan && (
                      <p className="text-sm text-muted-foreground text-center w-full">You have the best plan available. Thank you for your support!</p>
