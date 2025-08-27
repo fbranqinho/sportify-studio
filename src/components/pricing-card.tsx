@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Check, Gem } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { cn } from "@/lib/utils";
 
 interface PricingCardProps {
     user: User | null;
