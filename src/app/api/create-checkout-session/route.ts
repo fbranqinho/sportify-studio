@@ -15,6 +15,11 @@ export async function POST(req: Request) {
     if (!authToken) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    if (!adminApp) {
+        console.error("Firebase Admin SDK is not initialized. Check server environment variables.");
+        return new NextResponse("Server is not configured correctly.", { status: 503 });
+    }
     
     try {
         const decodedToken = await getAuth(adminApp).verifyIdToken(authToken);
