@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Check, Gem } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/hooks/use-user";
+import { useToast } from "@/hooks/use-toast";
+import { loadStripe } from '@stripe/stripe-js';
 
 interface PricingCardProps {
     user: User | null;
@@ -20,11 +23,53 @@ const premiumFeatures = [
     "Customizable profile with badges"
 ];
 
-export function PricingCard({ user }: PricingCardProps) {
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-    const handleUpgrade = () => {
-        // Here you would integrate with a payment provider like Stripe
-        alert("Upgrade functionality coming soon!");
+export function PricingCard({ user }: PricingCardProps) {
+    const { firebaseUser } = useUser();
+    const { toast } = useToast();
+    const [isProcessing, setIsProcessing] = React.useState(false);
+
+    const handleUpgrade = async () => {
+        setIsProcessing(true);
+        try {
+            if (!firebaseUser) {
+                throw new Error("User not authenticated.");
+            }
+            const token = await firebaseUser.getIdToken();
+
+            const res = await fetch("/api/create-checkout-session", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ priceId: process.env.STRIPE_PRO_PRICE_ID }),
+            });
+
+            if (!res.ok) {
+                throw new Error(`Failed to create checkout session: ${res.statusText}`);
+            }
+
+            const { sessionId } = await res.json();
+            const stripe = await stripePromise;
+            if (!stripe) {
+                throw new Error("Stripe.js has not loaded yet.");
+            }
+            
+            const { error } = await stripe.redirectToCheckout({ sessionId });
+            if (error) {
+                throw error;
+            }
+        } catch (error: any) {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error.message || "Something went wrong.",
+            });
+        } finally {
+            setIsProcessing(false);
+        }
     }
 
     if (!user) {
@@ -67,8 +112,8 @@ export function PricingCard({ user }: PricingCardProps) {
             </CardContent>
             <CardFooter>
                  {!user.premiumPlan && (
-                    <Button onClick={handleUpgrade} className="w-full font-bold">
-                        Upgrade to Premium
+                    <Button onClick={handleUpgrade} className="w-full font-bold" disabled={isProcessing}>
+                        {isProcessing ? "Processing..." : "Upgrade to Premium"}
                     </Button>
                 )}
                  {user.premiumPlan && (
