@@ -26,13 +26,14 @@ import { DashboardNav } from "@/components/dashboard-nav";
 import { Icons } from "@/components/icons";
 import type { User, UserRole, Notification, OwnerProfile } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Bell, LogOut, Settings, Check } from "lucide-react";
+import { Bell, LogOut, Settings, Check, Gem } from "lucide-react";
 import { app, db } from "@/lib/firebase";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { UserProvider, useUser } from "@/hooks/use-user";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
+import { Badge } from "../ui/badge";
 
 function NotificationBell() {
   const { user } = useUser();
@@ -206,35 +207,47 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <DashboardNav role={user.role} />
           </SidebarContent>
           <SidebarFooter>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
-                  <Avatar className="size-10">
-                    <AvatarImage src="https://placehold.co/100x100.png" alt={user.name} data-ai-hint="male profile"/>
-                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="group-data-[collapsible=icon]:hidden">
-                    <p className="font-semibold font-headline">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()}</p>
+             <div className="relative group-data-[collapsible=icon]:-left-1">
+                {!user.premiumPlan && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-auto group-data-[collapsible=icon]:hidden">
+                      <Link href="/dashboard/settings">
+                        <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg animate-pulse gap-1 border-amber-500">
+                          <Gem className="h-3 w-3"/>
+                          Go Premium
+                        </Badge>
+                      </Link>
                   </div>
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 mb-2 ml-2" side="right" align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-500 focus:text-red-500 focus:bg-red-50">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className="flex w-full cursor-pointer items-center gap-3 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:py-2 hover:bg-sidebar-accent rounded-md">
+                      <Avatar className="size-10">
+                        <AvatarImage src="https://placehold.co/100x100.png" alt={user.name} data-ai-hint="male profile"/>
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="group-data-[collapsible=icon]:hidden">
+                        <p className="font-semibold font-headline">{user.name}</p>
+                        <p className="text-sm text-muted-foreground">{user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()}</p>
+                      </div>
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56 mb-2 ml-2" side="right" align="end">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-red-500 focus:text-red-500 focus:bg-red-50">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
           </SidebarFooter>
         </Sidebar>
 
