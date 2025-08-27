@@ -25,13 +25,14 @@ import {
   Gamepad2,
   Calendar,
 } from "lucide-react";
+import { useUser } from "@/hooks/use-user";
 
 const navItems: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
+  { title: "Dashboard", href: "/dashboard", roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"] },
   { title: "Play Now", href: "/dashboard/games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
   { title: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["PLAYER", "MANAGER"] },
   { title: "My Games", href: "/dashboard/my-games", icon: Gamepad2, roles: ["PLAYER", "MANAGER", "REFEREE"] },
-  { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"] },
+  { title: "My Stats", href: "/dashboard/stats", icon: BarChart3, roles: ["PLAYER"], premium: true },
   { title: "My Payments", href: "/dashboard/payments", icon: Landmark, roles: ["PLAYER", "MANAGER", "OWNER", "PROMOTER"] },
   { title: "My Competitions", href: "/dashboard/competitions", icon: Award, roles: ["MANAGER", "PROMOTER"] },
   // Owner specific ordered items
@@ -48,6 +49,7 @@ interface DashboardNavProps {
 
 export function DashboardNav({ role }: DashboardNavProps) {
   const pathname = usePathname();
+  const { user } = useUser();
   
   const ownerNavOrder: NavItem[] = [
     navItems.find(item => item.href === "/dashboard")!,
@@ -62,7 +64,15 @@ export function DashboardNav({ role }: DashboardNavProps) {
   if (role === 'OWNER') {
       filteredNavItems = ownerNavOrder;
   } else {
-      filteredNavItems = navItems.filter(item => item.roles.includes(role));
+      filteredNavItems = navItems.filter(item => {
+        const roleMatch = item.roles.includes(role);
+        if (!roleMatch) return false;
+        // If item requires premium, check user plan
+        if (item.premium) {
+            return !!user?.premiumPlan;
+        }
+        return true;
+      });
   }
 
   return (

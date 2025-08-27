@@ -391,6 +391,7 @@ export type NavItem = {
   icon: LucideIcon;
   roles: UserRole[];
   label?: string;
+  premium?: boolean;
 };
 
 export interface EnrichedPlayerSearchResult {
