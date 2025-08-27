@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EditPlayerProfileForm } from "@/components/forms/edit-player-profile-form";
 import { EditManagerProfileForm } from "@/components/forms/edit-manager-profile-form";
 import { EditOwnerProfileForm } from "@/components/forms/edit-owner-profile-form";
+import { PricingCard } from "@/components/pricing-card";
 
 export default function SettingsPage() {
     const { user } = useUser();
@@ -57,7 +58,7 @@ export default function SettingsPage() {
         fetchProfile();
     }, [user]);
 
-    const renderSettings = () => {
+    const renderSettingsForms = () => {
         if (loading || !user) {
             return <Skeleton className="h-48 w-full" />;
         }
@@ -101,10 +102,18 @@ export default function SettingsPage() {
             <div>
                 <h1 className="text-3xl font-bold font-headline">Settings</h1>
                 <p className="text-muted-foreground">
-                    Manage your account and profile settings.
+                    Manage your account, profile, and subscription settings.
                 </p>
             </div>
-            {renderSettings()}
+            
+            <div className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2">
+                    {renderSettingsForms()}
+                </div>
+                <div className="lg:col-span-1">
+                     <PricingCard user={user} />
+                </div>
+            </div>
         </div>
     );
 }
