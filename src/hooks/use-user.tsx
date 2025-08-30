@@ -30,30 +30,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         try {
           const userDocRef = doc(db, "users", fbUser.uid);
 
-          // Listen for changes on both the user and their stripe customer document
           const unsubUser = onSnapshot(userDocRef, async (userDoc) => {
             if (userDoc.exists()) {
               const userData = { id: userDoc.id, ...userDoc.data() } as User;
               
-              // Now check for Stripe role
-              const customerDocRef = doc(db, "customers", fbUser.uid);
-              const customerDoc = await getDoc(customerDocRef);
+              // Get custom claims from the ID token
+              const idTokenResult = await fbUser.getIdTokenResult();
+              const stripeRole = idTokenResult.claims.stripeRole as string | undefined;
 
-              if (customerDoc.exists()) {
-                  const customerData = customerDoc.data();
-                  const subscriptions = customerData.subscriptions;
-                  if (subscriptions && subscriptions.length > 0) {
-                      // Find an active subscription
-                      const activeSub = subscriptions.find((sub: any) => sub.status === 'active');
-                      if (activeSub) {
-                          // Get the role from the first price's metadata
-                          const role = activeSub.items[0]?.price?.product?.metadata?.stripeRole;
-                          if (role) {
-                              userData.premiumPlan = role;
-                          }
-                      }
-                  }
+              if (stripeRole) {
+                userData.premiumPlan = stripeRole;
               }
+              
               setUser(userData);
             } else {
               console.error("No user document found in Firestore, logging out.");
@@ -72,13 +60,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setUser(null);
-        // Only push to login if not already on a public page
         const publicPages = ['/login', '/signup', '/'];
         if (!publicPages.includes(window.location.pathname)) {
             router.push("/login");
         }
       }
-      // Set loading to false after initial check is done
        if (loading) {
             setLoading(false);
        }
