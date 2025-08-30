@@ -27,52 +27,33 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
       if (fbUser) {
-        try {
-          const userDocRef = doc(db, "users", fbUser.uid);
+        const userDocRef = doc(db, "users", fbUser.uid);
+        const unsubUser = onSnapshot(userDocRef, async (userDoc) => {
+          if (userDoc.exists()) {
+            const userData = { id: userDoc.id, ...userDoc.data() } as User;
+            
+            // Get custom claims from the ID token
+            const idTokenResult = await fbUser.getIdTokenResult(true); // Force refresh
+            const stripeRole = idTokenResult.claims.stripeRole as string | undefined;
 
-          const unsubUser = onSnapshot(userDocRef, async (userDoc) => {
-            if (userDoc.exists()) {
-              const userData = { id: userDoc.id, ...userDoc.data() } as User;
-              
-              // Get custom claims from the ID token
-              const idTokenResult = await fbUser.getIdTokenResult();
-              const stripeRole = idTokenResult.claims.stripeRole as string | undefined;
-
-              if (stripeRole) {
-                userData.premiumPlan = stripeRole;
-              }
-              
-              setUser(userData);
-            } else {
-              console.error("No user document found in Firestore, logging out.");
-              await signOut(auth);
-              setUser(null);
-              router.push("/login");
-            }
-          });
-
-          return () => unsubUser(); // Return the user snapshot listener for cleanup
-
-        } catch(error) {
-            console.error("Error fetching user document:", error);
-            setUser(null);
-            setLoading(false);
-        }
+            userData.premiumPlan = stripeRole || undefined;
+            
+            setUser(userData);
+          } else {
+            console.log("User document not found yet for uid:", fbUser.uid);
+            setUser(null); // Explicitly set user to null if document doesn't exist
+          }
+           setLoading(false); // Set loading to false once we have a definitive answer
+        });
+        return () => unsubUser();
       } else {
         setUser(null);
-        const publicPages = ['/login', '/signup', '/'];
-        if (!publicPages.includes(window.location.pathname)) {
-            router.push("/login");
-        }
+        setLoading(false);
       }
-       if (loading) {
-            setLoading(false);
-       }
     });
 
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth]);
 
   const value = { user, firebaseUser, loading };
 
