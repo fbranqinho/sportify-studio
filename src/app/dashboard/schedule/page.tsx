@@ -146,7 +146,7 @@ export default function SchedulePage() {
             scoreA: 0,
             scoreB: 0,
             pitchRef: reservation.pitchId,
-            status: reservation.teamRef ? "Collecting players" : "Scheduled",
+            status: "Collecting players", // Status is always collecting players initially
             attendance: 0,
             refereeId: null,
             managerRef: reservation.actorId || null,
@@ -159,7 +159,7 @@ export default function SchedulePage() {
         const approvalNotificationRef = doc(collection(db, "users", actorId, "notifications"));
         batch.set(approvalNotificationRef, {
             message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players.`,
-            link: '/dashboard/my-games',
+            link: `/dashboard/games/${newMatchRef.id}`, // Link directly to the new game
             read: false,
             createdAt: serverTimestamp() as any,
         });

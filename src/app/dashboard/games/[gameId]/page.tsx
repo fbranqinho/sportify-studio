@@ -4,14 +4,14 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, collection, query, where, getDocs, documentId, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, documentId, updateDoc, serverTimestamp, writeBatch, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Notification, Pitch, OwnerProfile, User, MatchEvent, Reservation } from "@/types";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Play, Shirt } from "lucide-react";
+import { ChevronLeft, Play, Shirt, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn, getPlayerCapacity } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { MatchReport } from "@/components/game/match-report";
 import { MatchDetailsCard } from "@/components/game/match-details-card";
 import { DressingRoom } from "@/components/game/dressing-room";
 import { KudosVoting } from "@/components/kudos-voting";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 
 export default function GameDetailsPage() {
@@ -131,12 +132,42 @@ export default function GameDetailsPage() {
         setMatch(prev => prev ? {...prev, ...data} : null);
     }
 
-    const handleEventAdded = (event: MatchEvent) => {
-        setMatch(prev => {
-            if (!prev) return null;
-            const newEvents = [...(prev.events || []), event];
-            return { ...prev, events: newEvents };
-        });
+    const handleInviteTeam = async () => {
+        if (!teamA || !teamA.playerIds || teamA.playerIds.length === 0) {
+            toast({ variant: "destructive", title: "No players in team", description: "Your team has no players to invite." });
+            return;
+        }
+
+        const batch = writeBatch(db);
+
+        for (const playerId of teamA.playerIds) {
+            const invitationRef = doc(collection(db, "matchInvitations"));
+            batch.set(invitationRef, {
+                matchId: gameId,
+                teamId: teamA.id,
+                playerId: playerId,
+                managerId: user?.id,
+                status: "pending",
+                invitedAt: serverTimestamp(),
+            });
+
+            const notificationRef = doc(collection(db, "users", playerId, "notifications"));
+            batch.set(notificationRef, {
+                message: `You've been invited to a game with ${teamA.name}.`,
+                link: '/dashboard/my-games',
+                read: false,
+                createdAt: serverTimestamp() as any,
+            });
+        }
+        
+        try {
+            await batch.commit();
+            toast({ title: "Invitations Sent!", description: `All ${teamA.playerIds.length} players in your team have been invited.` });
+            fetchGameDetails(); // Refetch to update invitation counts
+        } catch (error) {
+            console.error("Error sending invitations:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not send invitations." });
+        }
     }
 
     const handleStartGame = async () => {
@@ -187,7 +218,7 @@ export default function GameDetailsPage() {
     const isFinished = match.status === 'Finished';
     const isLive = match.status === 'InProgress';
     const canStartGame = match.status === 'Scheduled' && isManager && reservation?.paymentStatus === 'Paid';
-    const confirmedPlayers = [...(match.teamAPlayers || []), ...(match.teamBPlayers || [])];
+    const showInviteTeamButton = isManagerA && match.status === 'Collecting players' && invitationCounts.pending === 0;
 
     const getMatchTitle = () => {
         const teamAName = teamA?.name || 'Team A';
@@ -219,6 +250,34 @@ export default function GameDetailsPage() {
                 owner={owner}
                 invitationCounts={invitationCounts}
             />
+            
+            {showInviteTeamButton && (
+                <Card className="bg-primary/10 border-primary/20">
+                    <CardHeader className="flex-row items-center justify-between">
+                         <div>
+                            <CardTitle>Ready to Play?</CardTitle>
+                            <CardDescription>Invite your team members to join this game.</CardDescription>
+                         </div>
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                               <Button><Send className="mr-2 h-4 w-4"/>Invite Team</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Invite Your Team?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will send a game invitation to all players currently on your roster for {teamA?.name}. Are you sure?
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleInviteTeam}>Yes, Send Invitations</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </CardHeader>
+                </Card>
+            )}
 
             {isManager && !isFinished && !isLive && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
