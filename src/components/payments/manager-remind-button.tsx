@@ -1,9 +1,10 @@
 
+
 "use client";
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc } from "firebase/firestore";
 import type { Payment, Notification } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -20,8 +21,8 @@ export const ManagerRemindButton = ({ payment }: { payment: Payment }) => {
         }
         setIsSending(true);
         try {
+            const notificationRef = doc(collection(db, "users", payment.playerRef, "notifications"));
             const notification: Omit<Notification, 'id'> = {
-                userId: payment.playerRef,
                 message: `Reminder: You have a pending payment for the game with ${payment.teamName}.`,
                 link: '/dashboard/payments',
                 read: false,

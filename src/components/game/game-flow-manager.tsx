@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -148,9 +149,8 @@ export function GameFlowManager({ match, onMatchUpdate, teamA, teamB, pitch, res
 
             // Create MVP vote notifications for all players
             allGamePlayerIds.forEach(playerId => {
-                const notificationRef = doc(collection(db, "notifications"));
+                const notificationRef = doc(collection(db, "users", playerId, "notifications"));
                 const notification: Omit<Notification, 'id'> = {
-                    userId: playerId,
                     message: "The game has finished! Vote for the MVP now.",
                     link: `/dashboard/games/${match.id}`,
                     read: false,

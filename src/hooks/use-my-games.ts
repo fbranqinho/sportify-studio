@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -289,9 +290,8 @@ export function useMyGames(user: User | null) {
             };
             batch.set(paymentRef, paymentData);
 
-            const notificationRef = doc(collection(db, "notifications"));
+            const notificationRef = doc(collection(db, "users", playerId, "notifications"));
             const notificationData: Omit<Notification, 'id'> = {
-                userId: playerId,
                 message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
                 link: '/dashboard/payments',
                 read: false,

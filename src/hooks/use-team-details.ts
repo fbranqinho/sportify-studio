@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -174,9 +175,8 @@ export function useTeamDetails() {
             invitedAt: serverTimestamp(),
         });
 
-        const newNotificationRef = doc(collection(db, "notifications"));
+        const newNotificationRef = doc(collection(db, "users", invitedUserId, "notifications"));
         batch.set(newNotificationRef, {
-            userId: invitedUserId,
             message: `You've been invited to join the team: ${team.name}.`,
             link: '/dashboard/teams',
             read: false,

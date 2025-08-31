@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -25,9 +26,9 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const fetchChallenges = async () => {
             setLoading(true);
             try {
+                // Challenges are now user-specific notifications
                 const challengesQuery = query(
-                    collection(db, "notifications"),
-                    where("userId", "==", user.id),
+                    collection(db, "users", user.id, "notifications"),
                     where("type", "==", "Challenge"),
                     where("payload.matchId", "==", match.id)
                 );
@@ -46,13 +47,15 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
     }, [match.id, user, toast]);
 
     const handleResponse = async (notification: Notification, accepted: boolean) => {
+        if (!user?.id) return;
+
         const { payload } = notification;
         const challengerTeamId = payload?.challengerTeamId;
 
         if (!payload || !payload.matchId || !challengerTeamId || !payload.challengerManagerId) {
             toast({ variant: "destructive", title: "Invalid Challenge Data", description: "This challenge notification is outdated or corrupted. It will be removed." });
             try {
-                await deleteDoc(doc(db, "notifications", notification.id));
+                await deleteDoc(doc(db, "users", user.id, "notifications", notification.id));
                 onUpdate(); 
             } catch (error) {
                  console.error("Error deleting invalid notification:", error);
@@ -63,7 +66,8 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
         const batch = writeBatch(db);
         const matchRef = doc(db, "matches", payload.matchId);
         
-        batch.delete(doc(db, "notifications", notification.id));
+        // Delete the request from the manager's notifications
+        batch.delete(doc(db, "users", user.id, "notifications", notification.id));
 
         if (accepted) {
             const challengerTeamRef = doc(db, "teams", challengerTeamId);
@@ -82,31 +86,32 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
                 allowChallenges: false, 
             });
             
+            // Create a notification for the challenger manager
             const responseNotification: Omit<Notification, 'id'> = {
-                userId: payload.challengerManagerId,
                 message: `Your challenge for the game on ${format(new Date(match.date), 'MMM d')} was accepted!`,
                 link: `/dashboard/games/${match.id}`,
                 read: false,
                 createdAt: serverTimestamp() as any,
                 type: 'ChallengeResponse'
             };
-            batch.set(doc(collection(db, "notifications")), responseNotification);
+            batch.set(doc(collection(db, "users", payload.challengerManagerId, "notifications")), responseNotification);
 
             if (challengerTeam.playerIds && challengerTeam.playerIds.length > 0) {
                  for (const playerId of challengerTeam.playerIds) {
+                    // Create match invitations for the challenger's players
                     const invitationRef = doc(collection(db, "matchInvitations"));
                     batch.set(invitationRef, {
                         matchId: match.id,
-                        teamId: challengerTeamId, // Ensure this is always defined
+                        teamId: challengerTeamId,
                         playerId: playerId,
                         managerId: payload.challengerManagerId,
                         status: "pending",
                         invitedAt: serverTimestamp(),
                     });
 
-                    const inviteNotificationRef = doc(collection(db, "notifications"));
+                    // Notify each player of the new game
+                    const inviteNotificationRef = doc(collection(db, "users", playerId, "notifications"));
                     batch.set(inviteNotificationRef, {
-                        userId: playerId,
                         message: `You've been invited to a game with ${challengerTeam.name} against ${match.teamARef ? 'another team' : 'a team'}.`,
                         link: '/dashboard/my-games',
                         read: false,
@@ -116,15 +121,15 @@ export function ChallengeInvitations({ match, onUpdate }: { match: Match; onUpda
             }
 
         } else {
+             // Notify the challenger manager that the challenge was declined
              const responseNotification: Omit<Notification, 'id'> = {
-                userId: payload.challengerManagerId,
                 message: `Your challenge for the game on ${format(new Date(match.date), 'MMM d')} was not accepted.`,
                 link: `/dashboard/my-games`,
                 read: false,
                 createdAt: serverTimestamp() as any,
                 type: 'ChallengeResponse'
             };
-            batch.set(doc(collection(db, "notifications")), responseNotification);
+            batch.set(doc(collection(db, "users", payload.challengerManagerId, "notifications")), responseNotification);
         }
 
         try {

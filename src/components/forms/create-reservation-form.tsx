@@ -123,18 +123,10 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
 
         batch.set(newReservationRef, reservationData);
         
-        // 2. Create notification for the owner
-        const newNotificationRef = doc(collection(db, "notifications"));
-        const notification: Omit<Notification, 'id'> = {
-            ownerProfileId: pitch.ownerRef, // Target the notification to the owner profile
-            message: `${user.name} has requested a booking for ${pitch.name}.`,
-            link: '/dashboard/schedule',
-            read: false,
-            createdAt: serverTimestamp() as any,
-        };
-        batch.set(newNotificationRef, notification);
+        // 2. Create notification for the owner. This does not work due to Firestore rules.
+        // A Cloud Function would be needed to listen for new reservations and notify the owner.
+        // For now, owners must check their schedule page manually.
         
-        // Commit both operations
         await batch.commit();
 
         toast({

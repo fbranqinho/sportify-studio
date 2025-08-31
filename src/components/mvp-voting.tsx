@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -16,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 interface MvpVotingProps {
   match: Match;
   user: User;
-  onMvpUpdated: () => void;
+  onMvpUpdate: () => void;
 }
 
 function VotingEndedCard({ match, user, isSubmitting, handleFinalizeVotes }: { match: Match, user: User, isSubmitting: boolean, handleFinalizeVotes: () => void }) {
@@ -75,7 +76,7 @@ function VotingEndedCard({ match, user, isSubmitting, handleFinalizeVotes }: { m
     );
 }
 
-export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
+export function MvpVoting({ match, user, onMvpUpdate }: MvpVotingProps) {
   const [loading, setLoading] = React.useState(true);
   const [participants, setParticipants] = React.useState<User[]>([]);
   const [userVote, setUserVote] = React.useState<MvpVote | null>(null);
@@ -182,7 +183,7 @@ export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
         batch.update(playerProfileRef, { mvps: increment(1) });
         
         await batch.commit();
-        onMvpUpdated(mvpId);
+        onMvpUpdated();
         toast({ title: "MVP Finalized!", description: "The Man of the Match has been determined." });
 
       } catch (error) {
@@ -246,5 +247,3 @@ export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
     </Card>
   )
 }
-
-    

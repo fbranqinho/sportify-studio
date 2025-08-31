@@ -104,9 +104,8 @@ export default function SchedulePage() {
         
         const actorId = reservation.managerRef || reservation.playerRef;
         if (actorId) {
-            const notificationRef = doc(collection(db, 'notifications'));
+            const notificationRef = doc(collection(db, "users", actorId, "notifications"));
             batch.set(notificationRef, {
-                userId: actorId,
                 message: `Your booking request for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')} was not approved.`,
                 link: '/dashboard/my-games',
                 read: false,
@@ -157,9 +156,8 @@ export default function SchedulePage() {
         batch.set(newMatchRef, matchData);
         
         // 3. Create Notification for the manager/player about the approval
-        const approvalNotificationRef = doc(collection(db, 'notifications'));
+        const approvalNotificationRef = doc(collection(db, "users", actorId, "notifications"));
         batch.set(approvalNotificationRef, {
-            userId: actorId,
             message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players.`,
             link: '/dashboard/my-games',
             read: false,
@@ -182,8 +180,8 @@ export default function SchedulePage() {
                             status: "pending", 
                             invitedAt: serverTimestamp() 
                         });
-                        const inviteNotificationRef = doc(collection(db, 'notifications'));
-                        batch.set(inviteNotificationRef, { userId: playerId, message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
+                        const inviteNotificationRef = doc(collection(db, "users", playerId, "notifications"));
+                        batch.set(inviteNotificationRef, { message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
                     }
                 }
             }

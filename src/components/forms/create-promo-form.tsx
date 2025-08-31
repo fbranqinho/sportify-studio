@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, Controller } from "react-hook-form";
@@ -103,9 +104,8 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
       
       managersSnapshot.forEach(managerDoc => {
           const manager = managerDoc.data() as User;
-          const newNotificationRef = doc(collection(db, "notifications"));
+          const newNotificationRef = doc(collection(db, "users", manager.id, "notifications"));
           const notification: Omit<Notification, 'id'> = {
-              userId: manager.id,
               message: notificationMessage,
               link: '/dashboard/games',
               read: false,

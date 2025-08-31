@@ -58,14 +58,13 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
             notificationMessage = `You're in! Your application for the game on ${format(new Date(match.date), "MMM d")} was accepted.`;
         }
 
+        const newNotificationRef = doc(collection(db, "users", applicantId, "notifications"));
         const notification: Omit<Notification, 'id'> = {
-            userId: applicantId,
             message: notificationMessage,
             link: notificationLink,
             read: false,
             createdAt: serverTimestamp() as any,
         };
-        const newNotificationRef = doc(collection(db, "notifications"));
         batch.set(newNotificationRef, notification);
 
         try {

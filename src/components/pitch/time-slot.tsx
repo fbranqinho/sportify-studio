@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -82,8 +83,9 @@ const ApplySlot = ({ match, user }: { match: Match; user: User; }) => {
     batch.update(doc(db, "matches", match.id), { playerApplications: arrayUnion(user.id) });
 
     if (match.managerRef) {
-      const notification: Omit<Notification, 'id'> = { userId: match.managerRef, message: `${user.name} applied to your game.`, link: `/dashboard/games/${match.id}`, read: false, createdAt: serverTimestamp() as any };
-      batch.set(doc(collection(db, "notifications")), notification);
+      const notificationRef = doc(collection(db, "users", match.managerRef, "notifications"));
+      const notification: Omit<Notification, 'id'> = { message: `${user.name} applied to your game.`, link: `/dashboard/games/${match.id}`, read: false, createdAt: serverTimestamp() as any };
+      batch.set(notificationRef, notification);
     }
     
     await batch.commit();
@@ -123,9 +125,9 @@ const ChallengeSlot = ({ match, user, userTeams }: { match: Match; user: User; u
     }
     const challengingTeam = userTeams.find(t => t.id === challengingTeamId);
     if (!challengingTeam) return;
-
+    
+    const notificationRef = doc(collection(db, "users", match.managerRef, "notifications"));
     const notification: Omit<Notification, 'id'> = {
-        userId: match.managerRef,
         message: `The team '${challengingTeam.name}' has challenged you to a match!`,
         link: `/dashboard/games/${match.id}`,
         read: false,
@@ -173,8 +175,7 @@ const ChallengeSlot = ({ match, user, userTeams }: { match: Match; user: User; u
                   <Button onClick={handleSendChallenge} disabled={!challengingTeamId}><Send className="mr-2 h-4 w-4" /> Send Challenge</Button>
               </DialogFooter>
           </DialogContent>
-      </Dialog>
-    </>
+      </>
   );
 };
 

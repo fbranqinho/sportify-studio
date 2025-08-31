@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -44,14 +45,13 @@ export function OpenGameCard({ match, user, onMouseEnter, onMouseLeave }: OpenGa
         try {
             const batch = writeBatch(db);
             const matchRef = doc(db, "matches", match.id);
-            const notificationRef = doc(collection(db, "notifications"));
+            const notificationRef = doc(collection(db, "users", match.managerRef, "notifications"));
 
             // Add player to applications list
             batch.update(matchRef, { playerApplications: arrayUnion(user.id) });
             
             // Notify manager
             const notification: Omit<Notification, 'id'> = {
-                userId: match.managerRef,
                 message: `${user.name} has applied to join your game.`,
                 link: `/dashboard/games/${match.id}`,
                 read: false,
