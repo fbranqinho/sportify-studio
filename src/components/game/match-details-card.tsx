@@ -5,16 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { Match, Pitch, OwnerProfile } from "@/types";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Users, CheckCircle, Play, Trophy, Shield, MapPin, Building, MailQuestion, UserMinus } from "lucide-react";
+import { Users, CheckCircle, Play, Trophy, Shield, MapPin, Building } from "lucide-react";
 
 interface MatchDetailsCardProps {
     match: Match;
     pitch: Pitch | null;
     owner: OwnerProfile | null;
-    invitationCounts: { pending: number, declined: number };
 }
 
-export function MatchDetailsCard({ match, pitch, owner, invitationCounts }: MatchDetailsCardProps) {
+export function MatchDetailsCard({ match, pitch, owner }: MatchDetailsCardProps) {
     
     const confirmedPlayersCount = (match.teamAPlayers?.length || 0) + (match.teamBPlayers?.length || 0);
     const isFinished = match.status === 'Finished';
@@ -53,14 +52,6 @@ export function MatchDetailsCard({ match, pitch, owner, invitationCounts }: Matc
                             <Users className="h-4 w-4 text-muted-foreground"/>
                             <span>Confirmed: <span className="font-semibold">{confirmedPlayersCount}</span></span>
                         </div>
-                         <div className="flex items-center gap-2">
-                            <MailQuestion className="h-4 w-4 text-muted-foreground"/>
-                            <span>Pending Invites: <span className="font-semibold">{invitationCounts.pending}</span></span>
-                        </div>
-                          <div className="flex items-center gap-2">
-                            <UserMinus className="h-4 w-4 text-muted-foreground"/>
-                            <span>Declined Invites: <span className="font-semibold">{invitationCounts.declined}</span></span>
-                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -98,3 +89,5 @@ export function MatchDetailsCard({ match, pitch, owner, invitationCounts }: Matc
         </div>
     );
 }
+
+    

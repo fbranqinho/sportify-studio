@@ -49,7 +49,6 @@ export default function GameDetailsPage() {
     const [pitch, setPitch] = React.useState<Pitch | null>(null);
     const [owner, setOwner] = React.useState<OwnerProfile | null>(null);
     const [reservation, setReservation] = React.useState<Reservation | null>(null);
-    const [invitationCounts, setInvitationCounts] = React.useState<{ pending: number, declined: number }>({ pending: 0, declined: 0 });
     const [loading, setLoading] = React.useState(true);
     const [isDressingRoomOpen, setIsDressingRoomOpen] = React.useState(false);
     const { toast } = useToast();
@@ -82,17 +81,6 @@ export default function GameDetailsPage() {
             if (currentMatch.reservationRef) {
                 setReservation(reservations.get(currentMatch.reservationRef) || null);
             }
-
-            const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", gameId));
-            const invSnapshot = await getDocs(invQuery);
-            let pending = 0;
-            let declined = 0;
-            invSnapshot.forEach(doc => {
-                const status = doc.data().status;
-                if (status === 'pending') pending++;
-                if (status === 'declined') declined++;
-            });
-            setInvitationCounts({ pending, declined });
             
         } catch (error) {
             console.error("Error fetching game details: ", error);
@@ -144,7 +132,7 @@ export default function GameDetailsPage() {
             });
 
             // Create notification for the player
-            const notificationRef = doc(collection(db, "notifications"));
+             const notificationRef = doc(collection(db, "users", playerId, "notifications"));
              batch.set(notificationRef, {
                 userId: playerId,
                 message: `You've been invited to a game with ${teamA.name}.`,
@@ -212,7 +200,8 @@ export default function GameDetailsPage() {
     const isFinished = match.status === 'Finished';
     const isLive = match.status === 'InProgress';
     const canStartGame = match.status === 'Scheduled' && isManager && reservation?.paymentStatus === 'Paid';
-    const showInviteTeamButton = isManagerA && match.status === 'Collecting players' && invitationCounts.pending === 0 && invitationCounts.declined === 0 && match.teamAPlayers.length === 0;
+    const showInviteTeamButton = isManagerA && match.status === 'Collecting players' && (!match.teamAPlayers || match.teamAPlayers.length === 0);
+
 
     const getMatchTitle = () => {
         const teamAName = teamA?.name || 'Team A';
@@ -242,7 +231,6 @@ export default function GameDetailsPage() {
                 match={match}
                 pitch={pitch}
                 owner={owner}
-                invitationCounts={invitationCounts}
             />
             
             {showInviteTeamButton && (
@@ -321,3 +309,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    
