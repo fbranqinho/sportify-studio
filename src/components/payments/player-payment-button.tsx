@@ -26,40 +26,19 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
         const reservationRef = doc(db, "reservations", reservation.id);
 
         try {
-            const conflictingReservationsQuery = query(
-                collection(db, "reservations"),
-                where("pitchId", "==", reservation.pitchId),
-                where("date", "==", reservation.date)
-            );
-
-            const conflictingSnap = await getDocs(conflictingReservationsQuery);
-
-            const otherTeamsConfirmed = conflictingSnap.docs.some(d => {
-                const data = d.data() as Reservation;
-                return d.id !== reservation.id && (data.status === 'Scheduled' || data.paymentStatus === 'Paid');
-            });
-            
-            if (otherTeamsConfirmed) {
-                toast({ variant: "destructive", title: "Slot Taken", description: "Sorry, another team has just booked this slot. Your reservation has been cancelled." });
-                await updateDoc(reservationRef, { status: "Canceled", paymentStatus: "Cancelled" });
-                onPaymentProcessed();
-                setIsProcessing(false);
-                return;
-            }
-
             const batch = writeBatch(db);
             const paymentRef = doc(db, "payments", payment.id);
             
-            batch.update(paymentRef, { status: "Paid" });
+            batch.update(paymentRef, { status: "Paid", date: new Date().toISOString() });
             
             const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id));
             const paymentsSnap = await getDocs(paymentsQuery);
             let totalPaid = payment.amount;
             let allPlayersPaid = true;
             
-            paymentsSnap.forEach(doc => {
-                const p = doc.data() as Payment;
-                if (doc.id !== payment.id) {
+            paymentsSnap.forEach(pDoc => {
+                const p = pDoc.data() as Payment;
+                if (pDoc.id !== payment.id) {
                      if (p.status === 'Paid') {
                         totalPaid += p.amount;
                     } else if (p.type === 'booking_split') {
@@ -82,46 +61,34 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
                     const capacity = getPlayerCapacity(pitchData.sport);
                     const currentPlayers = (matchData.teamAPlayers?.length || 0) + (matchData.teamBPlayers?.length || 0);
 
-                    // Only set to scheduled if the game is full
                     if (currentPlayers >= capacity) {
                         batch.update(matchRef, { status: 'Scheduled' });
                     }
                 }
                 
-                // Fetch owner's user ID to send notification
                 const ownerProfileDoc = await getDoc(doc(db, "ownerProfiles", reservation.ownerProfileId));
                 if (ownerProfileDoc.exists()) {
                     const ownerUserId = ownerProfileDoc.data().userRef;
                     const ownerNotificationRef = doc(collection(db, "users", ownerUserId, "notifications"));
-                    const notification : Omit<Notification, 'id'> = {
+                    const notification : Omit<Notification, 'id' | 'userId'> = {
                         message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
                         link: `/dashboard/schedule`,
                         read: false,
                         createdAt: serverTimestamp() as any,
                     };
-                    batch.set(ownerNotificationRef, notification);
+                    batch.set(ownerNotificationRef, {userId: ownerUserId, ...notification});
                 }
                 
                 if (reservation.managerRef) {
                     const managerNotificationRef = doc(collection(db, "users", reservation.managerRef, "notifications"));
                      batch.set(managerNotificationRef, {
+                        userId: reservation.managerRef,
                         message: `The payment for your game at ${reservation.pitchName} is complete.`,
                         link: `/dashboard/games/${matchSnap.docs[0].id}`,
                         read: false,
                         createdAt: serverTimestamp() as any,
                     });
                 }
-
-                conflictingSnap.docs.forEach(otherResDoc => {
-                    if(otherResDoc.id !== reservation.id) {
-                        batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
-                        const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
-                        if(managerId) {
-                            const cancellationNotificationRef = doc(collection(db, "users", managerId, "notifications"));
-                            batch.set(cancellationNotificationRef, { message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
-                        }
-                    }
-                });
             }
 
             await batch.commit();
