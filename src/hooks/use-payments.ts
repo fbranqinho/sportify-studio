@@ -85,7 +85,11 @@ export function usePayments(user: User | null) {
     } else if (user.role === 'MANAGER') {
         paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else if (user.role === 'OWNER') {
-        paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", user.id));
+        // Owners do not have a payments page, this is handled by notifications.
+        // We set their payments to empty.
+        setAllPayments([]);
+        setLoading(false);
+        return;
     } else {
         // For roles with no payments page or other roles
         setAllPayments([]);
@@ -113,3 +117,5 @@ export function usePayments(user: User | null) {
 
   return { allPayments, reservations, playerUsers, owners, loading, fetchData };
 }
+
+    

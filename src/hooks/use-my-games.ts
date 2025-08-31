@@ -348,3 +348,5 @@ export function useMyGames(user: User | null) {
       fetchGameData, handlePlayerInvitationResponse, handleTeamInvitationResponse, handleStartSplitPayment
   }
 }
+
+    

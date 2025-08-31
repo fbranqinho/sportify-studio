@@ -5,7 +5,7 @@ import * as React from "react";
 import type { Team, EnrichedPlayerSearchResult, PlayerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, documentId } from "firebase/firestore";
+import { collection, query, where, getDocs, documentId, startAt, endAt, orderBy } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -78,14 +78,16 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onBulkNumberUp
     
     setIsSearching(true);
     try {
-        const usersSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "PLAYER")));
-        const allPlayers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-        
-        const foundUsers = allPlayers.filter(player => 
-            player.name.toLowerCase().includes(searchTerm)
+        const profilesQuery = query(
+            collection(db, "playerProfiles"), 
+            orderBy("nickname"),
+            startAt(searchTerm),
+            endAt(searchTerm + '\uf8ff')
         );
+        const profilesSnapshot = await getDocs(profilesQuery);
 
-        const playerUserIds = foundUsers.map(u => u.id);
+        const foundProfiles = profilesSnapshot.docs.map(doc => ({id: doc.id, ...doc.data()}) as PlayerProfile);
+        const playerUserIds = foundProfiles.map(p => p.userRef);
         
         if(playerUserIds.length === 0){
              setSearchResults([]);
@@ -93,18 +95,17 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onBulkNumberUp
              return;
         }
 
-        const profilesQuery = query(collection(db, "playerProfiles"), where("userRef", "in", playerUserIds));
-        const profilesSnapshot = await getDocs(profilesQuery);
+        const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerUserIds));
+        const usersSnapshot = await getDocs(usersQuery);
 
-        const profilesMap = new Map<string, any>();
-        profilesSnapshot.forEach(doc => {
-            const profile = { id: doc.id, ...doc.data() };
-            profilesMap.set(profile.userRef, profile);
+        const usersMap = new Map<string, any>();
+        usersSnapshot.forEach(doc => {
+            usersMap.set(doc.id, { id: doc.id, ...doc.data() });
         });
 
-        const results: EnrichedPlayerSearchResult[] = foundUsers.map(user => {
-            const profile = profilesMap.get(user.id);
-            return profile ? { user, profile } : null;
+        const results: EnrichedPlayerSearchResult[] = foundProfiles.map(profile => {
+            const user = usersMap.get(profile.userRef);
+            return user ? { user, profile } : null;
         }).filter((item): item is EnrichedPlayerSearchResult => !!item);
 
         setSearchResults(results);
@@ -283,3 +284,5 @@ export function ManagerTeamView({ team, players, onPlayerRemoved, onBulkNumberUp
     </div>
   )
 }
+
+    
