@@ -309,5 +309,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    
