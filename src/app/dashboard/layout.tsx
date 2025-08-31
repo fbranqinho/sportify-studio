@@ -46,6 +46,8 @@ function NotificationBell() {
     if (!user?.id) return;
 
     // The query now points to a subcollection within the user's document
+    // This ensures that we only listen to notifications for the logged-in user,
+    // which aligns with the Firestore security rules.
     const notifQuery = query(
       collection(db, "users", user.id, "notifications"),
       orderBy("createdAt", "desc"),
@@ -59,7 +61,8 @@ function NotificationBell() {
             setUnreadCount(notifs.filter(n => !n.read).length);
         },
         (error) => {
-             console.error("Error fetching notifications (check Firestore rules and indexes):", error);
+             // This error handling is important for debugging permission issues.
+             console.error("Error fetching notifications (check Firestore rules for /users/{userId}/notifications):", error);
         }
     );
     
