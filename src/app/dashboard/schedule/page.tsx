@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -103,7 +102,7 @@ export default function SchedulePage() {
         
         const actorId = reservation.managerRef || reservation.playerRef;
         if (actorId) {
-            const notificationRef = doc(collection(db, "notifications"));
+            const notificationRef = doc(collection(db, "users", actorId, "notifications"));
             batch.set(notificationRef, {
                 userId: actorId,
                 message: `Your booking request for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')} was not approved.`,
@@ -155,7 +154,7 @@ export default function SchedulePage() {
         // 3. Notify the manager
         const managerId = reservation.managerRef || reservation.playerRef;
         if (managerId) {
-             const notificationRef = doc(collection(db, "notifications"));
+             const notificationRef = doc(collection(db, "users", managerId, "notifications"));
              batch.set(notificationRef, {
                 userId: managerId,
                 message: `Your booking at ${reservation.pitchName} is confirmed! You can now invite players.`,
@@ -394,5 +393,7 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
 
     
