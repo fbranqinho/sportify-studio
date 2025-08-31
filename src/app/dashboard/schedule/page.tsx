@@ -163,29 +163,6 @@ export default function SchedulePage() {
             read: false,
             createdAt: serverTimestamp() as any,
         });
-
-        // 4. If it's a team booking, invite players to the newly created match
-        if (reservation.teamRef && reservation.managerRef) {
-            const teamDoc = await getDoc(doc(db, "teams", reservation.teamRef));
-            if (teamDoc.exists()) {
-                const team = { id: teamDoc.id, ...teamDoc.data() } as Team;
-                if (team.playerIds?.length > 0) {
-                    for (const playerId of team.playerIds) {
-                        const invitationRef = doc(collection(db, "matchInvitations"));
-                        batch.set(invitationRef, { 
-                            matchId: newMatchRef.id, 
-                            teamId: team.id,
-                            playerId: playerId, 
-                            managerId: reservation.managerRef, 
-                            status: "pending", 
-                            invitedAt: serverTimestamp() 
-                        });
-                        const inviteNotificationRef = doc(collection(db, "users", playerId, "notifications"));
-                        batch.set(inviteNotificationRef, { message: `You've been invited to a game with ${team.name}.`, link: '/dashboard/my-games', read: false, createdAt: serverTimestamp() as any });
-                    }
-                }
-            }
-        }
         
         await batch.commit(); 
         
