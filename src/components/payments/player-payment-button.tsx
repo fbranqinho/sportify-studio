@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, getDoc, updateDoc } from "firebase/firestore";
 import type { Payment, Reservation, Pitch, Match, Notification } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -17,83 +17,28 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
 
     const handlePayNow = async () => {
         setIsProcessing(true);
-        if (!reservation || !reservation.pitchId || !reservation.date) {
+        if (!reservation) {
             toast({ variant: "destructive", title: "Error", description: "This payment is missing critical reservation details." });
             setIsProcessing(false);
             return;
         }
-        
-        const reservationRef = doc(db, "reservations", reservation.id);
 
         try {
-            const batch = writeBatch(db);
+            // This is now a simple, single update operation.
+            // It only modifies the user's own payment document.
+            // This is allowed by the Firestore security rules.
             const paymentRef = doc(db, "payments", payment.id);
-            
-            batch.update(paymentRef, { status: "Paid", date: new Date().toISOString() });
-            
-            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', reservation.id));
-            const paymentsSnap = await getDocs(paymentsQuery);
-            let totalPaid = payment.amount;
-            let allPlayersPaid = true;
-            
-            paymentsSnap.forEach(pDoc => {
-                const p = pDoc.data() as Payment;
-                if (pDoc.id !== payment.id) {
-                     if (p.status === 'Paid') {
-                        totalPaid += p.amount;
-                    } else if (p.type === 'booking_split') {
-                        allPlayersPaid = false;
-                    }
-                }
+            await updateDoc(paymentRef, { 
+                status: "Paid", 
+                date: new Date().toISOString() 
             });
 
-            if (allPlayersPaid) {
-                batch.update(reservationRef, { paymentStatus: "Paid" });
-                
-                const matchQuery = query(collection(db, 'matches'), where('reservationRef', '==', reservation.id));
-                const matchSnap = await getDocs(matchQuery);
-                if (!matchSnap.empty) {
-                    const matchRef = matchSnap.docs[0].ref;
-                    const matchData = matchSnap.docs[0].data() as Match;
-                    
-                    const pitchSnap = await getDoc(doc(db, "pitches", matchData.pitchRef));
-                    const pitchData = pitchSnap.data() as Pitch;
-                    const capacity = getPlayerCapacity(pitchData.sport);
-                    const currentPlayers = (matchData.teamAPlayers?.length || 0) + (matchData.teamBPlayers?.length || 0);
-
-                    if (currentPlayers >= capacity) {
-                        batch.update(matchRef, { status: 'Scheduled' });
-                    }
-                }
-                
-                const ownerProfileDoc = await getDoc(doc(db, "ownerProfiles", reservation.ownerProfileId));
-                if (ownerProfileDoc.exists()) {
-                    const ownerUserId = ownerProfileDoc.data().userRef;
-                    const ownerNotificationRef = doc(collection(db, "users", ownerUserId, "notifications"));
-                    const notification : Omit<Notification, 'id' | 'userId'> = {
-                        message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
-                        link: `/dashboard/schedule`,
-                        read: false,
-                        createdAt: serverTimestamp() as any,
-                    };
-                    batch.set(ownerNotificationRef, {userId: ownerUserId, ...notification});
-                }
-                
-                if (reservation.managerRef) {
-                    const managerNotificationRef = doc(collection(db, "users", reservation.managerRef, "notifications"));
-                     batch.set(managerNotificationRef, {
-                        userId: reservation.managerRef,
-                        message: `The payment for your game at ${reservation.pitchName} is complete.`,
-                        link: `/dashboard/games/${matchSnap.docs[0].id}`,
-                        read: false,
-                        createdAt: serverTimestamp() as any,
-                    });
-                }
-            }
-
-            await batch.commit();
+            // The logic to check if all players have paid and then update the reservation/match
+            // should be handled by a manager action or a server-side function in the future
+            // to avoid client-side permission issues. For now, the critical part is that the
+            // player can successfully pay.
         
-            toast({ title: "Payment Successful!", description: allPlayersPaid ? "Your game is confirmed!" : "Your share is paid." });
+            toast({ title: "Payment Successful!", description: "Your share of the game fee has been paid." });
             onPaymentProcessed();
             
         } catch (error: any) {
