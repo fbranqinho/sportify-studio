@@ -64,7 +64,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
 
                     return (
                         <TableRow key={p.id}>
-                            {userRole !== 'PLAYER' && <TableCell className="font-medium">{p.type === 'booking' ? 'Your Booking' : actorName}</TableCell>}
+                            {userRole !== 'PLAYER' && <TableCell className="font-medium">{isInitialBookingPayment ? 'Your Booking' : actorName}</TableCell>}
                             <TableCell className="font-medium">{description}</TableCell>
                             {userRole !== 'OWNER' && <TableCell>{owner?.companyName || "N/A"}</TableCell>}
                             <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
@@ -99,3 +99,5 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
         </Table>
     )
 }
+
+    

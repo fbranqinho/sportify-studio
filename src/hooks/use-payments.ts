@@ -85,8 +85,8 @@ export function usePayments(user: User | null) {
     } else if (user.role === 'MANAGER') {
         paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else if (user.role === 'OWNER') {
-        // Owners do not have a payments page, this is handled by notifications.
-        // We set their payments to empty.
+        // Since owners don't have a direct ref on payments, we can't query efficiently.
+        // We will rely on notifications for owners. This page will be empty for them.
         setAllPayments([]);
         setLoading(false);
         return;

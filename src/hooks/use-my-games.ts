@@ -272,23 +272,10 @@ export function useMyGames(user: User | null) {
             where("type", "==", "booking")
         );
         const managerPaymentSnap = await getDocs(managerPaymentQuery);
-
-        // Only create the initial manager payment if it doesn't already exist.
-        if (managerPaymentSnap.empty) {
-            const managerPaymentRef = doc(collection(db, "payments"));
-            const managerPaymentData: Omit<Payment, 'id'> = {
-                managerRef: reservation.actorId,
-                reservationRef: reservation.id,
-                type: 'booking',
-                amount: reservation.totalAmount,
-                status: 'Paid',
-                date: new Date().toISOString(),
-                pitchName: reservation.pitchName,
-                teamName: teamName,
-                teamRef: currentMatchData.teamARef!,
-                ownerRef: reservation.ownerProfileId,
-            };
-            batch.set(managerPaymentRef, managerPaymentData);
+        
+        if (!managerPaymentSnap.empty) {
+            // Delete the existing booking payment to replace it with split payments.
+            batch.delete(managerPaymentSnap.docs[0].ref);
         }
 
         confirmedPlayers.forEach(playerId => {
@@ -307,8 +294,9 @@ export function useMyGames(user: User | null) {
             };
             batch.set(paymentRef, paymentData);
 
-            const notificationRef = doc(collection(db, "users", playerId, "notifications"));
+            const notificationRef = doc(collection(db, "notifications"));
             const notificationData: Omit<Notification, 'id'> = {
+                userId: playerId,
                 message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
                 link: '/dashboard/payments',
                 read: false,
@@ -348,5 +336,7 @@ export function useMyGames(user: User | null) {
       fetchGameData, handlePlayerInvitationResponse, handleTeamInvitationResponse, handleStartSplitPayment
   }
 }
+
+    
 
     

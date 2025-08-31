@@ -152,17 +152,14 @@ export default function GameDetailsPage() {
                 invitedAt: serverTimestamp(),
             });
 
-            // This part is removed as it violates security rules for cross-user writes in a single batch.
-            // Players will see their invitations on the My Games page which queries the matchInvitations collection.
-            /*
-            const notificationRef = doc(collection(db, "users", playerId, "notifications"));
+            const notificationRef = doc(collection(db, "notifications"));
             batch.set(notificationRef, {
+                userId: playerId,
                 message: `You've been invited to a game with ${teamA.name}.`,
                 link: '/dashboard/my-games',
                 read: false,
                 createdAt: serverTimestamp() as any,
             });
-            */
         }
         
         try {
@@ -332,3 +329,5 @@ export default function GameDetailsPage() {
         </div>
     );
 }
+
+    

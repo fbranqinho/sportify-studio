@@ -103,8 +103,9 @@ export default function SchedulePage() {
         
         const actorId = reservation.managerRef || reservation.playerRef;
         if (actorId) {
-            const notificationRef = doc(collection(db, "users", actorId, "notifications"));
+            const notificationRef = doc(collection(db, "notifications"));
             batch.set(notificationRef, {
+                userId: actorId,
                 message: `Your booking request for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')} was not approved.`,
                 link: '/dashboard/my-games',
                 read: false,
@@ -151,8 +152,18 @@ export default function SchedulePage() {
         };
         batch.set(newMatchRef, matchData);
         
-        // NO LONGER NOTIFYING MANAGER FROM HERE TO AVOID PERMISSION ISSUES
-        // The notification will be handled by the manager's own `useMyGames` hook.
+        // 3. Notify the manager
+        const managerId = reservation.managerRef || reservation.playerRef;
+        if (managerId) {
+             const notificationRef = doc(collection(db, "notifications"));
+             batch.set(notificationRef, {
+                userId: managerId,
+                message: `Your booking at ${reservation.pitchName} is confirmed! You can now invite players.`,
+                link: `/dashboard/games/${newMatchRef.id}`,
+                read: false,
+                createdAt: serverTimestamp() as any
+            });
+        }
         
         await batch.commit(); 
         
@@ -383,3 +394,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
