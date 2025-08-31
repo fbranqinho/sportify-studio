@@ -4,7 +4,7 @@
 import * as React from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, doc, writeBatch, serverTimestamp, getDocs, updateDoc, getDoc } from "firebase/firestore";
-import type { Payment, Reservation, Pitch, Match } from "@/types";
+import type { Payment, Reservation, Pitch, Match, Notification } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard } from "lucide-react";
@@ -88,19 +88,23 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
                     }
                 }
                 
-                const ownerNotificationRef = doc(collection(db, "notifications"));
-                batch.set(ownerNotificationRef, {
-                    ownerProfileId: reservation.ownerProfileId,
-                    message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
-                    link: `/dashboard/schedule`,
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                });
+                // Fetch owner's user ID to send notification
+                const ownerProfileDoc = await getDoc(doc(db, "ownerProfiles", reservation.ownerProfileId));
+                if (ownerProfileDoc.exists()) {
+                    const ownerUserId = ownerProfileDoc.data().userRef;
+                    const ownerNotificationRef = doc(collection(db, "users", ownerUserId, "notifications"));
+                    const notification : Omit<Notification, 'id'> = {
+                        message: `Booking confirmed for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')}. Payment received.`,
+                        link: `/dashboard/schedule`,
+                        read: false,
+                        createdAt: serverTimestamp() as any,
+                    };
+                    batch.set(ownerNotificationRef, notification);
+                }
                 
                 if (reservation.managerRef) {
-                    const managerNotificationRef = doc(collection(db, "notifications"));
-                    batch.set(managerNotificationRef, {
-                        userId: reservation.managerRef,
+                    const managerNotificationRef = doc(collection(db, "users", reservation.managerRef, "notifications"));
+                     batch.set(managerNotificationRef, {
                         message: `The payment for your game at ${reservation.pitchName} is complete.`,
                         link: `/dashboard/games/${matchSnap.docs[0].id}`,
                         read: false,
@@ -113,8 +117,8 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
                         batch.update(otherResDoc.ref, { status: "Canceled", paymentStatus: "Cancelled" });
                         const managerId = otherResDoc.data().managerRef || otherResDoc.data().playerRef;
                         if(managerId) {
-                            const cancellationNotificationRef = doc(collection(db, 'notifications'));
-                            batch.set(cancellationNotificationRef, { userId: managerId, message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
+                            const cancellationNotificationRef = doc(collection(db, "users", managerId, "notifications"));
+                            batch.set(cancellationNotificationRef, { message: `The slot you booked for ${format(new Date(reservation.date), 'MMM d, HH:mm')} was secured by another team.`, link: '/dashboard/games', read: false, createdAt: serverTimestamp() as any });
                         }
                     }
                 });

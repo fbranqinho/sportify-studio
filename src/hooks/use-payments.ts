@@ -85,31 +85,7 @@ export function usePayments(user: User | null) {
     } else if (user.role === 'MANAGER') {
         paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
     } else if (user.role === 'OWNER') {
-        const ownerProfileQuery = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
-        // This is an async operation within the effect, so we handle it carefully.
-        getDocs(ownerProfileQuery).then(ownerProfileSnap => {
-            if (!ownerProfileSnap.empty) {
-                const ownerProfileId = ownerProfileSnap.docs[0].id;
-                paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", ownerProfileId));
-                 unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
-                    const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-                    processData(paymentsData).catch(console.error);
-                }, (error) => {
-                    console.error("Error in payments listener for Owner:", error);
-                    setLoading(false);
-                });
-            } else {
-                setLoading(false);
-                 setAllPayments([]);
-            }
-        }).catch(err => {
-            console.error("Error fetching owner profile:", err);
-            setLoading(false);
-        })
-        // Since the query for OWNER is async, we return the cleanup function from the outer scope.
-        return () => {
-          unsubscribe();
-        };
+        paymentsQuery = query(collection(db, "payments"), where("ownerRef", "==", user.id));
     } else {
         // For roles with no payments page or other roles
         setAllPayments([]);
