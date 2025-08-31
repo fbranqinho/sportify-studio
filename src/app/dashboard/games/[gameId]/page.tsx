@@ -15,6 +15,7 @@ import { ChevronLeft, Play, Shirt, Send } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn, getPlayerCapacity } from "@/lib/utils";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 // Import individual components
 import { GameFlowManager } from "@/components/game/game-flow-manager";
