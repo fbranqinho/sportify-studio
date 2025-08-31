@@ -1,5 +1,4 @@
 
-
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,15 +12,13 @@ interface PlayerDashboardProps {
   data: {
     user: User;
     profile: PlayerProfile | null;
-    upcomingGames: number;
-    pendingPayments: number;
   }
 }
 
 export function PlayerDashboard({ data }: PlayerDashboardProps) {
   if (!data) return <Skeleton className="h-32 w-full col-span-4"/>;
 
-  const { user, profile, upcomingGames, pendingPayments } = data;
+  const { user, profile } = data;
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -35,11 +32,10 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
                   <CardTitle className="font-headline">Next Game</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center text-center p-6">
-                  <p className="text-6xl font-bold font-headline text-primary">{upcomingGames}</p>
-                  <p className="text-muted-foreground mt-2">upcoming games on your schedule</p>
+                  <p className="text-2xl text-muted-foreground mt-2">Check your upcoming games, invitations and payments.</p>
                   <Button size="lg" className="mt-6 font-bold" asChild>
                       <Link href="/dashboard/my-games">
-                          View Games <ArrowRight className="ml-2"/>
+                          View My Games <ArrowRight className="ml-2"/>
                       </Link>
                   </Button>
               </CardContent>
@@ -51,11 +47,10 @@ export function PlayerDashboard({ data }: PlayerDashboardProps) {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-bold">{pendingPayments}</div>
-                  <p className="text-xs text-muted-foreground">{pendingPayments === 1 ? 'payment required' : 'payments required'}</p>
-                  <Button size="sm" variant={pendingPayments > 0 ? "destructive" : "secondary"} className="mt-2" asChild>
+                  <p className="text-xs text-muted-foreground">Check for pending payments</p>
+                  <Button size="sm" variant={"secondary"} className="mt-2" asChild>
                       <Link href="/dashboard/payments">
-                          {pendingPayments > 0 ? 'Pay Now' : 'View History'}
+                          View Payments
                       </Link>
                   </Button>
               </CardContent>
