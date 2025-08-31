@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp, getDocs, documentId } from "firebase/firestore";
 import type { Team, TeamInvitation, PlayerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
