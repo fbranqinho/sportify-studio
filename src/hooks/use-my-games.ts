@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -263,22 +264,32 @@ export function useMyGames(user: User | null) {
         const batch = writeBatch(db);
         const teamName = teams.get(currentMatchData.teamARef!)?.name || 'Your Team';
 
-        // First, create a payment document for the manager for the initial booking fee
-        const managerPaymentRef = doc(collection(db, "payments"));
-        const managerPaymentData: Omit<Payment, 'id'> = {
-            managerRef: reservation.actorId,
-            reservationRef: reservation.id,
-            type: 'booking',
-            amount: reservation.totalAmount,
-            status: 'Paid', // Mark manager's payment as paid since they initiate
-            date: new Date().toISOString(),
-            pitchName: reservation.pitchName,
-            teamName: teamName,
-            teamRef: currentMatchData.teamARef!,
-            ownerRef: reservation.ownerProfileId, // Associate with the owner
-        };
-        batch.set(managerPaymentRef, managerPaymentData);
+        // Check if a payment for the manager already exists for this reservation.
+        const managerPaymentQuery = query(
+            collection(db, "payments"), 
+            where("reservationRef", "==", reservation.id), 
+            where("managerRef", "==", reservation.actorId),
+            where("type", "==", "booking")
+        );
+        const managerPaymentSnap = await getDocs(managerPaymentQuery);
 
+        // Only create the initial manager payment if it doesn't already exist.
+        if (managerPaymentSnap.empty) {
+            const managerPaymentRef = doc(collection(db, "payments"));
+            const managerPaymentData: Omit<Payment, 'id'> = {
+                managerRef: reservation.actorId,
+                reservationRef: reservation.id,
+                type: 'booking',
+                amount: reservation.totalAmount,
+                status: 'Paid',
+                date: new Date().toISOString(),
+                pitchName: reservation.pitchName,
+                teamName: teamName,
+                teamRef: currentMatchData.teamARef!,
+                ownerRef: reservation.ownerProfileId,
+            };
+            batch.set(managerPaymentRef, managerPaymentData);
+        }
 
         confirmedPlayers.forEach(playerId => {
             const paymentRef = doc(collection(db, "payments"));
@@ -292,7 +303,7 @@ export function useMyGames(user: User | null) {
                 date: new Date().toISOString(),
                 pitchName: reservation.pitchName,
                 teamName: teamName,
-                ownerRef: reservation.ownerProfileId, // Associate with the owner
+                ownerRef: reservation.ownerProfileId,
             };
             batch.set(paymentRef, paymentData);
 

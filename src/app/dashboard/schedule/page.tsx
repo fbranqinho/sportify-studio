@@ -99,7 +99,6 @@ export default function SchedulePage() {
     // --- CANCELLATION LOGIC ---
     if (status === "Canceled") {
       try {
-        // Instead of updating, we now delete the reservation to free up the slot
         batch.delete(reservationRef);
         
         const actorId = reservation.managerRef || reservation.playerRef;
@@ -123,19 +122,16 @@ export default function SchedulePage() {
       return;
     }
 
-    // --- APPROVAL LOGIC ---
+    // --- APPROVAL LOGIC (SIMPLIFIED) ---
     if (status === "Confirmed") {
       try {
-        const actorId = reservation.managerRef || reservation.playerRef;
-        if (!actorId) throw new Error("Reservation is missing a manager or player reference.");
-        
-        // 1. Update Reservation status and cancellation policy
+        // 1. Update Reservation status
         batch.update(reservationRef, { 
           status: "Confirmed",
           allowCancellationsAfterPayment: allowCancellationMap.get(reservation.id) || false
         });
         
-        // 2. Create the Match document immediately
+        // 2. Create the Match document
         const newMatchRef = doc(collection(db, "matches"));
         const matchData: Omit<Match, 'id'> = {
             date: reservation.date,
@@ -146,7 +142,7 @@ export default function SchedulePage() {
             scoreA: 0,
             scoreB: 0,
             pitchRef: reservation.pitchId,
-            status: "Collecting players", // Status is always collecting players initially
+            status: "Collecting players",
             attendance: 0,
             refereeId: null,
             managerRef: reservation.actorId || null,
@@ -155,20 +151,14 @@ export default function SchedulePage() {
         };
         batch.set(newMatchRef, matchData);
         
-        // 3. Create Notification for the manager/player about the approval
-        const approvalNotificationRef = doc(collection(db, "users", actorId, "notifications"));
-        batch.set(approvalNotificationRef, {
-            message: `Your booking for ${reservation.pitchName} is approved! Go to 'My Games' to manage players.`,
-            link: `/dashboard/games/${newMatchRef.id}`, // Link directly to the new game
-            read: false,
-            createdAt: serverTimestamp() as any,
-        });
+        // NO LONGER NOTIFYING MANAGER FROM HERE TO AVOID PERMISSION ISSUES
+        // The notification will be handled by the manager's own `useMyGames` hook.
         
         await batch.commit(); 
         
         toast({
           title: "Reservation Approved!",
-          description: `A notification has been sent to ${reservation.actorName}. They can now manage the game.`,
+          description: `The game is now created. The manager will be notified to proceed with payment and invitations.`,
         });
 
       } catch (error) {
