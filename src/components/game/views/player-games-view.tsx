@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, documentId, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where, documentId } from "firebase/firestore";
 import type { Pitch, Match, Team } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,51 +41,57 @@ export function PlayerGamesView() {
       setUserLocation({ lat: 38.7223, lng: -9.1393 });
     }
 
-    const q = query(
-      collection(db, "matches"),
-      where("status", "==", "Collecting players"),
-      where("allowExternalPlayers", "==", true)
-    );
+    const fetchOpenGames = async () => {
+        setLoading(true);
+        try {
+            const q = query(
+              collection(db, "matches"),
+              where("status", "==", "Collecting players"),
+              where("allowExternalPlayers", "==", true)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const matchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            
+            const pitchIds = [...new Set(matchesData.map(m => m.pitchRef))];
+            const teamIds = [...new Set(matchesData.map(m => m.teamARef).filter(Boolean))];
 
-    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-      const matchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
-      
-      const pitchIds = [...new Set(matchesData.map(m => m.pitchRef))];
-      const teamIds = [...new Set(matchesData.map(m => m.teamARef).filter(Boolean))];
+            const pitchesMap = new Map<string, Pitch>();
+            if (pitchIds.length > 0) {
+                const pitchesQuery = query(collection(db, "pitches"), where(documentId(), "in", pitchIds));
+                const pitchesSnap = await getDocs(pitchesQuery);
+                pitchesSnap.forEach(doc => pitchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Pitch));
+            }
 
-      const pitchesMap = new Map<string, Pitch>();
-      if (pitchIds.length > 0) {
-        const pitchesQuery = query(collection(db, "pitches"), where(documentId(), "in", pitchIds));
-        const pitchesSnap = await getDocs(pitchesQuery);
-        pitchesSnap.forEach(doc => pitchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Pitch));
-      }
+            const teamsMap = new Map<string, Team>();
+            if (teamIds.length > 0) {
+                const teamsQuery = query(collection(db, "teams"), where(documentId(), "in", teamIds));
+                const teamsSnap = await getDocs(teamsQuery);
+                teamsSnap.forEach(doc => teamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team));
+            }
 
-      const teamsMap = new Map<string, Team>();
-      if (teamIds.length > 0) {
-        const teamsQuery = query(collection(db, "teams"), where(documentId(), "in", teamIds));
-        const teamsSnap = await getDocs(teamsQuery);
-        teamsSnap.forEach(doc => teamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team));
-      }
+            const enrichedMatches = matchesData.map(match => ({
+                ...match,
+                pitch: pitchesMap.get(match.pitchRef),
+                team: match.teamARef ? teamsMap.get(match.teamARef) : undefined
+            })).filter(m => {
+                if (!m.pitch) return false;
+                const capacity = getPlayerCapacity(m.pitch.sport);
+                const currentPlayers = (m.teamAPlayers?.length || 0) + (m.teamBPlayers?.length || 0);
+                return currentPlayers < capacity;
+            });
+            
+            setOpenMatches(enrichedMatches);
 
-      const enrichedMatches = matchesData.map(match => ({
-          ...match,
-          pitch: pitchesMap.get(match.pitchRef),
-          team: match.teamARef ? teamsMap.get(match.teamARef) : undefined
-      })).filter(m => {
-          if (!m.pitch) return false;
-          const capacity = getPlayerCapacity(m.pitch.sport);
-          const currentPlayers = m.teamAPlayers.length + m.teamBPlayers.length;
-          return currentPlayers < capacity;
-      });
-
-      setOpenMatches(enrichedMatches);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching open matches:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+        } catch(error) {
+             console.error("Error fetching open matches:", error);
+        } finally {
+             setLoading(false);
+        }
+    };
+    
+    fetchOpenGames();
+    
   }, []);
 
   const filteredMatches = openMatches.filter(match => {
