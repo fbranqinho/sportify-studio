@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, getDoc, updateDoc, increment, documentId } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, getDoc, updateDoc, increment, documentId, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,11 +50,12 @@ export function KudosVoting({ match, user }: KudosVotingProps) {
         setParticipants(usersSnap.docs.map(d => d.data() as User));
       }
 
-      const votesQuery = query(collection(db, "matches", match.id, "kudosVotes"), where("voterId", "==", user.id));
-      const votesSnap = await getDocs(votesQuery);
-      if (!votesSnap.empty) {
-        setUserVote(votesSnap.docs[0].data() as KudosVote);
+      // Check if user has already voted by looking in the match document's array
+      const existingVote = match.kudosVotes?.find(vote => vote.voterId === user.id);
+      if (existingVote) {
+        setUserVote(existingVote);
       }
+      
       setLoading(false);
     }
     
@@ -69,18 +70,21 @@ export function KudosVoting({ match, user }: KudosVotingProps) {
     setIsSubmitting(true);
     try {
         const batch = writeBatch(db);
+        const matchRef = doc(db, "matches", match.id);
 
-        const voteRef = doc(collection(db, "matches", match.id, "kudosVotes"));
-        batch.set(voteRef, {
+        const newVote: KudosVote = {
             voterId: user.id,
             votedForId: selectedPlayer,
-            matchId: match.id,
             rating: rating,
             tags: selectedTags,
-            createdAt: serverTimestamp(),
+        };
+
+        // Atomically add the new vote to the 'kudosVotes' array
+        batch.update(matchRef, {
+            kudosVotes: arrayUnion(newVote)
         });
         
-        const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", selectedPlayer), limit(1));
+        const playerProfileQuery = query(collection(db, "playerProfiles"), where("userRef", "==", selectedPlayer));
         const playerProfileSnap = await getDocs(playerProfileQuery);
 
         if (!playerProfileSnap.empty) {
@@ -89,12 +93,14 @@ export function KudosVoting({ match, user }: KudosVotingProps) {
             selectedTags.forEach(tag => {
                 updateData[`tags.${tag}`] = increment(1);
             });
-            batch.update(profileRef, updateData);
+            if (Object.keys(updateData).length > 0) {
+              batch.update(profileRef, updateData);
+            }
         }
         
         await batch.commit();
 
-        setUserVote({ id: voteRef.id, voterId: user.id, votedForId: selectedPlayer, matchId: match.id, rating, tags: selectedTags, createdAt: new Date() });
+        setUserVote(newVote);
         toast({ title: "Feedback Submitted!", description: "Thank you for your contribution." });
     } catch (error) {
         console.error("Error submitting kudos vote: ", error);
@@ -169,5 +175,5 @@ export function KudosVoting({ match, user }: KudosVotingProps) {
             </Button>
         </CardContent>
     </Card>
-  )
+  );
 }

@@ -301,6 +301,7 @@ export interface Match {
     events?: MatchEvent[];
     finishTime?: Timestamp | null;
     mvpPlayerId?: string | null;
+    kudosVotes?: KudosVote[];
 }
 
 export interface TeamChallenge {
@@ -321,13 +322,10 @@ export interface MvpVote {
 }
 
 export interface KudosVote {
-    id: string;
     voterId: string;
     votedForId: string;
-    matchId: string;
     rating: 'up' | 'down';
     tags: string[];
-    createdAt: FieldValue;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";

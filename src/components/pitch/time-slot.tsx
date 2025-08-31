@@ -140,7 +140,7 @@ const ChallengeSlot = ({ match, user, userTeams }: { match: Match; user: User; u
             challengerManagerId: user.id,
         }
     };
-    await addDoc(collection(db, 'notifications'), notification);
+    await addDoc(collection(db, "users", match.managerRef, "notifications"), notification);
     toast({ title: "Challenge Sent!" });
     setIsChallengeDialogOpen(false);
   };
@@ -175,7 +175,8 @@ const ChallengeSlot = ({ match, user, userTeams }: { match: Match; user: User; u
                   <Button onClick={handleSendChallenge} disabled={!challengingTeamId}><Send className="mr-2 h-4 w-4" /> Send Challenge</Button>
               </DialogFooter>
           </DialogContent>
-      </>
+      </Dialog>
+    </>
   );
 };
 
