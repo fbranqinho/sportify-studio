@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -18,104 +17,85 @@ export function usePayments(user: User | null) {
   const [loading, setLoading] = React.useState(true);
 
   const fetchData = React.useCallback(async () => {
-    // This function is intentionally left blank as useEffect handles the data fetching lifecycle.
-    // It can be used for manual refetching if needed in the future.
-  }, []);
-
-  React.useEffect(() => {
     if (!user) {
       setLoading(false);
       setAllPayments([]);
-      return; // Early return if there's no user
+      return;
     }
 
     setLoading(true);
 
-    const processData = async (paymentsData: Payment[]) => {
-        setAllPayments(paymentsData);
+    try {
+      let paymentsQuery;
+      if (user.role === 'PLAYER') {
+          paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
+      } else if (user.role === 'MANAGER') {
+          paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
+      } else {
+          setAllPayments([]);
+          setLoading(false);
+          return;
+      }
+      
+      const snapshot = await getDocs(paymentsQuery);
+      const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+      setAllPayments(paymentsData);
 
-        const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
-        const playerIds = [...new Set([...paymentsData.map(p => p.playerRef), ...paymentsData.map(p => p.managerRef)].filter(Boolean))];
-        const ownerIds = [...new Set(paymentsData.map(p => p.ownerRef).filter(Boolean))];
+      const reservationIds = [...new Set(paymentsData.map(p => p.reservationRef).filter(Boolean))];
+      const playerIds = [...new Set([...paymentsData.map(p => p.playerRef), ...paymentsData.map(p => p.managerRef)].filter(Boolean))];
+      const ownerIds = [...new Set(paymentsData.map(p => p.ownerRef).filter(Boolean))];
 
-        if (reservationIds.length > 0) {
-            const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds.slice(0, 30)));
-            const fetchedReservationsSnap = await getDocs(reservationsQuery);
-            const reservationsMap = new Map<string, Reservation>();
-            fetchedReservationsSnap.forEach(doc => {
-            reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
-            });
-            setReservations(reservationsMap);
-        } else {
-            setReservations(new Map());
-        }
-        
-        if (playerIds.length > 0) {
-            const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds.slice(0, 30)));
-            const usersSnap = await getDocs(usersQuery);
-            const usersMap = new Map<string, User>();
-            usersSnap.forEach(doc => {
-            usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
-            });
-            setPlayerUsers(usersMap);
-        } else {
-            setPlayerUsers(new Map());
-        }
-        
-        if (ownerIds.length > 0) {
-            const ownersQuery = query(collection(db, 'ownerProfiles'), where(documentId(), 'in', ownerIds.slice(0, 30)));
-            const ownersSnap = await getDocs(ownersQuery);
-            const ownersMap = new Map<string, OwnerProfile>();
-            ownersSnap.forEach(doc => {
-                ownersMap.set(doc.id, { id: doc.id, ...doc.data() } as OwnerProfile);
-            });
-            setOwners(ownersMap);
-        } else {
-            setOwners(new Map());
-        }
-        
-        setLoading(false);
-    };
+      if (reservationIds.length > 0) {
+          const reservationsQuery = query(collection(db, "reservations"), where(documentId(), "in", reservationIds.slice(0, 30)));
+          const fetchedReservationsSnap = await getDocs(reservationsQuery);
+          const reservationsMap = new Map<string, Reservation>();
+          fetchedReservationsSnap.forEach(doc => {
+          reservationsMap.set(doc.id, { id: doc.id, ...doc.data() } as Reservation);
+          });
+          setReservations(reservationsMap);
+      } else {
+          setReservations(new Map());
+      }
+      
+      if (playerIds.length > 0) {
+          const usersQuery = query(collection(db, 'users'), where(documentId(), 'in', playerIds.slice(0, 30)));
+          const usersSnap = await getDocs(usersQuery);
+          const usersMap = new Map<string, User>();
+          usersSnap.forEach(doc => {
+          usersMap.set(doc.id, { id: doc.id, ...doc.data() } as User);
+          });
+          setPlayerUsers(usersMap);
+      } else {
+          setPlayerUsers(new Map());
+      }
+      
+      if (ownerIds.length > 0) {
+          const ownersQuery = query(collection(db, 'ownerProfiles'), where(documentId(), 'in', ownerIds.slice(0, 30)));
+          const ownersSnap = await getDocs(ownersQuery);
+          const ownersMap = new Map<string, OwnerProfile>();
+          ownersSnap.forEach(doc => {
+              ownersMap.set(doc.id, { id: doc.id, ...doc.data() } as OwnerProfile);
+          });
+          setOwners(ownersMap);
+      } else {
+          setOwners(new Map());
+      }
 
-    let paymentsQuery;
-    let unsubscribe = () => {};
-
-    if (user.role === 'PLAYER') {
-        paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
-    } else if (user.role === 'MANAGER') {
-        paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
-    } else if (user.role === 'OWNER') {
-        // Since owners don't have a direct ref on payments, we can't query efficiently.
-        // We will rely on notifications for owners. This page will be empty for them.
-        setAllPayments([]);
-        setLoading(false);
-        return;
-    } else {
-        // For roles with no payments page or other roles
-        setAllPayments([]);
-        setLoading(false);
-        return;
-    }
-    
-    if (paymentsQuery) {
-        unsubscribe = onSnapshot(paymentsQuery, (snapshot) => {
-            const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
-            processData(paymentsData).catch(console.error);
-        }, (error) => {
-            console.error("Error in payments listener:", error);
-            setLoading(false);
+    } catch (error) {
+        console.error("Error fetching payment data:", error);
+        toast({
+            variant: "destructive",
+            title: "Error fetching data",
+            description: "Could not load your payment information."
         });
+    } finally {
+        setLoading(false);
     }
-    
-    // This is the cleanup function that will be called when the component unmounts
-    // or when the dependencies (user) change.
-    return () => {
-      unsubscribe();
-    };
+  }, [user, toast]);
 
-  }, [user]); // Rerun effect if user changes
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return { allPayments, reservations, playerUsers, owners, loading, fetchData };
 }
-
-    
