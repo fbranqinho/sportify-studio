@@ -28,6 +28,7 @@ import { MatchDetailsCard } from "@/components/game/match-details-card";
 import { DressingRoom } from "@/components/game/dressing-room";
 import { KudosVoting } from "@/components/kudos-voting";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useMyGames } from "@/hooks/use-my-games";
 
 
 export default function GameDetailsPage() {
@@ -35,6 +36,13 @@ export default function GameDetailsPage() {
     const router = useRouter();
     const { user } = useUser();
     const gameId = params.gameId as string;
+    
+    // Use the central hook to get all game-related data
+    const { 
+        matches, teams, pitches, owners, reservations, 
+        loading: hookLoading, fetchGameData 
+    } = useMyGames(user);
+
     const [match, setMatch] = React.useState<Match | null>(null);
     const [teamA, setTeamA] = React.useState<Team | null>(null);
     const [teamB, setTeamB] = React.useState<Team | null>(null);
@@ -49,88 +57,71 @@ export default function GameDetailsPage() {
     const fetchGameDetails = React.useCallback(async () => {
         try {
             setLoading(true);
-            const matchRef = doc(db, "matches", gameId);
-            const matchSnap = await getDoc(matchRef);
+            const currentMatch = matches.find(m => m.id === gameId);
 
-            if (!matchSnap.exists()) {
+            if (!currentMatch) {
                 toast({ variant: "destructive", title: "Error", description: "Match not found." });
                 router.push("/dashboard/my-games");
                 return;
             }
-
-            const matchData = { id: matchSnap.id, ...matchSnap.data() } as Match;
-            setMatch(matchData);
-
-            const promises = [];
-
-            if (matchData.teamARef) {
-                promises.push(getDoc(doc(db, "teams", matchData.teamARef)).then(d => d.exists() ? setTeamA({id: d.id, ...d.data()} as Team) : null));
-            }
-
-            const teamBId = matchData.teamBRef || matchData.invitedTeamId;
-            if (teamBId) {
-                promises.push(getDoc(doc(db, "teams", teamBId)).then(d => d.exists() ? setTeamB({id: d.id, ...d.data()} as Team) : null));
-            }
             
-            if (matchData.pitchRef) {
-                const pitchRef = doc(db, "pitches", matchData.pitchRef);
-                const pitchPromise = getDoc(pitchRef).then(async (pitchDoc) => {
-                    if (pitchDoc.exists()) {
-                        const pitchData = { id: pitchDoc.id, ...pitchDoc.data() } as Pitch;
-                        setPitch(pitchData);
-                        if (pitchData.ownerRef) {
-                             const ownerDocRef = doc(db, "ownerProfiles", pitchData.ownerRef);
-                             const ownerDoc = await getDoc(ownerDocRef);
-                             if (ownerDoc.exists()) {
-                                 setOwner({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
-                             }
-                        }
-                    }
-                });
-                promises.push(pitchPromise);
+            setMatch(currentMatch);
+
+            if (currentMatch.teamARef) setTeamA(teams.get(currentMatch.teamARef) || null);
+            const teamBId = currentMatch.teamBRef || currentMatch.invitedTeamId;
+            if (teamBId) setTeamB(teams.get(teamBId) || null);
+            
+            if (currentMatch.pitchRef) {
+                const currentPitch = pitches.get(currentMatch.pitchRef) || null;
+                setPitch(currentPitch);
+                if (currentPitch?.ownerRef) {
+                    setOwner(owners.get(currentPitch.ownerRef) || null);
+                }
             }
 
-            if (matchData.reservationRef) {
-                const reservationPromise = getDoc(doc(db, "reservations", matchData.reservationRef)).then(resSnap => {
-                     if (resSnap.exists()) {
-                        setReservation({id: resSnap.id, ...resSnap.data()} as Reservation);
-                    }
-                });
-                promises.push(reservationPromise);
+            if (currentMatch.reservationRef) {
+                setReservation(reservations.get(currentMatch.reservationRef) || null);
             }
 
             const invQuery = query(collection(db, "matchInvitations"), where("matchId", "==", gameId));
-            const invPromise = getDocs(invQuery).then(snapshot => {
-                let pending = 0;
-                let declined = 0;
-                snapshot.forEach(doc => {
-                    const status = doc.data().status;
-                    if (status === 'pending') pending++;
-                    if (status === 'declined') declined++;
-                });
-                setInvitationCounts({ pending, declined });
+            const invSnapshot = await getDocs(invQuery);
+            let pending = 0;
+            let declined = 0;
+            invSnapshot.forEach(doc => {
+                const status = doc.data().status;
+                if (status === 'pending') pending++;
+                if (status === 'declined') declined++;
             });
-            promises.push(invPromise);
-
-
-            await Promise.all(promises);
-
+            setInvitationCounts({ pending, declined });
+            
         } catch (error) {
             console.error("Error fetching game details: ", error);
             toast({ variant: "destructive", title: "Error", description: "Failed to load game details." });
         } finally {
             setLoading(false);
         }
-    }, [gameId, router, toast]);
+    }, [gameId, matches, teams, pitches, owners, reservations, router, toast]);
 
     React.useEffect(() => {
-        if (gameId) {
+        if (gameId && !hookLoading) {
             fetchGameDetails();
         }
-    }, [gameId, fetchGameDetails]);
+    }, [gameId, hookLoading, fetchGameDetails]);
     
     const handleMatchUpdate = (data: Partial<Match>) => {
         setMatch(prev => prev ? {...prev, ...data} : null);
+        // Also update the match in the central hook's state
+        const updatedMatch = { ...match!, ...data };
+        const matchIndex = matches.findIndex(m => m.id === gameId);
+        if (matchIndex !== -1) {
+            const newMatches = [...matches];
+            newMatches[matchIndex] = updatedMatch;
+        }
+    }
+    
+    const onActionSuccess = () => {
+        // Trigger a refetch in the central hook to get the latest state for everything
+        fetchGameData();
     }
 
     const handleInviteTeam = async () => {
@@ -152,8 +143,9 @@ export default function GameDetailsPage() {
                 invitedAt: serverTimestamp(),
             });
 
+            // Create notification for the player
             const notificationRef = doc(collection(db, "notifications"));
-            batch.set(notificationRef, {
+             batch.set(notificationRef, {
                 userId: playerId,
                 message: `You've been invited to a game with ${teamA.name}.`,
                 link: '/dashboard/my-games',
@@ -165,7 +157,7 @@ export default function GameDetailsPage() {
         try {
             await batch.commit();
             toast({ title: "Invitations Sent!", description: `All ${teamA.playerIds.length} players will be invited to the game.` });
-            fetchGameDetails(); // Refetch to update invitation counts
+            onActionSuccess();
         } catch (error) {
             console.error("Error sending invitations:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not send invitations." });
@@ -202,7 +194,7 @@ export default function GameDetailsPage() {
     };
 
 
-    if (loading) {
+    if (loading || hookLoading) {
         return <div className="space-y-4">
             <Skeleton className="h-8 w-48" />
             <Skeleton className="h-40 w-full" />
@@ -220,7 +212,7 @@ export default function GameDetailsPage() {
     const isFinished = match.status === 'Finished';
     const isLive = match.status === 'InProgress';
     const canStartGame = match.status === 'Scheduled' && isManager && reservation?.paymentStatus === 'Paid';
-    const showInviteTeamButton = isManagerA && match.status === 'Collecting players' && invitationCounts.pending === 0;
+    const showInviteTeamButton = isManagerA && match.status === 'Collecting players' && invitationCounts.pending === 0 && invitationCounts.declined === 0 && match.teamAPlayers.length === 0;
 
     const getMatchTitle = () => {
         const teamAName = teamA?.name || 'Team A';
@@ -305,7 +297,7 @@ export default function GameDetailsPage() {
             
             {isFinished ? (
                  <div className="space-y-6">
-                    {pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />}
+                    {pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={onActionSuccess} />}
                     <KudosVoting match={match} user={user} />
                 </div>
             ) : (
@@ -320,8 +312,8 @@ export default function GameDetailsPage() {
                         teamB={teamB}
                     />
 
-                    {isManagerA && <PlayerApplications match={match} onUpdate={fetchGameDetails} />}
-                    {isManagerA && <ChallengeInvitations match={match} onUpdate={fetchGameDetails} />}
+                    {isManagerA && <PlayerApplications match={match} onUpdate={onActionSuccess} />}
+                    {isManagerA && <ChallengeInvitations match={match} onUpdate={onActionSuccess} />}
                     
                     {isManager && !isLive && <ManageGame match={match} onMatchUpdate={handleMatchUpdate} reservation={reservation} pitch={pitch} />}
                 </div>
@@ -329,5 +321,3 @@ export default function GameDetailsPage() {
         </div>
     );
 }
-
-    

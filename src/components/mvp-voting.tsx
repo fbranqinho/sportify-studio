@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -17,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 interface MvpVotingProps {
   match: Match;
   user: User;
-  onMvpUpdate: () => void;
+  onMvpUpdated: () => void;
 }
 
 function VotingEndedCard({ match, user, isSubmitting, handleFinalizeVotes }: { match: Match, user: User, isSubmitting: boolean, handleFinalizeVotes: () => void }) {
@@ -76,7 +75,7 @@ function VotingEndedCard({ match, user, isSubmitting, handleFinalizeVotes }: { m
     );
 }
 
-export function MvpVoting({ match, user, onMvpUpdate }: MvpVotingProps) {
+export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
   const [loading, setLoading] = React.useState(true);
   const [participants, setParticipants] = React.useState<User[]>([]);
   const [userVote, setUserVote] = React.useState<MvpVote | null>(null);
@@ -104,7 +103,7 @@ export function MvpVoting({ match, user, onMvpUpdate }: MvpVotingProps) {
         // Fetch participants
         const allPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
         if (allPlayerIds.length > 0) {
-            const usersQuery = query(collection(db, "users"), where("id", "in", allPlayerIds));
+            const usersQuery = query(collection(db, "users"), where(documentId(), "in", allPlayerIds));
             const usersSnap = await getDocs(usersQuery);
             setParticipants(usersSnap.docs.map(d => d.data() as User));
         }
@@ -179,7 +178,7 @@ export function MvpVoting({ match, user, onMvpUpdate }: MvpVotingProps) {
         const playerProfileRef = playerProfileSnap.docs[0].ref;
 
         const batch = writeBatch(db);
-        batch.update(matchRef, { mvpPlayerId: mvpId, finishTime: null }); // Set finishTime to null to "close" voting
+        batch.update(matchRef, { mvpPlayerId: mvpId });
         batch.update(playerProfileRef, { mvps: increment(1) });
         
         await batch.commit();

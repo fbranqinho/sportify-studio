@@ -114,7 +114,7 @@ export function MatchReport({ match, teamA, teamB, pitch, user, onMvpUpdate }: {
 
     return (
         <div className="space-y-6">
-            <MvpVoting match={match} user={user} onMvpUpdate={onMvpUpdate} />
+            <MvpVoting match={match} user={user} onMvpUpdated={onMvpUpdate} />
              {match.events && match.events.length > 0 && (
                  <Card>
                     <CardHeader>
