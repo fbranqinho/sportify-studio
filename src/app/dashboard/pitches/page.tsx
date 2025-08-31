@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, onSnapshot, doc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import type { Pitch, OwnerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,14 +21,34 @@ import { EditPitchForm } from "@/components/forms/edit-pitch-form";
 import { PlusCircle, MapPin, Users, Shield, DollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PitchesPage() {
   const { user } = useUser();
+  const { toast } = useToast();
   const [ownerProfile, setOwnerProfile] = React.useState<OwnerProfile | null>(null);
   const [pitches, setPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [editingPitch, setEditingPitch] = React.useState<Pitch | null>(null);
+
+  const fetchPitches = React.useCallback(async (profileId: string) => {
+    try {
+        const q = query(collection(db, "pitches"), where("ownerRef", "==", profileId));
+        const querySnapshot = await getDocs(q);
+        const pitchesData: Pitch[] = [];
+        querySnapshot.forEach((doc) => {
+            pitchesData.push({ id: doc.id, ...doc.data() } as Pitch);
+        });
+        setPitches(pitchesData);
+    } catch (error) {
+        console.error("Error fetching pitches:", error);
+        toast({ variant: "destructive", title: "Error fetching pitches", description: "Could not load your pitches."});
+    } finally {
+        setLoading(false);
+    }
+  }, [toast]);
+
 
   React.useEffect(() => {
     if (!user || user.role !== 'OWNER') {
@@ -37,52 +57,36 @@ export default function PitchesPage() {
     }
 
     const fetchOwnerProfile = async () => {
+      setLoading(true);
       try {
         const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           const ownerDoc = querySnapshot.docs[0];
-          setOwnerProfile({ id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile);
+          const profile = { id: ownerDoc.id, ...ownerDoc.data() } as OwnerProfile;
+          setOwnerProfile(profile);
+          // Fetch pitches after getting the profile
+          await fetchPitches(profile.id);
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error("Error fetching owner profile:", error);
+        setLoading(false);
       }
     };
 
     fetchOwnerProfile();
-  }, [user]);
-
-  React.useEffect(() => {
-    if (!ownerProfile) {
-        if(user?.role === 'OWNER') setLoading(true);
-        else setLoading(false);
-        return;
-    };
-
-    setLoading(true);
-    const q = query(collection(db, "pitches"), where("ownerRef", "==", ownerProfile.id));
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const pitchesData: Pitch[] = [];
-      querySnapshot.forEach((doc) => {
-        pitchesData.push({ id: doc.id, ...doc.data() } as Pitch);
-      });
-      setPitches(pitchesData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching pitches:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [ownerProfile, user?.role]);
+  }, [user, fetchPitches]);
   
   const handlePitchCreated = () => {
     setIsCreateDialogOpen(false);
+    if(ownerProfile) fetchPitches(ownerProfile.id);
   };
 
   const handlePitchUpdated = () => {
     setEditingPitch(null);
+    if(ownerProfile) fetchPitches(ownerProfile.id);
   }
 
   return (
