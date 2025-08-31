@@ -5,7 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { doc, updateDoc, writeBatch, collection, query, where, getDocs, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Reservation, Payment, Pitch } from "@/types";
+import type { Match, Reservation, Payment, Pitch, Notification } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -75,7 +75,9 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                         const payment = paymentDoc.data() as Payment;
                         const playerRef = payment.playerRef || (payment.managerRef && payment.type === 'booking_split' ? payment.managerRef : undefined);
                         
-                        if (playerRef) playerIdsToNotify.push(playerRef);
+                        if (playerRef && !playerIdsToNotify.includes(playerRef)) {
+                            playerIdsToNotify.push(playerRef);
+                        }
 
                         if (payment.status === 'Paid') {
                             batch.update(paymentDoc.ref, { status: 'Refunded' });
@@ -90,14 +92,14 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                 }
 
                 playerIdsToNotify.forEach(userId => {
-                    const notificationRef = doc(collection(db, 'notifications'));
-                    batch.set(notificationRef, {
-                        userId: userId,
+                    const notificationRef = doc(collection(db, "users", userId, "notifications"));
+                    const notificationData: Omit<Notification, 'id'> = {
                         message: `The game on ${format(new Date(match.date), 'MMM d')} has been cancelled. Payments have been refunded/cancelled.`,
                         link: '/dashboard/payments',
                         read: false,
                         createdAt: serverTimestamp() as any,
-                    });
+                    };
+                    batch.set(notificationRef, notificationData);
                 });
 
                 batch.delete(reservationRef);
