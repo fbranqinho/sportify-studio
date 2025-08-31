@@ -90,24 +90,31 @@ export function useMyGames(user: User | null) {
               setInvitations(validInvs);
 
           } else if (user.role === 'MANAGER') {
+            
               const managerTeamsQuery = query(collection(db, "teams"), where("managerId", "==", user.id));
               const managerTeamsSnapshot = await getDocs(managerTeamsQuery);
               const userTeamIds = managerTeamsSnapshot.docs.map(doc => doc.id);
+              
+              const queriesToRun = [];
 
-              const matchConditions = [where("managerRef", "==", user.id)];
+              // Get matches where the user is the direct manager
+              const directManagerQuery = query(collection(db, "matches"), where("managerRef", "==", user.id));
+              queriesToRun.push(getDocs(directManagerQuery));
+
               if (userTeamIds.length > 0) {
-                  matchConditions.push(where("teamARef", "in", userTeamIds));
-                  matchConditions.push(where("teamBRef", "in", userTeamIds));
-                  matchConditions.push(where("invitedTeamId", "in", userTeamIds));
+                  // Get matches for teams managed by the user
+                  const teamAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+                  const teamBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
+                  const invitedTeamQuery = query(collection(db, "matches"), where("invitedTeamId", "in", userTeamIds));
+                  queriesToRun.push(getDocs(teamAQuery), getDocs(teamBQuery), getDocs(invitedTeamQuery));
               }
               
-              if (matchConditions.length > 0) {
-                const finalMatchQuery = query(collection(db, "matches"), or(...matchConditions));
-                const matchesSnapshot = await getDocs(finalMatchQuery);
-                matchesSnapshot.forEach(doc => {
-                    finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
-                });
-              }
+              const snapshots = await Promise.all(queriesToRun);
+              snapshots.forEach(snapshot => {
+                  snapshot.forEach(doc => {
+                      finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
+                  });
+              });
           }
           
           const finalMatches = Array.from(finalMatchesMap.values());
@@ -294,7 +301,7 @@ export function useMyGames(user: User | null) {
             };
             batch.set(paymentRef, paymentData);
 
-            const notificationRef = doc(collection(db, "notifications"));
+            const notificationRef = doc(collection(db, "users", playerId, "notifications"));
             const notificationData: Omit<Notification, 'id'> = {
                 userId: playerId,
                 message: `A payment of ${pricePerPlayer.toFixed(2)}€ is required to confirm the game.`,
@@ -336,7 +343,5 @@ export function useMyGames(user: User | null) {
       fetchGameData, handlePlayerInvitationResponse, handleTeamInvitationResponse, handleStartSplitPayment
   }
 }
-
-    
 
     
