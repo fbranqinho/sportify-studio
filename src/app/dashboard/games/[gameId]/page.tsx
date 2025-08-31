@@ -152,6 +152,9 @@ export default function GameDetailsPage() {
                 invitedAt: serverTimestamp(),
             });
 
+            // This part is removed as it violates security rules for cross-user writes in a single batch.
+            // Players will see their invitations on the My Games page which queries the matchInvitations collection.
+            /*
             const notificationRef = doc(collection(db, "users", playerId, "notifications"));
             batch.set(notificationRef, {
                 message: `You've been invited to a game with ${teamA.name}.`,
@@ -159,11 +162,12 @@ export default function GameDetailsPage() {
                 read: false,
                 createdAt: serverTimestamp() as any,
             });
+            */
         }
         
         try {
             await batch.commit();
-            toast({ title: "Invitations Sent!", description: `All ${teamA.playerIds.length} players in your team have been invited.` });
+            toast({ title: "Invitations Sent!", description: `All ${teamA.playerIds.length} players will be invited to the game.` });
             fetchGameDetails(); // Refetch to update invitation counts
         } catch (error) {
             console.error("Error sending invitations:", error);
@@ -227,7 +231,7 @@ export default function GameDetailsPage() {
         if (teamA && !teamB && !match.invitedTeamId && (match.status === 'Collecting players' || match.status === 'Scheduled')) return `${teamA.name} (Practice)`;
         if (teamA && teamB) return `${teamA.name} vs ${teamB.name}`;
         if (teamA && match.invitedTeamId && !teamB) {
-             const invitedTeam = teamB; 
+             const invitedTeam = teams.get(match.invitedTeamId); 
              return `${teamA.name} vs ${invitedTeam?.name || 'Invited Team'} (Pending)`;
         }
         return 'Match Details';
