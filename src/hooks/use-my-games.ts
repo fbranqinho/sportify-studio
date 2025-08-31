@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -48,7 +47,7 @@ export function useMyGames(user: User | null) {
       setLoading(true);
 
       try {
-          let finalMatches: Match[] = [];
+          let finalMatchesMap = new Map<string, Match>();
           
           if (user.role === 'PLAYER') {
               const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
@@ -56,18 +55,23 @@ export function useMyGames(user: User | null) {
               const userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
 
               const matchQueries = [];
-              if (userTeamIds.length > 0) {
-                  matchQueries.push(where("teamARef", "in", userTeamIds));
-                  matchQueries.push(where("teamBRef", "in", userTeamIds));
-              }
-              matchQueries.push(where("teamAPlayers", "array-contains", user.id));
-              matchQueries.push(where("teamBPlayers", "array-contains", user.id));
 
-              if (matchQueries.length > 0) {
-                  const finalMatchQuery = query(collection(db, "matches"), or(...matchQueries));
-                  const matchesSnapshot = await getDocs(finalMatchQuery);
-                  finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+              if (userTeamIds.length > 0) {
+                  const teamMatchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
+                  const teamMatchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
+                  matchQueries.push(getDocs(teamMatchesAQuery), getDocs(teamMatchesBQuery));
               }
+              
+              const individualMatchesAQuery = query(collection(db, "matches"), where("teamAPlayers", "array-contains", user.id));
+              const individualMatchesBQuery = query(collection(db, "matches"), where("teamBPlayers", "array-contains", user.id));
+              matchQueries.push(getDocs(individualMatchesAQuery), getDocs(individualMatchesBQuery));
+
+              const snapshots = await Promise.all(matchQueries);
+              snapshots.forEach(snapshot => {
+                  snapshot.forEach(doc => {
+                      finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
+                  });
+              });
 
               const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
               const invSnapshot = await getDocs(invQuery);
@@ -77,12 +81,11 @@ export function useMyGames(user: User | null) {
               if (matchIdsFromInvs.length > 0) {
                   const matchesFromInvsMap = await fetchDetails('matches', matchIdsFromInvs);
                   matchesFromInvsMap.forEach(match => {
-                      if (!finalMatches.some(m => m.id === match.id)) {
-                          finalMatches.push(match);
-                      }
+                      finalMatchesMap.set(match.id, match);
                   });
               }
-              const validInvs = new Map(invs.filter(inv => finalMatches.some(m => m.id === inv.matchId)).map(inv => [inv.matchId, inv]));
+              const finalMatchesForInv = Array.from(finalMatchesMap.values());
+              const validInvs = new Map(invs.filter(inv => finalMatchesForInv.some(m => m.id === inv.matchId)).map(inv => [inv.matchId, inv]));
               setInvitations(validInvs);
 
           } else if (user.role === 'MANAGER') {
@@ -100,10 +103,13 @@ export function useMyGames(user: User | null) {
               if (matchConditions.length > 0) {
                 const finalMatchQuery = query(collection(db, "matches"), or(...matchConditions));
                 const matchesSnapshot = await getDocs(finalMatchQuery);
-                finalMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+                matchesSnapshot.forEach(doc => {
+                    finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
+                });
               }
           }
           
+          const finalMatches = Array.from(finalMatchesMap.values());
           setMatches(finalMatches);
           
           // --- Fetch supporting details for all collected matches ---
