@@ -151,37 +151,43 @@ function PlayerTeamsView() {
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
+  const fetchData = React.useCallback(async () => {
     if (!user || user.role !== 'PLAYER') {
         setLoading(false);
         return;
     }
-    
     setLoading(true);
-    
-    // Fetch Invitations
-    const invitationsQuery = query(
-      collection(db, "teamInvitations"),
-      where("playerId", "==", user.id),
-      where("status", "==", "pending")
-    );
-    const unsubscribeInvitations = onSnapshot(invitationsQuery, (snapshot) => {
-      setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamInvitation)));
-      setLoading(false);
-    }, (error) => { console.error(error); setLoading(false); });
 
-    // Fetch Teams
-    const teamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
-    const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
-      setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-      setLoading(false);
-    }, (error) => { console.error(error); setLoading(false); });
-    
-    return () => {
-        unsubscribeInvitations();
-        unsubscribeTeams();
-    };
-  }, [user]);
+    try {
+        // Fetch Invitations securely
+        const invitationsQuery = query(
+            collection(db, "teamInvitations"),
+            where("playerId", "==", user.id),
+            where("status", "==", "pending")
+        );
+        const invitationsSnapshot = await getDocs(invitationsQuery);
+        setInvitations(invitationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamInvitation)));
+
+        // Fetch Teams securely
+        const teamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
+        const teamsSnapshot = await getDocs(teamsQuery);
+        setTeams(teamsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+
+    } catch (error) {
+        console.error("Error fetching player teams data:", error);
+        toast({
+            variant: "destructive",
+            title: "Error fetching data",
+            description: "Could not load your teams and invitations. Please try again later."
+        });
+    } finally {
+        setLoading(false);
+    }
+  }, [user, toast]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
 
   const handleInvitationResponse = async (invitation: TeamInvitation, accepted: boolean) => {
@@ -215,6 +221,8 @@ function PlayerTeamsView() {
         await batch.commit();
         toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${teamName}.` });
     }
+    // Refetch data to show the changes
+    fetchData();
   };
 
 
@@ -223,7 +231,7 @@ function PlayerTeamsView() {
       <CardHeader>
         <CardTitle className="font-headline">Invitation to join {invitation.teamName}</CardTitle>
         <CardDescription>
-          Invited {invitation.invitedAt ? formatDistanceToNow(new Date(invitation.invitedAt.seconds * 1000), { addSuffix: true }) : 'recently'}
+          Invited {invitation.invitedAt ? formatDistanceToNow(new Date((invitation.invitedAt as any).seconds * 1000), { addSuffix: true }) : 'recently'}
         </CardDescription>
       </CardHeader>
       <CardContent>
