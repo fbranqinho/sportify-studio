@@ -25,6 +25,7 @@ import { ManageGame } from "@/components/game/manage-game";
 import { MatchReport } from "@/components/game/match-report";
 import { MatchDetailsCard } from "@/components/game/match-details-card";
 import { DressingRoom } from "@/components/game/dressing-room";
+import { KudosVoting } from "@/components/kudos-voting";
 
 
 export default function GameDetailsPage() {
@@ -242,7 +243,10 @@ export default function GameDetailsPage() {
             )}
             
             {isFinished ? (
-                 pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />
+                 <div className="space-y-6">
+                    {pitch && <MatchReport match={match} teamA={teamA} teamB={teamB} pitch={pitch} user={user} onMvpUpdate={fetchGameDetails} />}
+                    <KudosVoting match={match} user={user} />
+                </div>
             ) : (
                 <div className="space-y-6">
                     {isLive && <GameFlowManager match={match} onMatchUpdate={handleMatchUpdate} teamA={teamA} teamB={teamB} pitch={pitch} reservation={reservation} />}

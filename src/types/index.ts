@@ -87,6 +87,9 @@ export interface PlayerProfile {
   suspended: boolean;
   availableToPlay: boolean;
   availableToJoinTeams: boolean;
+
+  // Kudos System
+  tags?: Record<string, number>;
 }
 
 export type ManagerFootballType = 'fut7' | 'fut5' | 'futsal';
@@ -117,11 +120,11 @@ export interface OwnerProfile {
 }
 
 export interface PromoterProfile {
-    id: string;
-    userRef: string; // User ID
-    company: string;
-    photoUrl?: string;
-    competitionsRef: string[]; // Competition IDs
+  id: string;
+  userRef: string; // User ID
+  company: string;
+  photoUrl?: string;
+  competitionsRef: string[]; // Competition IDs
 }
 
 export interface RefereeProfile {
@@ -315,6 +318,16 @@ export interface MvpVote {
   voterId: string;
   votedForId: string;
   timestamp: FieldValue;
+}
+
+export interface KudosVote {
+    id: string;
+    voterId: string;
+    votedForId: string;
+    matchId: string;
+    rating: 'up' | 'down';
+    tags: string[];
+    createdAt: FieldValue;
 }
 
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";
