@@ -143,7 +143,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const auth = getAuth(app);
 
   React.useEffect(() => {
-    if (!loading && user && !user.profileCompleted) {
+    if (!loading && user && !user.profileCompleted && user.role !== 'ADMIN') {
       router.push("/complete-profile");
     }
   }, [user, loading, router]);
@@ -166,7 +166,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (user && !user.profileCompleted) {
+  if (user && !user.profileCompleted && user.role !== 'ADMIN') {
     return (
        <div className="flex items-center justify-center min-h-screen">
         <p>Redirecting to complete your profile...</p>

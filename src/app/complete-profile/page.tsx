@@ -28,7 +28,7 @@ export default function CompleteProfilePage() {
         if (userDoc.exists()) {
           const userData = { id: userDoc.id, ...userDoc.data() } as User;
           setUser(userData);
-          if (userData.profileCompleted) {
+          if (userData.profileCompleted || userData.role === 'ADMIN') {
             router.push("/dashboard");
           }
         } else {
