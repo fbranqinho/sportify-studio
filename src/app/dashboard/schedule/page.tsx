@@ -62,31 +62,32 @@ export default function SchedulePage() {
         return;
     }
     
-    setLoading(true);
+    const fetchReservations = async () => {
+        setLoading(true);
 
-    const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+        try {
+            const reservationsQuery = query(collection(db, "reservations"), where("ownerProfileId", "==", ownerProfileId));
+            const querySnapshot = await getDocs(reservationsQuery);
+            const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+            setReservations(reservationsData);
+
+            const pitchIds = [...new Set(reservationsData.map(r => r.pitchId))];
+            if (pitchIds.length > 0) {
+                const pitchesQuery = query(collection(db, 'pitches'), where(documentId(), 'in', pitchIds));
+                const pitchesSnap = await getDocs(pitchesQuery);
+                const pitchesMap = new Map<string, Pitch>();
+                pitchesSnap.forEach(doc => pitchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Pitch));
+                setPitches(pitchesMap);
+            }
+        } catch (error) {
+            console.error("Error fetching reservations: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
+        } finally {
+            setLoading(false);
+        }
+    }
     
-    const unsubscribe = onSnapshot(reservationsQuery, async (querySnapshot) => {
-      const reservationsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
-      setReservations(reservationsData);
-
-      const pitchIds = [...new Set(reservationsData.map(r => r.pitchId))];
-      if (pitchIds.length > 0) {
-          const pitchesQuery = query(collection(db, 'pitches'), where(documentId(), 'in', pitchIds));
-          const pitchesSnap = await getDocs(pitchesQuery);
-          const pitchesMap = new Map<string, Pitch>();
-          pitchesSnap.forEach(doc => pitchesMap.set(doc.id, {id: doc.id, ...doc.data()} as Pitch));
-          setPitches(pitchesMap);
-      }
-
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching reservations: ", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not fetch reservations." });
-      setLoading(false);
-    });
-    
-    return () => unsubscribe();
+    fetchReservations();
 
   }, [user, ownerProfileId, toast]);
   
