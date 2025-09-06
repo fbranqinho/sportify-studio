@@ -3,8 +3,8 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, serverTimestamp, getDocs, addDoc, getDoc, documentId, updateDoc, or, deleteDoc } from "firebase/firestore";
-import type { Payment, Notification, PaymentStatus, Reservation, User, UserRole, OwnerProfile } from "@/types";
+import { collection, query, where, getDocs, documentId, or } from "firebase/firestore";
+import type { Payment, Reservation, User, UserRole, OwnerProfile } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -27,15 +27,12 @@ export function usePayments(user: User | null) {
 
     try {
       let paymentsQuery;
-      if (user.role === 'PLAYER') {
-          paymentsQuery = query(collection(db, "payments"), where("playerRef", "==", user.id));
-      } else if (user.role === 'MANAGER') {
-          paymentsQuery = query(collection(db, "payments"), where("managerRef", "==", user.id));
-      } else {
-          setAllPayments([]);
-          setLoading(false);
-          return;
-      }
+      // This query securely fetches payments where the current user is either the player, manager or owner.
+      paymentsQuery = query(collection(db, "payments"), or(
+          where("playerRef", "==", user.id),
+          where("managerRef", "==", user.id),
+          where("ownerRef", "==", user.id)
+      ));
       
       const snapshot = await getDocs(paymentsQuery);
       const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
