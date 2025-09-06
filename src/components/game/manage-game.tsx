@@ -23,16 +23,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { format } from "date-fns";
-import { getPlayerCapacity } from "@/lib/utils";
+import { deleteMatchById } from "@/ai/flows/admin-flow";
 
 export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; pitch: Pitch | null; }) {
     const { toast } = useToast();
     const router = useRouter();
     const isPaid = reservation?.paymentStatus === 'Paid';
-
-    const capacity = pitch ? getPlayerCapacity(pitch.sport) : 0;
-    const isFull = capacity > 0 && (match.teamAPlayers.length + (match.teamBPlayers?.length || 0)) >= capacity;
+    const [isDeleting, setIsDeleting] = React.useState(false);
 
     const handleToggleExternalPlayers = async (checked: boolean) => {
         const matchRef = doc(db, "matches", match.id);
@@ -59,67 +56,20 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
     }
     
     const handleDeleteGame = async () => {
-        const batch = writeBatch(db);
-        const matchRef = doc(db, "matches", match.id);
-        
+        setIsDeleting(true);
         try {
-            let playerIdsToNotify: string[] = [];
-
-            if (match.reservationRef) {
-                const reservationRef = doc(db, "reservations", match.reservationRef);
-                const paymentsQuery = query(collection(db, "payments"), where("reservationRef", "==", match.reservationRef));
-                const paymentsSnap = await getDocs(paymentsQuery);
-
-                if (!paymentsSnap.empty) {
-                    paymentsSnap.forEach(paymentDoc => {
-                        const payment = paymentDoc.data() as Payment;
-                        const playerRef = payment.playerRef || (payment.managerRef && payment.type === 'booking_split' ? payment.managerRef : undefined);
-                        
-                        if (playerRef && !playerIdsToNotify.includes(playerRef)) {
-                            playerIdsToNotify.push(playerRef);
-                        }
-
-                        if (payment.status === 'Paid') {
-                            batch.update(paymentDoc.ref, { status: 'Refunded' });
-                        } else if (payment.status === 'Pending') {
-                            batch.update(paymentDoc.ref, { status: 'Cancelled' });
-                        }
-                    });
-                }
-                batch.delete(reservationRef);
+            const result = await deleteMatchById(match.id);
+            if(result.success) {
+                toast({ title: "Game Deleted", description: result.message });
+                router.push('/dashboard/my-games');
+            } else {
+                toast({ variant: "destructive", title: "Error", description: result.message });
             }
-            
-            // Add all players from the match to the notification list
-            const matchPlayerIds = [...new Set([...(match.teamAPlayers || []), ...(match.teamBPlayers || [])])];
-            playerIdsToNotify.push(...matchPlayerIds);
-            
-            // Add manager if not already in the list
-            if (match.managerRef && !playerIdsToNotify.includes(match.managerRef)) {
-                playerIdsToNotify.push(match.managerRef);
-            }
-
-            // Create notifications
-            const uniquePlayerIds = [...new Set(playerIdsToNotify)];
-            uniquePlayerIds.forEach(userId => {
-                const notificationRef = doc(collection(db, "users", userId, "notifications"));
-                const notificationData: Omit<Notification, 'id'> = {
-                    message: `The game on ${format(new Date(match.date), 'MMM d')} has been cancelled. Payments have been refunded/cancelled.`,
-                    link: '/dashboard/payments',
-                    read: false,
-                    createdAt: serverTimestamp() as any,
-                    userId,
-                };
-                batch.set(notificationRef, notificationData);
-            });
-
-            batch.delete(matchRef);
-
-            await batch.commit();
-            toast({ title: "Game Deleted", description: "The game and all associated data have been removed."});
-            router.push('/dashboard/my-games');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error deleting game:", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not delete the game. Check console for details." });
+            toast({ variant: "destructive", title: "Error", description: `An unexpected error occurred: ${error.message}` });
+        } finally {
+            setIsDeleting(false);
         }
     }
 
@@ -143,7 +93,6 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                         id="allow-external"
                         checked={!!match.allowExternalPlayers}
                         onCheckedChange={handleToggleExternalPlayers}
-                        disabled={isFull}
                     />
                 </div>
                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
@@ -159,7 +108,7 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                         id="allow-challenges"
                         checked={!!match.allowChallenges}
                         onCheckedChange={handleToggleAllowChallenges}
-                        disabled={isFull || !!match.teamBRef}
+                        disabled={!!match.teamBRef}
                     />
                 </div>
                 <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
@@ -173,8 +122,9 @@ export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match
                     </div>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={isPaid && !reservation?.allowCancellationsAfterPayment}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            <Button variant="destructive" disabled={isDeleting || (isPaid && !reservation?.allowCancellationsAfterPayment)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> 
+                                {isDeleting ? 'Deleting...' : 'Delete'}
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
