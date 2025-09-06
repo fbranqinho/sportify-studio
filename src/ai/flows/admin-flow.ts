@@ -7,7 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, where, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, writeBatch, query, where, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
 import { z } from 'zod';
 import type { Payment, Notification, Match, Reservation, Team, User } from '@/types';
 
@@ -85,7 +85,16 @@ const UserSchema = z.object({
 // Helper function to fetch all documents from a collection
 async function fetchAll<T>(collectionName: string): Promise<T[]> {
     const snapshot = await getDocs(collection(db, collectionName));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Convert Firestore Timestamps to JS Date objects for fields that are known to be timestamps
+        for (const key in data) {
+            if (data[key] instanceof Timestamp) {
+                data[key] = data[key].toDate();
+            }
+        }
+        return { id: doc.id, ...data } as T;
+    });
 }
 
 // Exported functions remain the same
