@@ -100,27 +100,32 @@ export function useTeamDetails() {
   const handleBulkUpdateNumbers = async (numberChanges: Map<string, number | null>) => {
     if (!team || numberChanges.size === 0) return;
     
-    const updatedPlayers = team.players.map(p => {
-        if(numberChanges.has(p.playerId)) {
+    const teamDocRef = doc(db, "teams", teamId);
+
+    // Create a new 'players' array based on the original one, but with updated numbers.
+    const updatedPlayersArray = team.players.map(p => {
+        if (numberChanges.has(p.playerId)) {
             return { ...p, number: numberChanges.get(p.playerId)! };
         }
         return p;
     });
 
     try {
-        const teamDocRef = doc(db, "teams", teamId);
-        await updateDoc(teamDocRef, { players: updatedPlayers });
+        // This is a single, secure operation. The manager is only updating their own team document.
+        await updateDoc(teamDocRef, {
+            players: updatedPlayersArray
+        });
         
         toast({ title: "Success", description: "Player numbers updated successfully." });
         
-        // Refetch data to ensure UI is consistent with backend, especially sorting
+        // Refetch all data to ensure the UI is consistent with the backend, especially sorting.
         await fetchTeamData();
 
     } catch (error) {
         console.error("Error updating player numbers:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to update player numbers." });
     }
-  };
+};
 
 
   const handleRemovePlayer = async (playerIdToRemove: string) => {
