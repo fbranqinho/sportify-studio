@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, documentId, arrayRemove, arrayUnion, writeBatch } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp, documentId, arrayRemove, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Team, PlayerProfile, User, EnrichedPlayerSearchResult, Notification } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -102,7 +101,6 @@ export function useTeamDetails() {
     
     const teamDocRef = doc(db, "teams", teamId);
 
-    // Create a new 'players' array based on the original one, but with updated numbers.
     const updatedPlayersArray = team.players.map(p => {
         if (numberChanges.has(p.playerId)) {
             return { ...p, number: numberChanges.get(p.playerId)! };
@@ -164,8 +162,6 @@ export function useTeamDetails() {
             return;
         }
         
-        // This is the only operation a manager should perform when inviting:
-        // create the invitation document.
         await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
