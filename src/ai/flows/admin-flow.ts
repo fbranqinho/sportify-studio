@@ -1,17 +1,17 @@
 
 'use server';
 /**
- * @fileOverview Admin actions flow.
- * - deleteAllMatches: Deletes all documents from the 'matches' collection.
- * - deleteMatchById: Deletes a specific match and its related data.
+ * @fileOverview Admin actions flow using the standard client-side Firestore SDK.
+ * Permissions are enforced by Firestore Security Rules, where the 'ADMIN' role has full access.
  */
 
 import { ai } from '@/ai/genkit';
-import { getAdminApp } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, writeBatch, query, where, deleteDoc } from "firebase/firestore";
 import { z } from 'zod';
 import type { Payment, Notification, Match, Reservation, Team, User } from '@/types';
 
+// Schemas remain the same as they define the data structure, which is correct.
 const DeleteAllResultSchema = z.object({
   deletedCount: z.number().describe('The number of documents deleted.'),
 });
@@ -21,7 +21,6 @@ const DeleteByIdResultSchema = z.object({
   message: z.string(),
 });
 
-// Define Zod schemas for the new data types
 const MatchSchema = z.object({
   id: z.string(),
   date: z.string(),
@@ -79,23 +78,25 @@ const UserSchema = z.object({
     email: z.string(),
     role: z.string(),
     profileCompleted: z.boolean(),
-    createdAt: z.any(), // Timestamps can be complex
+    createdAt: z.any(),
 });
 
 
-export async function deleteAllMatches(): Promise<
-  z.infer<typeof DeleteAllResultSchema>
-> {
+// Helper function to fetch all documents from a collection
+async function fetchAll<T>(collectionName: string): Promise<T[]> {
+    const snapshot = await getDocs(collection(db, collectionName));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+}
+
+// Exported functions remain the same
+export async function deleteAllMatches(): Promise<z.infer<typeof DeleteAllResultSchema>> {
   return deleteAllMatchesFlow();
 }
 
-export async function deleteMatchById(
-  matchId: string
-): Promise<z.infer<typeof DeleteByIdResultSchema>> {
+export async function deleteMatchById(matchId: string): Promise<z.infer<typeof DeleteByIdResultSchema>> {
   return deleteMatchByIdFlow(matchId);
 }
 
-// New exported functions for fetching all data
 export async function getAllMatches(): Promise<Match[]> {
   return getAllMatchesFlow();
 }
@@ -119,16 +120,14 @@ const deleteAllMatchesFlow = ai.defineFlow(
     outputSchema: DeleteAllResultSchema,
   },
   async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const matchesCollection = db.collection('matches');
-    const snapshot = await matchesCollection.get();
+    const matchesCollection = collection(db, 'matches');
+    const snapshot = await getDocs(matchesCollection);
 
     if (snapshot.empty) {
       return { deletedCount: 0 };
     }
 
-    const batch = db.batch();
+    const batch = writeBatch(db);
     snapshot.docs.forEach((doc) => {
       batch.delete(doc.ref);
     });
@@ -146,70 +145,31 @@ const deleteMatchByIdFlow = ai.defineFlow(
     outputSchema: DeleteByIdResultSchema,
   },
   async (matchId) => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const batch = db.batch();
-    const matchRef = db.collection('matches').doc(matchId);
+    const batch = writeBatch(db);
+    const matchRef = doc(db, 'matches', matchId);
     
     try {
-        const matchDoc = await matchRef.get();
-        if (!matchDoc.exists) {
+        const matchDoc = await getDoc(matchRef);
+        if (!matchDoc.exists()) {
             return { success: false, message: 'Match not found.' };
         }
         const match = matchDoc.data();
 
-        let playerIdsToNotify: string[] = [];
-
-        // Handle associated reservation and payments if they exist
         if (match?.reservationRef) {
-            const reservationRef = db.collection('reservations').doc(match.reservationRef);
-            const paymentsQuery = db.collection('payments').where('reservationRef', '==', match.reservationRef);
-            const paymentsSnap = await paymentsQuery.get();
+            const reservationRef = doc(db, 'reservations', match.reservationRef);
+            batch.delete(reservationRef);
+            
+            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', match.reservationRef));
+            const paymentsSnap = await getDocs(paymentsQuery);
 
             if (!paymentsSnap.empty) {
                 paymentsSnap.forEach(paymentDoc => {
-                    const payment = paymentDoc.data() as Payment;
-                    const playerRef = payment.playerRef || (payment.managerRef && payment.type === 'booking_split' ? payment.managerRef : undefined);
-                    
-                    if (playerRef && !playerIdsToNotify.includes(playerRef)) {
-                        playerIdsToNotify.push(playerRef);
-                    }
-
-                    if (payment.status === 'Paid') {
-                        batch.update(paymentDoc.ref, { status: 'Refunded' });
-                    } else if (payment.status === 'Pending') {
-                        batch.update(paymentDoc.ref, { status: 'Cancelled' });
-                    }
+                     batch.delete(paymentDoc.ref);
                 });
             }
-            batch.delete(reservationRef);
         }
-
-        // Add all players from the match to the notification list
-        const matchPlayerIds = [...new Set([...(match?.teamAPlayers || []), ...(match?.teamBPlayers || [])])];
-        playerIdsToNotify.push(...matchPlayerIds);
-        
-        // Add manager if not already in the list
-        if (match?.managerRef && !playerIdsToNotify.includes(match.managerRef)) {
-            playerIdsToNotify.push(match.managerRef);
-        }
-
-        // Create notifications
-        const uniquePlayerIds = [...new Set(playerIdsToNotify)];
-        uniquePlayerIds.forEach(userId => {
-            const notificationRef = db.collection('users').doc(userId).collection('notifications').doc();
-            const notificationData: Omit<Notification, 'id'> = {
-                message: `The game on ${new Date(match?.date).toLocaleDateString()} has been cancelled. Payments have been handled.`,
-                link: '/dashboard/payments',
-                read: false,
-                createdAt: new Date() as any,
-                userId,
-            };
-            batch.set(notificationRef, notificationData);
-        });
         
         batch.delete(matchRef);
-
         await batch.commit();
         
         return { success: true, message: 'Game and all associated data deleted successfully.' };
@@ -221,39 +181,10 @@ const deleteMatchByIdFlow = ai.defineFlow(
   }
 );
 
+// --- Flows using the standard client SDK ---
 
-// New flows for fetching all documents from a collection
-const getAllMatchesFlow = ai.defineFlow({ name: 'getAllMatchesFlow', outputSchema: z.array(MatchSchema) }, async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const snapshot = await db.collection('matches').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match);
-});
-
-const getAllReservationsFlow = ai.defineFlow({ name: 'getAllReservationsFlow', outputSchema: z.array(ReservationSchema) }, async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const snapshot = await db.collection('reservations').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Reservation);
-});
-
-const getAllPaymentsFlow = ai.defineFlow({ name: 'getAllPaymentsFlow', outputSchema: z.array(PaymentSchema) }, async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const snapshot = await db.collection('payments').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Payment);
-});
-
-const getAllTeamsFlow = ai.defineFlow({ name: 'getAllTeamsFlow', outputSchema: z.array(TeamSchema) }, async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const snapshot = await db.collection('teams').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Team);
-});
-
-const getAllUsersFlow = ai.defineFlow({ name: 'getAllUsersFlow', outputSchema: z.array(UserSchema) }, async () => {
-    const adminApp = getAdminApp();
-    const db = getFirestore(adminApp);
-    const snapshot = await db.collection('users').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as User);
-});
+const getAllMatchesFlow = ai.defineFlow({ name: 'getAllMatchesFlow', outputSchema: z.array(MatchSchema) }, () => fetchAll<Match>('matches'));
+const getAllReservationsFlow = ai.defineFlow({ name: 'getAllReservationsFlow', outputSchema: z.array(ReservationSchema) }, () => fetchAll<Reservation>('reservations'));
+const getAllPaymentsFlow = ai.defineFlow({ name: 'getAllPaymentsFlow', outputSchema: z.array(PaymentSchema) }, () => fetchAll<Payment>('payments'));
+const getAllTeamsFlow = ai.defineFlow({ name: 'getAllTeamsFlow', outputSchema: z.array(TeamSchema) }, () => fetchAll<Team>('teams'));
+const getAllUsersFlow = ai.defineFlow({ name: 'getAllUsersFlow', outputSchema: z.array(UserSchema) }, () => fetchAll<User>('users'));
