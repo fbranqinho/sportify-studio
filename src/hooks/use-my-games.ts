@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -51,27 +50,13 @@ export function useMyGames(user: User | null) {
           let finalMatchesMap = new Map<string, Match>();
           
           if (user.role === 'PLAYER') {
-              const playerTeamsQuery = query(collection(db, "teams"), where("playerIds", "array-contains", user.id));
-              const playerTeamsSnapshot = await getDocs(playerTeamsQuery);
-              const userTeamIds = playerTeamsSnapshot.docs.map(doc => doc.id);
-
-              const matchQueries = [];
-
-              if (userTeamIds.length > 0) {
-                  const teamMatchesAQuery = query(collection(db, "matches"), where("teamARef", "in", userTeamIds));
-                  const teamMatchesBQuery = query(collection(db, "matches"), where("teamBRef", "in", userTeamIds));
-                  matchQueries.push(getDocs(teamMatchesAQuery), getDocs(teamMatchesBQuery));
-              }
-              
-              const individualMatchesAQuery = query(collection(db, "matches"), where("teamAPlayers", "array-contains", user.id));
-              const individualMatchesBQuery = query(collection(db, "matches"), where("teamBPlayers", "array-contains", user.id));
-              matchQueries.push(getDocs(individualMatchesAQuery), getDocs(individualMatchesBQuery));
-
-              const snapshots = await Promise.all(matchQueries);
-              snapshots.forEach(snapshot => {
-                  snapshot.forEach(doc => {
-                      finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
-                  });
+              const playerMatchesQuery = query(
+                  collection(db, "matches"),
+                  where("playerIds", "array-contains", user.id)
+              );
+              const playerMatchesSnapshot = await getDocs(playerMatchesQuery);
+              playerMatchesSnapshot.forEach(doc => {
+                  finalMatchesMap.set(doc.id, { id: doc.id, ...doc.data() } as Match);
               });
 
               const invQuery = query(collection(db, "matchInvitations"), where("playerId", "==", user.id), where("status", "==", "pending"));
