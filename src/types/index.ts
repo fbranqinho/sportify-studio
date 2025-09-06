@@ -385,6 +385,7 @@ export type NavItem = {
   roles: UserRole[];
   label?: string;
   premium?: boolean;
+  isSubItem?: boolean;
 };
 
 export interface EnrichedPlayerSearchResult {

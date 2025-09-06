@@ -25,6 +25,11 @@ import {
   Gamepad2,
   Calendar,
   Settings,
+  List,
+  Database,
+  Banknote,
+  Users2,
+  ShieldCheckIcon,
 } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 
@@ -43,7 +48,12 @@ const navItems: NavItem[] = [
   // Promoter specific
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
   // Admin specific
-  { title: "Admin Tools", href: "/dashboard/admin", icon: Settings, roles: ["ADMIN"] },
+  { title: "Data Management", href: "/dashboard/admin", icon: Database, roles: ["ADMIN"] },
+  { title: "All Games", href: "/dashboard/admin/games", icon: Gamepad2, roles: ["ADMIN"], isSubItem: true },
+  { title: "All Users", href: "/dashboard/admin/users", icon: Users2, roles: ["ADMIN"], isSubItem: true },
+  { title: "All Teams", href: "/dashboard/admin/teams", icon: ShieldCheckIcon, roles: ["ADMIN"], isSubItem: true },
+  { title: "All Reservations", href: "/dashboard/admin/reservations", icon: List, roles: ["ADMIN"], isSubItem: true },
+  { title: "All Payments", href: "/dashboard/admin/payments", icon: Banknote, roles: ["ADMIN"], isSubItem: true },
 ];
 
 interface DashboardNavProps {
@@ -86,7 +96,10 @@ export function DashboardNav({ role }: DashboardNavProps) {
           const isPitchesDetailsPage = /^\/dashboard\/pitches\/[a-zA-Z0-9]+$/.test(pathname);
 
           let isActive = false;
-          if (isGameDetailsPage) {
+          if (item.href === '/dashboard/admin' && pathname.startsWith('/dashboard/admin')) {
+             isActive = true;
+          }
+          else if (isGameDetailsPage) {
               isActive = item.href === '/dashboard/my-games';
           } else if(isPitchesDetailsPage) {
               isActive = item.href === '/dashboard/games';
@@ -96,7 +109,7 @@ export function DashboardNav({ role }: DashboardNavProps) {
           }
           
           return (
-            <SidebarMenuItem key={item.href}>
+            <SidebarMenuItem key={item.href} className={cn(item.isSubItem && "pl-8")}>
               <Link href={item.href}>
                 <SidebarMenuButton
                   isActive={isActive}

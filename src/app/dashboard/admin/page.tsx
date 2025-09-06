@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2 } from "lucide-react";
+import { Database, Trash2 } from "lucide-react";
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -46,7 +46,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold font-headline">Admin Tools</h1>
+        <h1 className="text-3xl font-bold font-headline">Data Management</h1>
         <p className="text-muted-foreground">
           Advanced controls for site administration. Use with caution.
         </p>
@@ -54,9 +54,12 @@ export default function AdminPage() {
 
       <Card className="border-destructive/50">
         <CardHeader>
-          <CardTitle className="font-headline text-destructive">Database Actions</CardTitle>
+          <CardTitle className="font-headline text-destructive flex items-center gap-2">
+            <Database />
+            Destructive Actions
+          </CardTitle>
           <CardDescription>
-            These actions directly modify the Firestore database.
+            These actions directly modify the Firestore database and cannot be undone.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
