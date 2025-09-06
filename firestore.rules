@@ -3,46 +3,44 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Helper Functions ---
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
     function isProfileOwner(profileType, profileId) {
       return exists(/databases/$(database)/documents/$(profileType)/$(profileId)) &&
              get(/databases/$(database)/documents/$(profileType)/$(profileId)).data.userRef == request.auth.uid;
     }
 
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
-    }
-
-    // --- Global Admin Rule ---
-    match /{path=**} {
-      allow read, write: if isAdmin();
-    }
-    
     // --- Users & Profiles ---
     match /users/{userId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create: if request.auth.uid == userId;
       allow update, delete: if request.auth.uid == userId;
     }
 
     match /playerProfiles/{profileId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create, update, delete: if isProfileOwner('playerProfiles', profileId);
     }
 
     match /managerProfiles/{profileId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create, update, delete: if isProfileOwner('managerProfiles', profileId);
     }
 
     match /ownerProfiles/{profileId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create, update, delete: if isProfileOwner('ownerProfiles', profileId);
     }
     
     // --- Teams ---
     match /teams/{teamId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create: if request.resource.data.managerId == request.auth.uid;
       allow update, delete: if get(/databases/$(database)/documents/teams/$(teamId)).data.managerId == request.auth.uid;
@@ -50,66 +48,63 @@ service cloud.firestore {
 
     // --- Pitches ---
     match /pitches/{pitchId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow write: if isProfileOwner('ownerProfiles', request.resource.data.ownerRef);
     }
 
     // --- Reservations ---
     match /reservations/{reservationId} {
-      allow read: if request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.actorId ||
-                     isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId);
-      allow create: if request.auth.uid == request.resource.data.actorId;
-      allow update, delete: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId) ||
-                               request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.actorId;
+      allow read, write: if isAdmin();
+      allow read: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId) ||
+                     request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.managerRef;
+
+      allow create: if request.auth.uid == request.resource.data.managerId;
+
+      allow update, delete: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId);
     }
     
     // --- Matches ---
     match /matches/{matchId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
       allow create: if request.resource.data.managerRef == request.auth.uid;
-      allow update: if get(/databases/$(database)/documents/matches/$(matchId)).data.managerRef == request.auth.uid ||
-                       (get(/databases/$(database)/documents/matches/$(matchId)).data.teamAPlayers.hasAny([request.auth.uid])) ||
-                       (get(/databases/$(database)/documents/matches/$(matchId)).data.teamBPlayers.hasAny([request.auth.uid]));
-      allow delete: if get(/databases/$(database)/documents/matches/$(matchId)).data.managerRef == request.auth.uid;
-    }
-    
-    match /matches/{matchId}/mvpVotes/{voteId} {
-      allow read: if request.auth != null;
-      allow create: if get(/databases/$(database)/documents/matches/$(matchId)).data.teamAPlayers.hasAny([request.auth.uid]) ||
-                       get(/databases/$(database)/documents/matches/$(matchId)).data.teamBPlayers.hasAny([request.auth.uid]);
+      allow update, delete: if get(/databases/$(database)/documents/matches/$(matchId)).data.managerRef == request.auth.uid;
     }
 
     // --- Payments ---
     match /payments/{paymentId} {
-      allow read: if request.auth.uid == resource.data.playerRef ||
-                     request.auth.uid == resource.data.managerRef ||
-                     isProfileOwner('ownerProfiles', resource.data.ownerRef);
-      allow create: if request.auth.uid == request.resource.data.managerRef || request.auth.uid == request.resource.data.ownerRef;
-      allow update: if request.auth.uid == resource.data.playerRef; // Players can update their own payment (e.g. status to "Paid")
+      allow read, write: if isAdmin();
+      allow read, write: if request.auth.uid == resource.data.playerRef ||
+                            request.auth.uid == resource.data.managerRef ||
+                            isProfileOwner('ownerProfiles', resource.data.ownerRef);
     }
 
     // --- Invitations ---
     match /teamInvitations/{invitationId} {
-      allow read, update: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
+      allow read, write: if isAdmin();
+      allow read, update, delete: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
       allow create: if request.auth.uid == request.resource.data.managerId;
     }
 
     match /matchInvitations/{invitationId} {
+      allow read, write: if isAdmin();
       allow read, update, delete: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
       allow create: if request.auth.uid == request.resource.data.managerId;
     }
     
     // --- Notifications ---
     match /users/{userId}/notifications/{notificationId} {
-      allow read, write, delete: if request.auth.uid == userId;
-      // Allow servers (like Cloud Functions) or other users to create notifications
-      allow create: if request.auth != null;
+        allow read, write: if isAdmin();
+        allow read, write, delete: if request.auth.uid == userId;
+        allow create: if request.auth.uid != userId; 
     }
     
     // --- Promos ---
     match /promos/{promoId} {
+      allow read, write: if isAdmin();
       allow read: if request.auth != null;
-      allow write: if isProfileOwner('ownerProfiles', request.resource.data.ownerProfileId);
+      allow write: if isProfileOwner('ownerProfiles', request.resource.data.ownerRef);
     }
   }
 }
