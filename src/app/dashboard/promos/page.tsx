@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { EditPromoForm } from "@/components/forms/edit-promo-form";
+import { useToast } from "@/hooks/use-toast";
 
 const dayOfWeekAsString = (dayIndex: number) => {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayIndex];
@@ -29,12 +30,29 @@ const dayOfWeekAsString = (dayIndex: number) => {
 
 export default function PromosPage() {
   const { user } = useUser();
+  const { toast } = useToast();
   const [ownerProfile, setOwnerProfile] = React.useState<OwnerProfile | null>(null);
   const [promos, setPromos] = React.useState<Promo[]>([]);
   const [ownerPitches, setOwnerPitches] = React.useState<Pitch[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [editingPromo, setEditingPromo] = React.useState<Promo | null>(null);
+
+  const fetchPromos = React.useCallback(async (profileId: string) => {
+    setLoading(true);
+    try {
+        const q = query(collection(db, "promos"), where("ownerProfileId", "==", profileId));
+        const querySnapshot = await getDocs(q);
+        const promosData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
+        promosData.sort((a, b) => (b.createdAt as any) - (a.createdAt as any));
+        setPromos(promosData);
+    } catch (error) {
+        console.error("Error fetching promos:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load promotions." });
+    } finally {
+        setLoading(false);
+    }
+  }, [toast]);
 
   React.useEffect(() => {
     if (!user || user.role !== 'OWNER') {
@@ -43,6 +61,7 @@ export default function PromosPage() {
     }
 
     const fetchOwnerProfileAndPitches = async () => {
+      setLoading(true);
       try {
         const q = query(collection(db, "ownerProfiles"), where("userRef", "==", user.id));
         const querySnapshot = await getDocs(q);
@@ -55,44 +74,29 @@ export default function PromosPage() {
           const pitchesSnapshot = await getDocs(pitchesQuery);
           const pitchesData = pitchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
           setOwnerPitches(pitchesData);
+          
+          await fetchPromos(profile.id);
+
+        } else {
+             setLoading(false);
         }
       } catch (error) {
         console.error("Error fetching owner profile and pitches:", error);
+        setLoading(false);
       }
     };
 
     fetchOwnerProfileAndPitches();
-  }, [user]);
-
-  React.useEffect(() => {
-    if (!ownerProfile) {
-        if(user?.role === 'OWNER') setLoading(true);
-        else setLoading(false);
-        return;
-    };
-
-    setLoading(true);
-    const q = query(collection(db, "promos"), where("ownerProfileId", "==", ownerProfile.id));
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const promosData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
-      promosData.sort((a, b) => (b.createdAt as any) - (a.createdAt as any));
-      setPromos(promosData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching promos:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [ownerProfile, user?.role]);
+  }, [user, fetchPromos]);
   
   const handlePromoCreated = () => {
     setIsCreateDialogOpen(false);
+    if (ownerProfile) fetchPromos(ownerProfile.id);
   };
   
   const handlePromoUpdated = () => {
     setEditingPromo(null);
+    if (ownerProfile) fetchPromos(ownerProfile.id);
   };
 
   return (
