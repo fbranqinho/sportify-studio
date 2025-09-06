@@ -164,8 +164,11 @@ export function useTeamDetails() {
             return;
         }
 
+        const batch = writeBatch(db);
+
+        // 1. Create the invitation document
         const newInvitationRef = doc(collection(db, "teamInvitations"));
-        await addDoc(collection(db, "teamInvitations"), {
+        batch.set(newInvitationRef, {
             teamId: teamId,
             teamName: team.name,
             playerId: invitedUserId,
@@ -174,6 +177,17 @@ export function useTeamDetails() {
             status: "pending",
             invitedAt: serverTimestamp(),
         });
+        
+        // 2. Create the notification document in the correct subcollection
+        const notificationRef = doc(collection(db, "users", invitedUserId, "notifications"));
+        batch.set(notificationRef, {
+            message: `You've been invited to join the team: ${team.name}`,
+            link: `/dashboard/teams`,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+        
+        await batch.commit();
         
         toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${playerToInvite.user.name}.` });
     } catch (error) {
