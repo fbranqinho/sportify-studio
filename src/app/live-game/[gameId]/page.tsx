@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, onSnapshot, getDoc, collection, query, where, documentId, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, documentId, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Match, Team, Pitch, User } from "@/types";
 import { useUser } from "@/hooks/use-user";
@@ -39,46 +39,53 @@ export default function LiveGamePage() {
             return;
         };
 
-        const unsubMatch = onSnapshot(doc(db, "matches", gameId), async (matchSnap) => {
-            if (matchSnap.exists()) {
-                const matchData = { id: matchSnap.id, ...matchSnap.data() } as Match;
-                setMatch(matchData);
+        const fetchGameData = async () => {
+            setLoading(true);
+            try {
+                const matchSnap = await getDoc(doc(db, "matches", gameId));
 
-                // Fetch details only once or when they change
-                if (!teamA && matchData.teamARef) {
-                    const teamADoc = await getDoc(doc(db, "teams", matchData.teamARef));
-                    if (teamADoc.exists()) setTeamA({ id: teamADoc.id, ...teamADoc.data() } as Team);
-                }
-                if (!teamB && matchData.teamBRef) {
-                    const teamBDoc = await getDoc(doc(db, "teams", matchData.teamBRef));
-                    if (teamBDoc.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
-                }
-                if (!pitch && matchData.pitchRef) {
-                    const pitchDoc = await getDoc(doc(db, "pitches", matchData.pitchRef));
-                    if (pitchDoc.exists()) setPitch(pitchDoc.data() as Pitch);
-                }
-                
-                const fetchPlayers = async (playerIds: string[], setPlayers: React.Dispatch<React.SetStateAction<LivePlayer[]>>) => {
-                    if (playerIds.length === 0) {
-                        setPlayers([]);
-                        return;
+                if (matchSnap.exists()) {
+                    const matchData = { id: matchSnap.id, ...matchSnap.data() } as Match;
+                    setMatch(matchData);
+
+                    // Fetch supporting details
+                    const detailsToFetch: Promise<any>[] = [];
+                    if (matchData.teamARef) detailsToFetch.push(getDoc(doc(db, "teams", matchData.teamARef)));
+                    if (matchData.teamBRef) detailsToFetch.push(getDoc(doc(db, "teams", matchData.teamBRef)));
+                    if (matchData.pitchRef) detailsToFetch.push(getDoc(doc(db, "pitches", matchData.pitchRef)));
+
+                    const [teamADoc, teamBDoc, pitchDoc] = await Promise.all(detailsToFetch);
+
+                    if (teamADoc?.exists()) setTeamA({ id: teamADoc.id, ...teamADoc.data() } as Team);
+                    if (teamBDoc?.exists()) setTeamB({ id: teamBDoc.id, ...teamBDoc.data() } as Team);
+                    if (pitchDoc?.exists()) setPitch(pitchDoc.data() as Pitch);
+
+                    const fetchPlayers = async (playerIds: string[], setPlayers: React.Dispatch<React.SetStateAction<LivePlayer[]>>) => {
+                        if (playerIds.length === 0) {
+                            setPlayers([]);
+                            return;
+                        }
+                        const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
+                        const usersSnap = await getDocs(usersQuery);
+                        setPlayers(usersSnap.docs.map(d => ({id: d.id, name: d.data().name})));
                     }
-                    const usersQuery = query(collection(db, "users"), where(documentId(), "in", playerIds));
-                    const usersSnap = await getDocs(usersQuery);
-                    setPlayers(usersSnap.docs.map(d => ({id: d.id, name: d.data().name})));
+
+                    if (matchData.teamAPlayers) await fetchPlayers(matchData.teamAPlayers, setTeamAPlayers);
+                    if (matchData.teamBPlayers) await fetchPlayers(matchData.teamBPlayers, setTeamBPlayers);
+
+                } else {
+                    router.push("/dashboard/my-games");
                 }
-
-                if (matchData.teamAPlayers) fetchPlayers(matchData.teamAPlayers, setTeamAPlayers);
-                if (matchData.teamBPlayers) fetchPlayers(matchData.teamBPlayers, setTeamBPlayers);
-
+            } catch (error) {
+                console.error("Error fetching live game data:", error);
+                 router.push("/dashboard/my-games");
+            } finally {
                 setLoading(false);
-            } else {
-                router.push("/dashboard/my-games");
             }
-        });
+        };
 
-        return () => unsubMatch();
-    }, [gameId, router, teamA, teamB, pitch]);
+        fetchGameData();
+    }, [gameId, router]);
 
 
     if (loading || !match) {
