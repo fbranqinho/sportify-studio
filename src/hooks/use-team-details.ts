@@ -111,14 +111,11 @@ export function useTeamDetails() {
     });
 
     try {
-        // This is a single, secure operation. The manager is only updating their own team document.
         await updateDoc(teamDocRef, {
             players: updatedPlayersArray
         });
         
         toast({ title: "Success", description: "Player numbers updated successfully." });
-        
-        // Refetch all data to ensure the UI is consistent with the backend, especially sorting.
         await fetchTeamData();
 
     } catch (error) {
@@ -167,10 +164,8 @@ export function useTeamDetails() {
             return;
         }
 
-        const batch = writeBatch(db);
-
         const newInvitationRef = doc(collection(db, "teamInvitations"));
-        batch.set(newInvitationRef, {
+        await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
             playerId: invitedUserId,
@@ -179,16 +174,7 @@ export function useTeamDetails() {
             status: "pending",
             invitedAt: serverTimestamp(),
         });
-
-        const newNotificationRef = doc(collection(db, "users", invitedUserId, "notifications"));
-        batch.set(newNotificationRef, {
-            message: `You've been invited to join the team: ${team.name}.`,
-            link: '/dashboard/teams',
-            read: false,
-            createdAt: serverTimestamp() as any,
-        });
         
-        await batch.commit();
         toast({ title: "Invitation Sent!", description: `An invitation has been sent to ${playerToInvite.user.name}.` });
     } catch (error) {
          console.error("Error inviting player:", error);
