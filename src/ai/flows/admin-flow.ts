@@ -22,11 +22,66 @@ const DeleteByIdResultSchema = z.object({
 });
 
 // Define Zod schemas for the new data types
-const MatchSchema = z.any();
-const ReservationSchema = z.any();
-const PaymentSchema = z.any();
-const TeamSchema = z.any();
-const UserSchema = z.any();
+const MatchSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  teamARef: z.string().nullable(),
+  teamBRef: z.string().nullable(),
+  scoreA: z.number(),
+  scoreB: z.number(),
+  pitchRef: z.string(),
+  status: z.string(),
+  managerRef: z.string().nullable(),
+  reservationRef: z.string().optional(),
+});
+
+const ReservationSchema = z.object({
+    id: z.string(),
+    date: z.string(),
+    status: z.string(),
+    paymentStatus: z.string(),
+    pitchId: z.string(),
+    pitchName: z.string(),
+    ownerProfileId: z.string(),
+    totalAmount: z.number(),
+    actorId: z.string(),
+    actorName: z.string(),
+    actorRole: z.string(),
+});
+
+const PaymentSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    amount: z.number(),
+    date: z.string(),
+    status: z.string(),
+    playerRef: z.string().optional(),
+    managerRef: z.string().optional(),
+    ownerRef: z.string().optional(),
+    pitchName: z.string().optional(),
+    teamName: z.string().optional(),
+});
+
+const TeamSchema = z.object({
+    id: z.string(),
+    name: z.string().optional(),
+    city: z.string().optional(),
+    managerId: z.string().optional(),
+    playerIds: z.array(z.string()).optional(),
+    wins: z.number().optional(),
+    draws: z.number().optional(),
+    losses: z.number().optional(),
+});
+
+const UserSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    role: z.string(),
+    profileCompleted: z.boolean(),
+    createdAt: z.any(), // Timestamps can be complex
+});
+
 
 export async function deleteAllMatches(): Promise<
   z.infer<typeof DeleteAllResultSchema>
@@ -208,3 +263,4 @@ const getAllUsersFlow = ai.defineFlow({ name: 'getAllUsersFlow', outputSchema: z
     const snapshot = await db.collection('users').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 });
+
