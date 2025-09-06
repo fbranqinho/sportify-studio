@@ -10,6 +10,7 @@ import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
 import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
+import { AdminDashboard } from "@/components/dashboards/admin-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useUser } from "@/hooks/use-user";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,17 +30,6 @@ const WelcomeHeader = ({ role, name }: WelcomeHeaderProps) => (
       Here's your {role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()} dashboard overview.
     </p>
   </div>
-);
-
-const AdminDashboard = () => (
-    <Card>
-        <CardHeader>
-            <CardTitle>Admin Dashboard</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <p>Full implementation coming soon.</p>
-        </CardContent>
-    </Card>
 );
 
 const LoadingDashboard = () => (
