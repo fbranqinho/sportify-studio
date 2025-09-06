@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, writeBatch, arrayUnion, serverTimestamp, getDocs, documentId } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, writeBatch, arrayUnion, serverTimestamp, documentId } from "firebase/firestore";
 import type { Team, TeamInvitation, PlayerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,22 +28,25 @@ function ManagerTeamsView() {
       return;
     }
 
-    setLoading(true);
-    const q = query(collection(db, "teams"), where("managerId", "==", user.id));
+    const fetchTeams = async () => {
+        setLoading(true);
+        try {
+            const q = query(collection(db, "teams"), where("managerId", "==", user.id));
+            const querySnapshot = await getDocs(q);
+            const teamsData: Team[] = [];
+            querySnapshot.forEach((doc) => {
+                teamsData.push({ id: doc.id, ...doc.data() } as Team);
+            });
+            setTeams(teamsData);
+        } catch (error) {
+            console.error("Error fetching teams:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    fetchTeams();
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const teamsData: Team[] = [];
-      querySnapshot.forEach((doc) => {
-        teamsData.push({ id: doc.id, ...doc.data() } as Team);
-      });
-      setTeams(teamsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching teams:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
   }, [user]);
 
   return (
