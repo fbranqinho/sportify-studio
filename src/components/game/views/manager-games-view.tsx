@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot, query, getDocs } from "firebase/firestore";
 import type { Pitch } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,17 +34,21 @@ export function ManagerGamesView() {
       setUserLocation({ lat: 38.7223, lng: -9.1393 });
     }
 
-    const q = query(collection(db, "pitches"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const pitchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
-      setAllPitches(pitchesData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching pitches:", error);
-      setLoading(false);
-    });
+    const fetchPitches = async () => {
+        try {
+            const q = query(collection(db, "pitches"));
+            const querySnapshot = await getDocs(q);
+            const pitchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pitch));
+            setAllPitches(pitchesData);
+        } catch (error) {
+            console.error("Error fetching pitches:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    fetchPitches();
 
-    return () => unsubscribe();
   }, []);
 
   const filteredPitches = allPitches
