@@ -38,7 +38,7 @@ import { app, db } from "@/lib/firebase";
 import type { UserRole } from "@/types";
 
 
-const roles: UserRole[] = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE"];
+const roles: UserRole[] = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"];
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
