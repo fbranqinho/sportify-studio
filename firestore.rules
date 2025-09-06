@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -9,8 +10,7 @@ service cloud.firestore {
     }
 
     function isProfileOwner(profileType, profileId) {
-      return request.auth != null && 
-             exists(/databases/$(database)/documents/$(profileType)/$(profileId)) &&
+      return exists(/databases/$(database)/documents/$(profileType)/$(profileId)) &&
              get(/databases/$(database)/documents/$(profileType)/$(profileId)).data.userRef == request.auth.uid;
     }
 
@@ -52,7 +52,7 @@ service cloud.firestore {
     // --- Reservations ---
     match /reservations/{reservationId} {
       allow read: if isAdmin() || isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId) ||
-                     request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.managerId;
+                     request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.managerRef;
       allow create: if isAdmin() || request.auth.uid == request.resource.data.managerId;
       allow update, delete: if isAdmin() || isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId);
     }
@@ -82,10 +82,10 @@ service cloud.firestore {
       allow create: if isAdmin() || request.auth.uid == request.resource.data.managerId;
     }
     
-    // --- Notifications ---
+    // --- Notifications (Subcollection) ---
     match /users/{userId}/notifications/{notificationId} {
-      allow read, delete: if isAdmin() || request.auth.uid == userId;
-      allow write: if isAdmin() || request.auth.uid == userId; // Simplified for broad admin/user access
+      allow read, write, delete: if isAdmin() || request.auth.uid == userId;
+      // The create rule is slightly different, as others can create notifications for a user.
       allow create: if isAdmin() || request.auth.uid != userId;
     }
     
@@ -93,6 +93,14 @@ service cloud.firestore {
     match /promos/{promoId} {
       allow read: if isAdmin() || request.auth != null;
       allow write: if isAdmin() || isProfileOwner('ownerProfiles', request.resource.data.ownerRef);
+    }
+    
+    // --- MVP Votes (Subcollection) ---
+    match /matches/{matchId}/mvpVotes/{voteId} {
+      allow read: if isAdmin() || request.auth != null;
+      // Allow create if user participated in the match
+      allow create: if isAdmin() || request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.teamAPlayers ||
+                       request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.teamBPlayers;
     }
   }
 }
