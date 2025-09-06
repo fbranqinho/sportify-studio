@@ -94,7 +94,7 @@ export default function SignupPage() {
         role: values.role,
         mobile: values.mobile,
         birthDate: values.birthDate,
-        profileCompleted: false,
+        profileCompleted: values.role === 'ADMIN',
         createdAt: serverTimestamp() as Timestamp,
       });
 
