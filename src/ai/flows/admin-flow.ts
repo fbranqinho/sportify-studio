@@ -7,7 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { adminApp } from '@/lib/firebase-admin';
+import { getAdminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { Payment, Notification, Match, Reservation, Team, User } from '@/types';
@@ -119,10 +119,7 @@ const deleteAllMatchesFlow = ai.defineFlow(
     outputSchema: DeleteAllResultSchema,
   },
   async () => {
-    if (!adminApp) {
-      throw new Error('Firebase Admin SDK is not initialized.');
-    }
-
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const matchesCollection = db.collection('matches');
     const snapshot = await matchesCollection.get();
@@ -149,10 +146,7 @@ const deleteMatchByIdFlow = ai.defineFlow(
     outputSchema: DeleteByIdResultSchema,
   },
   async (matchId) => {
-    if (!adminApp) {
-      throw new Error('Firebase Admin SDK is not initialized.');
-    }
-
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const batch = db.batch();
     const matchRef = db.collection('matches').doc(matchId);
@@ -230,37 +224,36 @@ const deleteMatchByIdFlow = ai.defineFlow(
 
 // New flows for fetching all documents from a collection
 const getAllMatchesFlow = ai.defineFlow({ name: 'getAllMatchesFlow', outputSchema: z.array(MatchSchema) }, async () => {
-    if (!adminApp) throw new Error('Firebase Admin SDK not initialized.');
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('matches').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Match);
 });
 
 const getAllReservationsFlow = ai.defineFlow({ name: 'getAllReservationsFlow', outputSchema: z.array(ReservationSchema) }, async () => {
-    if (!adminApp) throw new Error('Firebase Admin SDK not initialized.');
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('reservations').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Reservation);
 });
 
 const getAllPaymentsFlow = ai.defineFlow({ name: 'getAllPaymentsFlow', outputSchema: z.array(PaymentSchema) }, async () => {
-    if (!adminApp) throw new Error('Firebase Admin SDK not initialized.');
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('payments').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Payment);
 });
 
 const getAllTeamsFlow = ai.defineFlow({ name: 'getAllTeamsFlow', outputSchema: z.array(TeamSchema) }, async () => {
-    if (!adminApp) throw new Error('Firebase Admin SDK not initialized.');
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('teams').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Team);
 });
 
 const getAllUsersFlow = ai.defineFlow({ name: 'getAllUsersFlow', outputSchema: z.array(UserSchema) }, async () => {
-    if (!adminApp) throw new Error('Firebase Admin SDK not initialized.');
+    const adminApp = getAdminApp();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('users').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as User);
 });
-
