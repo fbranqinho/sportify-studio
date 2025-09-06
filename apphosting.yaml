@@ -1,7 +1,23 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
 
+requiredServices:
+  - run.googleapis.com
+  - artifactregistry.googleapis.com
+
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+backend:
+  # The server that will run your Genkit AI flows.
+  # https://firebase.google.com/docs/app-hosting/backends/genkit
+  genkit:
+    # The list of flows that you want to deploy.
+    # TODO: Add your flows here.
+    flows: [deleteAllMatchesFlow, deleteMatchByIdFlow, getAllMatchesFlow, getAllReservationsFlow, getAllPaymentsFlow, getAllTeamsFlow, getAllUsersFlow]
+    # The region where you want to deploy your flows.
+    # We recommend using a region close to your users.
+    # https://firebase.google.com/docs/app-hosting/locations
+    location: us-central1
