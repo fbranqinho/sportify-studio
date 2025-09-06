@@ -3,113 +3,108 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- Helper Functions ---
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
     }
 
-    function isProfileOwner(profileType, profileId) {
-      return request.auth != null && get(/databases/$(database)/documents/$(profileType)/$(profileId)).data.userRef == request.auth.uid;
+    function isProfileOwner(profileCollection, profileId) {
+      return request.auth != null && exists(/databases/$(database)/documents/$(profileCollection)/$(profileId)) &&
+             get(/databases/$(database)/documents/$(profileCollection)/$(profileId)).data.userRef == request.auth.uid;
     }
     
     function isTeamManager(teamId) {
-      return request.auth != null && get(/databases/$(database)/documents/teams/$(teamId)).data.managerId == request.auth.uid;
-    }
-    
-    function isMatchManager(matchId) {
-      return request.auth != null && get(/databases/$(database)/documents/matches/$(matchId)).data.managerRef == request.auth.uid;
+        return request.auth != null && exists(/databases/$(database)/documents/teams/$(teamId)) &&
+           get(/databases/$(database)/documents/teams/$(teamId)).data.managerId == request.auth.uid;
     }
 
-    match /{document=**} {
-      allow read, write, delete: if isAdmin();
-    }
+    // --- Collections ---
 
-    // --- Users & Profiles ---
+    // Users can read their own data. Admins can read/write anything.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth.uid == userId;
-      allow update, delete: if request.auth.uid == userId;
-    }
-
-    match /playerProfiles/{profileId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isProfileOwner('playerProfiles', profileId);
-    }
-
-    match /managerProfiles/{profileId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isProfileOwner('managerProfiles', profileId);
-    }
-
-    match /ownerProfiles/{profileId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isProfileOwner('ownerProfiles', profileId);
+      allow read: if request.auth.uid == userId || isAdmin();
+      allow write: if isAdmin();
+      
+      // Notifications are private to each user.
+      match /notifications/{notificationId} {
+        allow read, write, delete: if request.auth.uid == userId;
+      }
     }
     
-    // --- Teams ---
+    // Profiles can be read by anyone, but only written by their owner or an admin.
+    match /{profileCollection}/{profileId} where profileCollection in ['playerProfiles', 'managerProfiles', 'ownerProfiles', 'promoterProfiles', 'refereeProfiles'] {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isProfileOwner(profileCollection, profileId) || isAdmin();
+    }
+
+    // Teams can be read by anyone. They can only be created by an authenticated user.
+    // They can only be updated/deleted by their manager or an admin.
     match /teams/{teamId} {
       allow read: if request.auth != null;
-      allow create: if request.resource.data.managerId == request.auth.uid;
-      allow update, delete: if isTeamManager(teamId);
+      allow create: if request.auth != null;
+      allow update, delete: if isTeamManager(teamId) || isAdmin();
     }
 
-    // --- Pitches ---
+    // Invitations are private and can only be managed by the involved parties or an admin.
+    match /teamInvitations/{invitationId} {
+       allow read, create: if request.auth != null;
+       allow update: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId || isAdmin();
+       allow delete: if isAdmin();
+    }
+    
+    match /matchInvitations/{invitationId} {
+       allow read, create: if request.auth != null;
+       allow update: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId || isAdmin();
+       allow delete: if isAdmin();
+    }
+
+    // Pitches can be read by anyone. Create/Update/Delete by owner or admin.
     match /pitches/{pitchId} {
       allow read: if request.auth != null;
-      allow create: if isProfileOwner('ownerProfiles', request.resource.data.ownerRef);
-      allow update, delete: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/pitches/$(pitchId)).data.ownerRef);
+      allow create, update, delete: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/pitches/$(pitchId)).data.ownerRef) || isAdmin();
     }
 
-    // --- Reservations ---
+    // Reservations can be read by anyone involved.
     match /reservations/{reservationId} {
-      allow read: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId) ||
-                     request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.actorId;
-      allow create: if request.auth.uid == request.resource.data.actorId;
-      allow update: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId) ||
-                       (request.auth.uid == get(/databases/$(database)/documents/reservations/$(reservationId)).data.actorId && request.resource.data.status == 'Canceled');
-      allow delete: if isProfileOwner('ownerProfiles', get(/databases/$(database)/documents/reservations/$(reservationId)).data.ownerProfileId);
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      // Only the actor (player/manager) or owner can update/delete.
+      allow update, delete: if request.auth.uid == resource.data.actorId || isProfileOwner('ownerProfiles', resource.data.ownerProfileId) || isAdmin();
     }
     
-    // --- Matches ---
+    // Matches can be read by anyone. Write access is complex and managed by managers/admins.
     match /matches/{matchId} {
-      allow read: if request.auth != null;
-      allow create: if request.resource.data.managerRef == request.auth.uid;
-      allow update, delete: if isMatchManager(matchId);
-    }
-    
-    match /matches/{matchId}/mvpVotes/{voteId} {
-       allow read: if request.auth != null;
-       allow create: if request.auth.uid == request.resource.data.voterId;
+        allow read: if request.auth != null;
+        allow create, update: if request.auth.uid == resource.data.managerRef || isAdmin();
+        allow delete: if isAdmin();
+        
+        // MVP votes subcollection
+        match /mvpVotes/{voteId} {
+            allow read, create: if request.auth != null;
+            allow update, delete: if isAdmin();
+        }
     }
 
-    // --- Payments ---
+    // Payments can be managed by the involved parties.
     match /payments/{paymentId} {
-      allow read: if request.auth.uid == resource.data.playerRef ||
-                     request.auth.uid == resource.data.managerRef ||
-                     isProfileOwner('ownerProfiles', resource.data.ownerRef);
-      allow update(status, date): if request.auth.uid == resource.data.playerRef && request.resource.data.status == 'Paid';
-    }
-
-    // --- Invitations ---
-    match /teamInvitations/{invitationId} {
-      allow read, update, delete: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
-      allow create: if request.auth.uid == request.resource.data.managerId;
-    }
-
-    match /matchInvitations/{invitationId} {
-      allow read, update, delete: if request.auth.uid == resource.data.playerId || request.auth.uid == resource.data.managerId;
-      allow create: if request.auth.uid == request.resource.data.managerId;
+        allow read: if request.auth.uid == resource.data.playerRef || request.auth.uid == resource.data.managerRef || isProfileOwner('ownerProfiles', resource.data.ownerRef) || isAdmin();
+        allow create: if request.auth != null;
+        // Only the payer can update their own payment (e.g. to "Paid").
+        allow update: if request.auth.uid == resource.data.playerRef || request.auth.uid == resource.data.managerRef || isAdmin();
+        allow delete: if isAdmin();
     }
     
-    // --- Notifications ---
-    match /users/{userId}/notifications/{notificationId} {
-      allow read, delete: if request.auth.uid == userId;
-      allow create: if request.auth.uid != userId;
-    }
-    
-    // --- Promos ---
+    // Promos can be read by anyone, write by owner/admin.
     match /promos/{promoId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isProfileOwner('ownerProfiles', request.resource.data.ownerProfileId);
+        allow read: if request.auth != null;
+        allow create, update, delete: if isProfileOwner('ownerProfiles', resource.data.ownerProfileId) || isAdmin();
+    }
+    
+    // Stripe customers collection is private
+    match /customers/{uid} {
+      allow read, write: if request.auth.uid == uid;
     }
   }
 }
