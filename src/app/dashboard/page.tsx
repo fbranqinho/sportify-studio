@@ -10,7 +10,6 @@ import { ManagerDashboard } from "@/components/dashboards/manager-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
 import { PromoterDashboard } from "@/components/dashboards/promoter-dashboard";
 import { RefereeDashboard } from "@/components/dashboards/referee-dashboard";
-import { AdminDashboard } from "@/components/dashboards/admin-dashboard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useUser } from "@/hooks/use-user";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,6 +89,19 @@ export default function DashboardPage() {
   }
 
   const renderDashboard = () => {
+    if (user.role === 'ADMIN') {
+       return (
+         <Card>
+           <CardHeader>
+             <CardTitle>Admin Dashboard</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <p>Welcome, Administrator. Please use the navigation on the left to access admin tools.</p>
+           </CardContent>
+         </Card>
+       )
+    }
+
     switch (user.role) {
       case "PLAYER":
         return <PlayerDashboard data={profileData} />;
@@ -101,8 +113,6 @@ export default function DashboardPage() {
         return <PromoterDashboard />;
       case "REFEREE":
         return <RefereeDashboard />;
-      case "ADMIN":
-        return <AdminDashboard />;
       default:
         // Fallback or loading state
         return <div>Loading dashboard...</div>;

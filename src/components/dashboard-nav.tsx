@@ -24,6 +24,7 @@ import {
   CalendarCheck,
   Gamepad2,
   Calendar,
+  Settings,
 } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 
@@ -41,6 +42,8 @@ const navItems: NavItem[] = [
   { title: "My Promotions", href: "/dashboard/promos", icon: Ticket, roles: ["OWNER"] },
   // Promoter specific
   { title: "Network", href: "/dashboard/network", icon: Contact, roles: ["PROMOTER"] },
+  // Admin specific
+  { title: "Admin Tools", href: "/dashboard/admin", icon: Settings, roles: ["ADMIN"] },
 ];
 
 interface DashboardNavProps {
