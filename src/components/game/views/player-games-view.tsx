@@ -44,14 +44,11 @@ export function PlayerGamesView() {
     const fetchOpenGames = async () => {
         setLoading(true);
         try {
-            const q = query(
-              collection(db, "matches"),
-              where("status", "==", "Collecting players"),
-              where("allowExternalPlayers", "==", true)
-            );
+            // Fetch all matches and filter on the client. This is required by the current security rules.
+            const matchesSnapshot = await getDocs(collection(db, "matches"));
+            const allMatches = matchesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
             
-            const querySnapshot = await getDocs(q);
-            const matchesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            const matchesData = allMatches.filter(m => m.status === 'Collecting players' && m.allowExternalPlayers === true);
             
             const pitchIds = [...new Set(matchesData.map(m => m.pitchRef))];
             const teamIds = [...new Set(matchesData.map(m => m.teamARef).filter(Boolean))];
