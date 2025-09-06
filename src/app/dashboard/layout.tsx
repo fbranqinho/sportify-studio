@@ -42,32 +42,28 @@ function NotificationBell() {
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
 
-  React.useEffect(() => {
+  const fetchNotifications = React.useCallback(async () => {
     if (!user?.id) return;
-
-    // The query now points to a subcollection within the user's document
-    // This ensures that we only listen to notifications for the logged-in user,
-    // which aligns with the Firestore security rules.
-    const notifQuery = query(
-      collection(db, "users", user.id, "notifications"),
-      orderBy("createdAt", "desc"),
-      limit(10)
-    );
-
-    const unsubscribe = onSnapshot(notifQuery, 
-        (snapshot) => {
-            const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-            setNotifications(notifs);
-            setUnreadCount(notifs.filter(n => !n.read).length);
-        },
-        (error) => {
-             // This error handling is important for debugging permission issues.
-             console.error("Error fetching notifications (check Firestore rules for /users/{userId}/notifications):", error);
-        }
-    );
-    
-    return () => unsubscribe();
+    try {
+      const notifQuery = query(
+        collection(db, "users", user.id, "notifications"),
+        orderBy("createdAt", "desc"),
+        limit(10)
+      );
+      const snapshot = await getDocs(notifQuery);
+      const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.read).length);
+    } catch (error) {
+      console.error("Error fetching notifications (check Firestore rules for /users/{userId}/notifications):", error);
+    }
   }, [user?.id]);
+
+
+  React.useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
 
   const handleMarkAsRead = async (notificationId: string) => {
     if (!user?.id) return;
@@ -81,12 +77,15 @@ function NotificationBell() {
   
   const handleOpenChange = (open: boolean) => {
       setIsPopoverOpen(open);
-      if(open && unreadCount > 0) {
-          notifications.forEach(n => {
-              if(!n.read) {
-                  handleMarkAsRead(n.id);
-              }
-          })
+      if(open) {
+          fetchNotifications(); // Refetch on open
+          if(unreadCount > 0) {
+              notifications.forEach(n => {
+                  if(!n.read) {
+                      handleMarkAsRead(n.id);
+                  }
+              })
+          }
       }
   }
 
