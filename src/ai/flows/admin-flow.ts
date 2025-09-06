@@ -1,15 +1,15 @@
 
 'use server';
 /**
- * @fileOverview Admin actions flow using the standard client-side Firestore SDK.
- * Permissions are enforced by Firestore Security Rules, where the 'ADMIN' role has full access.
+ * @fileOverview Admin actions flow using the Firebase Admin SDK.
+ * This ensures all operations have full administrative privileges.
  */
 
 import { ai } from '@/ai/genkit';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, where, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
+import { adminDb } from '@/lib/firebase-admin';
 import { z } from 'zod';
 import type { Payment, Notification, Match, Reservation, Team, User } from '@/types';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // Schemas remain the same as they define the data structure, which is correct.
 const DeleteAllResultSchema = z.object({
@@ -82,9 +82,9 @@ const UserSchema = z.object({
 });
 
 
-// Helper function to fetch all documents from a collection
+// Helper function to fetch all documents from a collection using the Admin SDK
 async function fetchAll<T>(collectionName: string): Promise<T[]> {
-    const snapshot = await getDocs(collection(db, collectionName));
+    const snapshot = await adminDb.collection(collectionName).get();
     return snapshot.docs.map(doc => {
         const data = doc.data();
         // Convert Firestore Timestamps to JS Date objects for fields that are known to be timestamps
@@ -129,14 +129,14 @@ const deleteAllMatchesFlow = ai.defineFlow(
     outputSchema: DeleteAllResultSchema,
   },
   async () => {
-    const matchesCollection = collection(db, 'matches');
-    const snapshot = await getDocs(matchesCollection);
+    const matchesCollection = adminDb.collection('matches');
+    const snapshot = await matchesCollection.get();
 
     if (snapshot.empty) {
       return { deletedCount: 0 };
     }
 
-    const batch = writeBatch(db);
+    const batch = adminDb.batch();
     snapshot.docs.forEach((doc) => {
       batch.delete(doc.ref);
     });
@@ -154,22 +154,22 @@ const deleteMatchByIdFlow = ai.defineFlow(
     outputSchema: DeleteByIdResultSchema,
   },
   async (matchId) => {
-    const batch = writeBatch(db);
-    const matchRef = doc(db, 'matches', matchId);
+    const batch = adminDb.batch();
+    const matchRef = adminDb.collection('matches').doc(matchId);
     
     try {
-        const matchDoc = await getDoc(matchRef);
-        if (!matchDoc.exists()) {
+        const matchDoc = await matchRef.get();
+        if (!matchDoc.exists) {
             return { success: false, message: 'Match not found.' };
         }
         const match = matchDoc.data();
 
         if (match?.reservationRef) {
-            const reservationRef = doc(db, 'reservations', match.reservationRef);
+            const reservationRef = adminDb.collection('reservations').doc(match.reservationRef);
             batch.delete(reservationRef);
             
-            const paymentsQuery = query(collection(db, 'payments'), where('reservationRef', '==', match.reservationRef));
-            const paymentsSnap = await getDocs(paymentsQuery);
+            const paymentsQuery = adminDb.collection('payments').where('reservationRef', '==', match.reservationRef);
+            const paymentsSnap = await paymentsQuery.get();
 
             if (!paymentsSnap.empty) {
                 paymentsSnap.forEach(paymentDoc => {
@@ -190,7 +190,7 @@ const deleteMatchByIdFlow = ai.defineFlow(
   }
 );
 
-// --- Flows using the standard client SDK ---
+// --- Flows using the Admin SDK ---
 
 const getAllMatchesFlow = ai.defineFlow({ name: 'getAllMatchesFlow', outputSchema: z.array(MatchSchema) }, () => fetchAll<Match>('matches'));
 const getAllReservationsFlow = ai.defineFlow({ name: 'getAllReservationsFlow', outputSchema: z.array(ReservationSchema) }, () => fetchAll<Reservation>('reservations'));
