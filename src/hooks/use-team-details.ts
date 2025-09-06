@@ -163,8 +163,9 @@ export function useTeamDetails() {
             toast({ variant: "destructive", title: "Invitation Exists", description: `An invitation has already been sent to ${playerToInvite.user.name}.` });
             return;
         }
-
-        // Only create the invitation document.
+        
+        // This is the only operation a manager should perform when inviting:
+        // create the invitation document.
         await addDoc(collection(db, "teamInvitations"), {
             teamId: teamId,
             teamName: team.name,
