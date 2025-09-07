@@ -2,7 +2,6 @@
 "use client";
 
 import * as React from "react";
-import { deleteAllMatches } from "@/ai/flows/admin-flow";
 import {
   AlertDialog,
   AlertDialogAction,

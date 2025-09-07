@@ -3,8 +3,8 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { getAuth } from "firebase-admin/auth";
-import { adminApp } from "@/lib/firebase-admin";
+import { getAuth } from "firebase/auth";
+import { db } from "@/lib/firebase";
 
 export async function POST(req: Request) {
     const headersList = headers();
@@ -16,13 +16,13 @@ export async function POST(req: Request) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    if (!adminApp) {
+    if (!db) {
         console.error("Firebase Admin SDK is not initialized. Check server environment variables.");
         return new NextResponse("Server is not configured correctly.", { status: 503 });
     }
     
     try {
-        const decodedToken = await getAuth(adminApp).verifyIdToken(authToken);
+        const decodedToken = await getAuth(db).verifyIdToken(authToken);
         const userId = decodedToken.uid;
         const userEmail = decodedToken.email;
 
