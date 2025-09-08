@@ -20,6 +20,20 @@ const getAdminDb = () => {
     return admin.firestore();
 };
 
+const convertTimestamps = (data: any) => {
+    if (!data) return data;
+    const newData: any = {};
+    for (const key in data) {
+        const value = data[key];
+        if (value && typeof value === 'object' && value.toDate) { // Check for Timestamp
+            newData[key] = value.toDate().toISOString();
+        } else {
+            newData[key] = value;
+        }
+    }
+    return newData;
+};
+
 
 // Helper function for batch deletion
 async function deleteCollectionBatch(collectionRef: FirebaseFirestore.CollectionReference, batchSize: number): Promise<number> {
@@ -112,7 +126,7 @@ export async function deleteMatchById(matchId: string) {
 export async function getAllMatches() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('matches').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 
@@ -121,23 +135,23 @@ export async function getAllMatches() {
 export async function getAllReservations() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('reservations').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllPayments() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('payments').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllTeams() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('teams').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllUsers() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('users').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
