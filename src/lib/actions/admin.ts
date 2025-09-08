@@ -4,15 +4,22 @@
 import * as admin from 'firebase-admin';
 
 // This new, robust pattern ensures Firebase Admin is initialized only once.
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp();
-  } catch (error: any) {
-    console.error('Firebase admin initialization error', error.stack);
+const initializeAdmin = () => {
+  if (!admin.apps.length) {
+    try {
+      admin.initializeApp();
+    } catch (error: any) {
+      console.error('Firebase admin initialization error', error.stack);
+    }
   }
-}
+  return admin;
+};
 
-const adminDb = admin.firestore();
+const getAdminDb = () => {
+    initializeAdmin();
+    return admin.firestore();
+};
+
 
 // Helper function for batch deletion
 async function deleteCollectionBatch(collectionRef: FirebaseFirestore.CollectionReference, batchSize: number): Promise<number> {
@@ -26,7 +33,7 @@ async function deleteCollectionBatch(collectionRef: FirebaseFirestore.Collection
             break;
         }
 
-        const batch = adminDb.batch();
+        const batch = getAdminDb().batch();
         snapshot.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
@@ -42,6 +49,7 @@ async function deleteCollectionBatch(collectionRef: FirebaseFirestore.Collection
 
 export async function deleteAllMatches() {
     try {
+        const adminDb = getAdminDb();
         const matchesRef = adminDb.collection('matches');
         const deletedCount = await deleteCollectionBatch(matchesRef, 100);
         return { success: true, deletedCount };
@@ -56,6 +64,7 @@ export async function deleteMatchById(matchId: string) {
         return { success: false, message: "Match ID is required." };
     }
     try {
+        const adminDb = getAdminDb();
         const batch = adminDb.batch();
         
         const matchRef = adminDb.doc(`matches/${matchId}`);
@@ -101,6 +110,7 @@ export async function deleteMatchById(matchId: string) {
 
 
 export async function getAllMatches() {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('matches').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
@@ -109,21 +119,25 @@ export async function getAllMatches() {
 // --- Other Admin Flows ---
 
 export async function getAllReservations() {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('reservations').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function getAllPayments() {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('payments').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function getAllTeams() {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('teams').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function getAllUsers() {
+    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('users').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
