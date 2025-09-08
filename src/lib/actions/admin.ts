@@ -26,7 +26,7 @@ const convertTimestamps = (data: any): any => {
         return data.map(item => convertTimestamps(item));
     }
     if (typeof data === 'object' && !Array.isArray(data)) {
-         if (data.toDate && typeof data.toDate === 'function') { // Check for Timestamp
+         if (data instanceof admin.firestore.Timestamp) {
             return data.toDate().toISOString();
         }
         const newData: any = {};
@@ -158,4 +158,52 @@ export async function getAllUsers() {
     const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('users').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
+}
+
+export async function getMonthlyStats(month: number, year: number) {
+    const adminDb = getAdminDb();
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 1);
+
+    // Users
+    const usersSnapshot = await adminDb.collection('users').get();
+    const totalUsers = usersSnapshot.size;
+    
+    const newUsersQuery = adminDb.collection('users').where('createdAt', '>=', startDate).where('createdAt', '<', endDate);
+    const newUsersSnapshot = await newUsersQuery.get();
+    const newUsers = newUsersSnapshot.size;
+
+    const premiumUsersSnapshot = await adminDb.collection('users').where('premiumPlan', '!=', null).get();
+    const premiumUsers = premiumUsersSnapshot.size;
+    
+    // Reservations
+    const reservationsQuery = adminDb.collection('reservations').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    const reservationsSnapshot = await reservationsQuery.get();
+    const totalReservations = reservationsSnapshot.size;
+    const cancelledReservations = reservationsSnapshot.docs.filter(doc => doc.data().status === 'Canceled').length;
+
+    // Games
+    const gamesQuery = adminDb.collection('matches').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    const gamesSnapshot = await gamesQuery.get();
+    const totalGames = gamesSnapshot.size;
+
+    // Payments
+    const paymentsQuery = adminDb.collection('payments').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    const paymentsSnapshot = await paymentsQuery.get();
+    const totalPayments = paymentsSnapshot.size;
+    const totalPaymentVolume = paymentsSnapshot.docs.reduce((sum, doc) => {
+        const payment = doc.data();
+        return payment.status === 'Paid' ? sum + payment.amount : sum;
+    }, 0);
+
+    return {
+        totalUsers,
+        newUsers,
+        premiumUsers,
+        totalReservations,
+        cancelledReservations,
+        totalGames,
+        totalPayments,
+        totalPaymentVolume
+    };
 }
