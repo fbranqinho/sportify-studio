@@ -20,18 +20,22 @@ const getAdminDb = () => {
     return admin.firestore();
 };
 
-const convertTimestamps = (data: any) => {
+const convertTimestamps = (data: any): any => {
     if (!data) return data;
-    const newData: any = {};
-    for (const key in data) {
-        const value = data[key];
-        if (value && typeof value === 'object' && value.toDate) { // Check for Timestamp
-            newData[key] = value.toDate().toISOString();
-        } else {
-            newData[key] = value;
-        }
+    if (Array.isArray(data)) {
+        return data.map(item => convertTimestamps(item));
     }
-    return newData;
+    if (typeof data === 'object' && !Array.isArray(data)) {
+         if (data.toDate && typeof data.toDate === 'function') { // Check for Timestamp
+            return data.toDate().toISOString();
+        }
+        const newData: any = {};
+        for (const key in data) {
+            newData[key] = convertTimestamps(data[key]);
+        }
+        return newData;
+    }
+    return data;
 };
 
 
