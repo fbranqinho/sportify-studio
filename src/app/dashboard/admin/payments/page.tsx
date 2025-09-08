@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import type { Payment } from "@/types";
-import { getAllPayments } from "@/ai/flows/admin-flow";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Banknote } from "lucide-react";
+import { getAllPayments } from "@/lib/actions/admin";
 
 export default function AdminPaymentsPage() {
   const [payments, setPayments] = React.useState<Payment[]>([]);
@@ -24,7 +24,7 @@ export default function AdminPaymentsPage() {
       setLoading(true);
       try {
         const allPayments = await getAllPayments();
-        setPayments(allPayments);
+        setPayments(allPayments as Payment[]);
       } catch (error: any) {
         toast({
           variant: "destructive",

@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import type { Reservation } from "@/types";
-import { getAllReservations } from "@/ai/flows/admin-flow";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { List } from "lucide-react";
+import { getAllReservations } from "@/lib/actions/admin";
 
 export default function AdminReservationsPage() {
   const [reservations, setReservations] = React.useState<Reservation[]>([]);
@@ -24,7 +24,7 @@ export default function AdminReservationsPage() {
       setLoading(true);
       try {
         const allReservations = await getAllReservations();
-        setReservations(allReservations);
+        setReservations(allReservations as Reservation[]);
       } catch (error: any) {
         toast({
           variant: "destructive",

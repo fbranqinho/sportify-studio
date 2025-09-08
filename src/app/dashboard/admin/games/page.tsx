@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { deleteMatchById, getAllMatches } from "@/lib/actions/admin";
 
 export default function AdminGamesPage() {
   const [matches, setMatches] = React.useState<Match[]>([]);
@@ -34,7 +35,7 @@ export default function AdminGamesPage() {
     setLoading(true);
     try {
       const allMatches = await getAllMatches();
-      setMatches(allMatches);
+      setMatches(allMatches as Match[]);
     } catch (error: any) {
       toast({
         variant: "destructive",

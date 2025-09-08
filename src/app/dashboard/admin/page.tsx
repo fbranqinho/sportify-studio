@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Database, Trash2 } from "lucide-react";
+import { deleteAllMatches } from "@/lib/actions/admin";
 
 export default function AdminPage() {
   const { toast } = useToast();

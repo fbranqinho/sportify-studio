@@ -3,14 +3,13 @@
 
 import * as React from "react";
 import type { Team } from "@/types";
-import { getAllTeams } from "@/ai/flows/admin-flow";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldCheckIcon } from "lucide-react";
+import { getAllTeams } from "@/lib/actions/admin";
 
 export default function AdminTeamsPage() {
   const [teams, setTeams] = React.useState<Team[]>([]);
@@ -23,7 +22,7 @@ export default function AdminTeamsPage() {
       setLoading(true);
       try {
         const allTeams = await getAllTeams();
-        setTeams(allTeams);
+        setTeams(allTeams as Team[]);
       } catch (error: any) {
         toast({
           variant: "destructive",

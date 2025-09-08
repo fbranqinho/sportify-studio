@@ -3,9 +3,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { doc, updateDoc, writeBatch, collection, query, where, getDocs, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Match, Reservation, Payment, Pitch, Notification } from "@/types";
+import type { Match, Reservation, Pitch } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -23,7 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { deleteMatchById } from "@/ai/flows/admin-flow";
+import { deleteMatchById } from "@/lib/actions/admin";
 
 export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; pitch: Pitch | null; }) {
     const { toast } = useToast();

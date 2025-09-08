@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import type { User } from "@/types";
-import { getAllUsers } from "@/ai/flows/admin-flow";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users2 } from "lucide-react";
+import { getAllUsers } from "@/lib/actions/admin";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = React.useState<User[]>([]);
@@ -23,7 +23,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     try {
       const allUsers = await getAllUsers();
-      setUsers(allUsers);
+      setUsers(allUsers as User[]);
     } catch (error: any) {
       toast({
         variant: "destructive",
