@@ -1,9 +1,19 @@
 
 'use server';
 
-import { adminDb } from '@/lib/firebase-admin';
-import { z } from 'zod';
+import * as admin from 'firebase-admin';
 
+// Initialize Firebase Admin SDK directly in the actions file.
+// This is a more robust pattern for Next.js Server Actions.
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp();
+  } catch (error: any) {
+    console.error('Firebase admin initialization error', error.stack);
+  }
+}
+
+const adminDb = admin.firestore();
 
 // Helper function for batch deletion
 async function deleteCollectionBatch(collectionRef: FirebaseFirestore.CollectionReference, batchSize: number): Promise<number> {
