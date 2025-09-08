@@ -3,8 +3,7 @@
 
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin SDK directly in the actions file.
-// This is a more robust pattern for Next.js Server Actions.
+// This new, robust pattern ensures Firebase Admin is initialized only once.
 if (!admin.apps.length) {
   try {
     admin.initializeApp();
@@ -48,7 +47,7 @@ export async function deleteAllMatches() {
         return { success: true, deletedCount };
     } catch (error) {
         console.error("Error in deleteAllMatches: ", error);
-        return { success: false, deletedCount: 0 };
+        return { success: false, deletedCount: 0, message: (error as Error).message };
     }
 }
 
