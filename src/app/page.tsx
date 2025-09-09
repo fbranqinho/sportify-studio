@@ -8,7 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="relative flex flex-col min-h-screen">
+      <div className="absolute inset-0 z-[-1]">
+        <Image
+          src="https://placehold.co/1920x1080.png"
+          alt="Dramatic soccer action in a stadium"
+          data-ai-hint="soccer action dramatic"
+          fill
+          className="object-cover opacity-10"
+        />
+        <div className="absolute inset-0 bg-background/90" />
+      </div>
+
       <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-headline text-2xl font-bold text-primary">
           <Icons.logo className="h-20 w-20" />
