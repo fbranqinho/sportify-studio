@@ -26,12 +26,12 @@ export default function Home() {
         <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <p className="font-headline text-base font-semibold text-primary tracking-wider uppercase">Play, simple</p>
+              <p className="font-headline text-base font-semibold text-primary tracking-wider uppercase">Inspired by The Fork, Pokemon Go & Tinder</p>
               <h1 className="font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground">
-                Find Your Next Game, Effortlessly.
+                Book Pitches. Discover Rivals. Match Your Game.
               </h1>
               <p className="text-lg text-muted-foreground">
-                Sportify connects players, managers, and field owners to simplify the world of amateur sports. Discover nearby fields, join teams, and manage your games all in one place.
+                Sportify revolutionizes amateur sports. Reserve the best pitches like The Fork, find and challenge nearby teams like in Pokémon Go, and find the perfect game with a simple swipe, just like Tinder.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button asChild size="lg" className="font-semibold">
