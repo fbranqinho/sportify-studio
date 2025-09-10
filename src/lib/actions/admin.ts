@@ -1,35 +1,15 @@
 
 'use server';
 
-import * as admin from 'firebase-admin';
-
-// This new, robust pattern ensures Firebase Admin is initialized only once.
-const initializeAdmin = () => {
-  if (!admin.apps.length) {
-    // When running in a deployed environment, initializeApp() is called without
-    // arguments and it uses GOOGLE_APPLICATION_CREDENTIALS environment variable.
-    // In a local environment, the Genkit dev server automatically sets up
-    // the required environment variables.
-    try {
-        admin.initializeApp();
-    } catch (error: any) {
-        console.error('Firebase admin initialization error', error.stack);
-    }
-  }
-  return admin;
-};
-
-const getAdminDb = () => {
-    initializeAdmin();
-    return admin.firestore();
-};
+import { adminDb } from '@/lib/firebase-admin';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const convertTimestamps = (data: any): any => {
     if (!data) return data;
     if (Array.isArray(data)) {
         return data.map(item => convertTimestamps(item));
     }
-    if (data instanceof admin.firestore.Timestamp) {
+    if (data instanceof Timestamp) {
         return data.toDate().toISOString();
     }
     if (typeof data === 'object' && !Array.isArray(data) && data !== null) {
@@ -55,7 +35,7 @@ async function deleteCollectionBatch(collectionRef: FirebaseFirestore.Collection
             break;
         }
 
-        const batch = getAdminDb().batch();
+        const batch = adminDb.batch();
         snapshot.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
@@ -71,7 +51,6 @@ async function deleteCollectionBatch(collectionRef: FirebaseFirestore.Collection
 
 export async function deleteAllMatches() {
     try {
-        const adminDb = getAdminDb();
         const matchesRef = adminDb.collection('matches');
         const deletedCount = await deleteCollectionBatch(matchesRef, 100);
         return { success: true, deletedCount };
@@ -86,7 +65,6 @@ export async function deleteMatchById(matchId: string) {
         return { success: false, message: "Match ID is required." };
     }
     try {
-        const adminDb = getAdminDb();
         const batch = adminDb.batch();
         
         const matchRef = adminDb.doc(`matches/${matchId}`);
@@ -132,7 +110,6 @@ export async function deleteMatchById(matchId: string) {
 
 
 export async function getAllMatches() {
-    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('matches').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
@@ -141,31 +118,26 @@ export async function getAllMatches() {
 // --- Other Admin Flows ---
 
 export async function getAllReservations() {
-    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('reservations').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllPayments() {
-    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('payments').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllTeams() {
-    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('teams').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getAllUsers() {
-    const adminDb = getAdminDb();
     const snapshot = await adminDb.collection('users').get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestamps(doc.data()) }));
 }
 
 export async function getMonthlyStats(month: number, year: number) {
-    const adminDb = getAdminDb();
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 1);
 
