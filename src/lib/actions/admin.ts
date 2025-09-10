@@ -141,7 +141,10 @@ export async function getMonthlyStats(month: number, year: number) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 1);
 
-    // Users
+    const startDateISO = startDate.toISOString();
+    const endDateISO = endDate.toISOString();
+
+    // Users (use Timestamp objects for createdAt)
     const usersSnapshot = await adminDb.collection('users').get();
     const totalUsers = usersSnapshot.size;
     
@@ -152,19 +155,19 @@ export async function getMonthlyStats(month: number, year: number) {
     const premiumUsersSnapshot = await adminDb.collection('users').where('premiumPlan', '!=', null).get();
     const premiumUsers = premiumUsersSnapshot.size;
     
-    // Reservations
-    const reservationsQuery = adminDb.collection('reservations').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    // Reservations (use ISO strings for date)
+    const reservationsQuery = adminDb.collection('reservations').where('date', '>=', startDateISO).where('date', '<', endDateISO);
     const reservationsSnapshot = await reservationsQuery.get();
     const totalReservations = reservationsSnapshot.size;
     const cancelledReservations = reservationsSnapshot.docs.filter(doc => doc.data().status === 'Canceled').length;
 
-    // Games
-    const gamesQuery = adminDb.collection('matches').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    // Games (use ISO strings for date)
+    const gamesQuery = adminDb.collection('matches').where('date', '>=', startDateISO).where('date', '<', endDateISO);
     const gamesSnapshot = await gamesQuery.get();
     const totalGames = gamesSnapshot.size;
 
-    // Payments
-    const paymentsQuery = adminDb.collection('payments').where('date', '>=', startDate.toISOString()).where('date', '<', endDate.toISOString());
+    // Payments (use ISO strings for date)
+    const paymentsQuery = adminDb.collection('payments').where('date', '>=', startDateISO).where('date', '<', endDateISO);
     const paymentsSnapshot = await paymentsQuery.get();
     const totalPayments = paymentsSnapshot.size;
     const totalPaymentVolume = paymentsSnapshot.docs.reduce((sum, doc) => {
