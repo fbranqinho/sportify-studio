@@ -1,4 +1,4 @@
-{// src/lib/firebase-admin.ts
+// src/lib/firebase-admin.ts
 import * as admin from 'firebase-admin';
 
 // This new, robust pattern ensures Firebase Admin is initialized only once.
