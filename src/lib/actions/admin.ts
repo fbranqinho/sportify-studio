@@ -6,10 +6,14 @@ import * as admin from 'firebase-admin';
 // This new, robust pattern ensures Firebase Admin is initialized only once.
 const initializeAdmin = () => {
   if (!admin.apps.length) {
+    // When running in a deployed environment, initializeApp() is called without
+    // arguments and it uses GOOGLE_APPLICATION_CREDENTIALS environment variable.
+    // In a local environment, the Genkit dev server automatically sets up
+    // the required environment variables.
     try {
-      admin.initializeApp();
+        admin.initializeApp();
     } catch (error: any) {
-      console.error('Firebase admin initialization error', error.stack);
+        console.error('Firebase admin initialization error', error.stack);
     }
   }
   return admin;
@@ -25,10 +29,10 @@ const convertTimestamps = (data: any): any => {
     if (Array.isArray(data)) {
         return data.map(item => convertTimestamps(item));
     }
-    if (typeof data === 'object' && !Array.isArray(data)) {
-         if (data instanceof admin.firestore.Timestamp) {
-            return data.toDate().toISOString();
-        }
+    if (data instanceof admin.firestore.Timestamp) {
+        return data.toDate().toISOString();
+    }
+    if (typeof data === 'object' && !Array.isArray(data) && data !== null) {
         const newData: any = {};
         for (const key in data) {
             newData[key] = convertTimestamps(data[key]);
