@@ -3,14 +3,18 @@ import * as admin from 'firebase-admin';
 
 // This new, robust pattern ensures Firebase Admin is initialized only once.
 if (!admin.apps.length) {
-  // When running in a deployed environment, initializeApp() is called without
-  // arguments and it uses GOOGLE_APPLICATION_CREDENTIALS environment variable.
-  // In a local environment, the Genkit dev server automatically sets up
-  // the required environment variables.
   try {
-      admin.initializeApp();
+    // This is the robust way to initialize for server-side environments like Next.js Server Actions / API routes.
+    // It uses environment variables to securely configure the connection.
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.GCLOUD_PROJECT,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      }),
+    });
   } catch (error: any) {
-      console.error('Firebase admin initialization error', error.stack);
+    console.error('Firebase admin initialization error', error.stack);
   }
 }
 
