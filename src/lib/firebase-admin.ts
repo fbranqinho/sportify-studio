@@ -8,11 +8,12 @@ if (!admin.apps.length) {
     // It uses environment variables to securely configure the connection.
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: process.env.GCLOUD_PROJECT,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       }),
     });
+    console.log("Firebase Admin SDK initialized successfully.");
   } catch (error: any) {
     console.error('Firebase admin initialization error', error.stack);
   }
