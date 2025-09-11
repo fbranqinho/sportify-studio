@@ -43,7 +43,7 @@ export default function AdminReservationsPage() {
     r.pitchName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.actorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.status?.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a,b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
+  ).sort((a,b) => (b.date ? new Date(b.date as any).getTime() : 0) - (a.date ? new Date(a.date as any).getTime() : 0));
 
   if (loading) {
     return (
@@ -91,7 +91,7 @@ export default function AdminReservationsPage() {
             <TableBody>
               {filteredReservations.length > 0 ? filteredReservations.map(res => (
                 <TableRow key={res.id}>
-                  <TableCell>{res.date ? format(res.date.toDate(), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
+                  <TableCell>{res.date ? format(new Date(res.date as any), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                   <TableCell>{res.pitchName}</TableCell>
                   <TableCell className="font-medium">{res.actorName} ({res.actorRole})</TableCell>
                   <TableCell><Badge variant="outline">{res.status}</Badge></TableCell>
