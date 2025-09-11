@@ -67,8 +67,8 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                             {userRole !== 'PLAYER' && <TableCell className="font-medium">{isInitialBookingPayment ? 'Your Booking' : actorName}</TableCell>}
                             <TableCell className="font-medium">{description}</TableCell>
                             {userRole !== 'OWNER' && <TableCell>{owner?.companyName || "N/A"}</TableCell>}
-                            <TableCell>{reservation ? format(new Date(reservation.date), "dd/MM/yyyy") : '-'}</TableCell>
-                            <TableCell>{p.date ? format(new Date(p.date), "dd/MM/yyyy") : '-'}</TableCell>
+                            <TableCell>{reservation?.date ? format(reservation.date.toDate(), "dd/MM/yyyy") : '-'}</TableCell>
+                            <TableCell>{p.date ? format(p.date.toDate(), "dd/MM/yyyy") : '-'}</TableCell>
                             <TableCell className="text-center">{getStatusBadge(p.status)}</TableCell>
                             <TableCell className="text-right font-mono">{p.amount.toFixed(2)}€</TableCell>
                             {showActions && (
@@ -99,5 +99,3 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
         </Table>
     )
 }
-
-    

@@ -71,7 +71,7 @@ export default function AdminGamesPage() {
     m.teamARef?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.teamBRef?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.status.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  ).sort((a,b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
 
   if (loading) {
     return (
@@ -118,7 +118,7 @@ export default function AdminGamesPage() {
             <TableBody>
               {filteredMatches.length > 0 ? filteredMatches.map(match => (
                 <TableRow key={match.id}>
-                  <TableCell>{format(new Date(match.date), 'dd/MM/yyyy HH:mm')}</TableCell>
+                  <TableCell>{match.date ? format(match.date.toDate(), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                   <TableCell><Badge variant={match.status === 'Finished' ? 'default' : 'secondary'}>{match.status}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">{match.teamARef} vs {match.teamBRef || 'N/A'}</TableCell>
                   <TableCell className="font-mono">{match.scoreA} - {match.scoreB}</TableCell>

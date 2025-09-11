@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, getDoc, updateDoc } from "firebase/firestore";
+import { doc, writeBatch, serverTimestamp, getDocs, query, collection, where, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import type { Payment, Reservation, Pitch, Match, Notification } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +30,7 @@ export const PlayerPaymentButton = ({ payment, reservation, onPaymentProcessed }
             const paymentRef = doc(db, "payments", payment.id);
             await updateDoc(paymentRef, { 
                 status: "Paid", 
-                date: new Date().toISOString() 
+                date: Timestamp.now()
             });
 
             // The logic to check if all players have paid and then update the reservation/match

@@ -279,7 +279,7 @@ export function useMyGames(user: User | null) {
                 type: 'booking_split',
                 amount: pricePerPlayer,
                 status: 'Pending',
-                date: new Date().toISOString(),
+                date: Timestamp.now(),
                 pitchName: reservation.pitchName,
                 teamName: teamName,
                 ownerRef: reservation.ownerProfileId,
@@ -313,13 +313,14 @@ export function useMyGames(user: User | null) {
   const now = new Date();
   
   const upcomingMatches = matches.filter(m => {
-    const isFuture = new Date(m.date) >= now;
+    if (!m.date) return false;
+    const isFuture = m.date.toDate() >= now;
     const isNotFinishedOrCancelled = m.status !== 'Finished' && m.status !== 'Cancelled';
     return isFuture && isNotFinishedOrCancelled;
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }).sort((a, b) => (a.date?.toDate().getTime() || 0) - (b.date?.toDate().getTime() || 0));
 
   const pastMatches = matches.filter(m => m.status === 'Finished')
-    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a,b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
     
   return {
       user, loading,

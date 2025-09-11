@@ -13,9 +13,9 @@ export interface User {
   role: UserRole;
   profileCompleted: boolean;
   mobile?: string;
-  birthDate?: string; // ISO 8601 string
+  birthDate?: Timestamp;
   premiumPlan?: string;
-  premiumPlanExpireDate?: string; // ISO 8601 string
+  premiumPlanExpireDate?: Timestamp;
   createdAt: Timestamp;
 }
 
@@ -226,7 +226,7 @@ export type ReservationPaymentStatus = "Pending" | "Paid" | "Cancelled" | "Split
 
 export interface Reservation {
   id: string;
-  date: string; // ISO 8601 string
+  date: Timestamp;
   status: ReservationStatus;
   paymentStatus: ReservationPaymentStatus;
   pitchId: string; 
@@ -279,7 +279,7 @@ export interface TeamMatchDetails {
 
 export interface Match {
     id: string;
-    date: string; // ISO 8601 string
+    date: Timestamp;
     teamARef: string | null;
     teamBRef: string | null;
     invitedTeamId?: string | null; // ID of the team invited, used with PendingOpponent status
@@ -300,6 +300,7 @@ export interface Match {
     reservationRef?: string; // ID of the reservation that created this match
     events?: MatchEvent[];
     finishTime?: Timestamp | null;
+    startTime?: Timestamp | null;
     mvpPlayerId?: string | null;
     kudosVotes?: KudosVote[];
 }
@@ -328,14 +329,28 @@ export interface KudosVote {
     tags: string[];
 }
 
+export interface Promo {
+  id: string;
+  name: string;
+  ownerProfileId: string;
+  pitchIds: string[];
+  discountPercent: number;
+  validFrom: Timestamp;
+  validTo: Timestamp;
+  applicableDays: number[]; // 0 for Sunday, 1 for Monday, etc.
+  applicableHours: number[]; // 0-23
+  createdAt: Timestamp;
+}
+
+
 export type CompetitionFormat = "tournament" | "cup" | "pre-season";
 
 export interface Competition {
   id: string;
   name: string;
   logoUrl?: string;
-  startDate: string; // ISO 8601 string
-  endDate: string; // ISO 8601 string
+  startDate: Timestamp;
+  endDate: Timestamp;
   pitches: string[]; // Pitch IDs
   teams: string[]; // Team IDs
   format: CompetitionFormat;
@@ -357,8 +372,8 @@ export interface Payment {
   reservationRef?: string; // Reservation ID
   type: PaymentType;
   amount: number;
-  date: string; // ISO 8601 string
-  expirationDate?: string; // ISO 8601 string
+  date: Timestamp;
+  expirationDate?: Timestamp;
   status: PaymentStatus;
   notes?: string;
   reminder?: boolean;

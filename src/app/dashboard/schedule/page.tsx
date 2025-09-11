@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch, deleteDoc, documentId } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, getDoc, serverTimestamp, writeBatch, deleteDoc, documentId, Timestamp } from "firebase/firestore";
 import { useUser } from "@/hooks/use-user";
 import type { Reservation, Team, Notification, Match, Payment, PaymentStatus, Pitch } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -106,7 +106,7 @@ export default function SchedulePage() {
             const notificationRef = doc(collection(db, "users", actorId, "notifications"));
             batch.set(notificationRef, {
                 userId: actorId,
-                message: `Your booking request for ${reservation.pitchName} on ${format(new Date(reservation.date), 'MMM d')} was not approved.`,
+                message: `Your booking request for ${reservation.pitchName} on ${format(reservation.date.toDate(), 'MMM d')} was not approved.`,
                 link: '/dashboard/my-games',
                 read: false,
                 createdAt: serverTimestamp() as any,
@@ -180,9 +180,9 @@ export default function SchedulePage() {
   };
 
   const now = new Date();
-  const pendingReservations = reservations.filter(r => r.status === "Pending").sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const upcomingReservations = reservations.filter(r => (r.status === "Confirmed" || r.status === "Scheduled") && new Date(r.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const pastReservations = reservations.filter(r => new Date(r.date) < now || r.status === "Canceled").sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const pendingReservations = reservations.filter(r => r.status === "Pending").sort((a,b) => (a.date?.toDate().getTime() || 0) - (b.date?.toDate().getTime() || 0));
+  const upcomingReservations = reservations.filter(r => (r.status === "Confirmed" || r.status === "Scheduled") && (r.date?.toDate() || now) >= now).sort((a,b) => (a.date?.toDate().getTime() || 0) - (b.date?.toDate().getTime() || 0));
+  const pastReservations = reservations.filter(r => (r.date?.toDate() || now) < now || r.status === "Canceled").sort((a,b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
   
   const getStatusIcon = (status: Reservation["status"]) => {
     switch(status) {
@@ -230,7 +230,7 @@ export default function SchedulePage() {
             <CardHeader>
                 <CardTitle className="font-headline">{reservation.pitchName}</CardTitle>
                 <CardDescription className="flex items-center gap-2 pt-1">
-                <Calendar className="h-4 w-4" /> {format(new Date(reservation.date), "PPP 'at' HH:mm")}
+                <Calendar className="h-4 w-4" /> {reservation.date ? format(reservation.date.toDate(), "PPP 'at' HH:mm") : 'No date'}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -398,3 +398,4 @@ export default function SchedulePage() {
     
 
     
+

@@ -35,7 +35,7 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
 
     // 2. Find reservation and match for this specific slot.
     const reservation = reservations.find(r => {
-      const resDate = new Date(r.date);
+      const resDate = r.date.toDate();
       // Ignore cancelled reservations for slot availability checks
       if (r.status === 'Canceled') return false;
 
@@ -87,8 +87,8 @@ export function useSlotStatus({ day, time, pitch, user, reservations, matches, p
     const dayOfWeek = getDay(day);
     const applicablePromo = promos
         .filter(p => {
-            const validFrom = startOfDay(new Date(p.validFrom));
-            const validTo = startOfDay(new Date(p.validTo));
+            const validFrom = startOfDay(p.validFrom.toDate());
+            const validTo = startOfDay(p.validTo.toDate());
             const currentDay = startOfDay(day);
             
             return currentDay >= validFrom && currentDay <= validTo &&

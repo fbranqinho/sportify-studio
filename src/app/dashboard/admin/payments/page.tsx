@@ -45,7 +45,7 @@ export default function AdminPaymentsPage() {
     p.playerRef?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.managerRef?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.ownerRef?.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  ).sort((a,b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
 
   if (loading) {
     return (
@@ -92,7 +92,7 @@ export default function AdminPaymentsPage() {
             <TableBody>
               {filteredPayments.length > 0 ? filteredPayments.map(p => (
                 <TableRow key={p.id}>
-                  <TableCell>{format(new Date(p.date), 'dd/MM/yyyy')}</TableCell>
+                  <TableCell>{p.date ? format(p.date.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   <TableCell>{p.type}</TableCell>
                   <TableCell>
                     {p.pitchName && `Pitch: ${p.pitchName}`}<br/>

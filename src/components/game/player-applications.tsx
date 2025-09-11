@@ -50,12 +50,12 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
 
         batch.update(matchRef, { playerApplications: arrayRemove(applicantId) });
         
-        let notificationMessage = `Your application for the game on ${format(new Date(match.date), "MMM d")} was not accepted.`;
+        let notificationMessage = `Your application for the game on ${match.date ? format(match.date.toDate(), "MMM d") : 'a future date'} was not accepted.`;
         let notificationLink = '/dashboard/my-games';
         
         if (accepted) {
             batch.update(matchRef, { teamAPlayers: arrayUnion(applicantId) });
-            notificationMessage = `You're in! Your application for the game on ${format(new Date(match.date), "MMM d")} was accepted.`;
+            notificationMessage = `You're in! Your application for the game on ${match.date ? format(match.date.toDate(), "MMM d") : 'a future date'} was accepted.`;
         }
 
         const newNotificationRef = doc(collection(db, "users", applicantId, "notifications"));

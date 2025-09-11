@@ -93,7 +93,7 @@ export default function SignupPage() {
         email: values.email,
         role: values.role,
         mobile: values.mobile,
-        birthDate: values.birthDate,
+        birthDate: Timestamp.fromDate(new Date(values.birthDate)),
         profileCompleted: values.role === 'ADMIN',
         createdAt: serverTimestamp() as Timestamp,
       });

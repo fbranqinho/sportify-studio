@@ -89,7 +89,7 @@ export function OpenGameCard({ match, user, onMouseEnter, onMouseLeave }: OpenGa
             <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
-                    <span><span className="font-semibold">{format(new Date(match.date), "EEE, MMM d 'at' HH:mm")}</span></span>
+                    <span><span className="font-semibold">{match.date ? format(match.date.toDate(), "EEE, MMM d 'at' HH:mm") : 'No Date'}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary" />

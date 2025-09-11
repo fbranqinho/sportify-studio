@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { OwnerProfile, Pitch, Notification, User } from "@/types";
 import { DateRange } from "react-day-picker";
@@ -86,8 +86,8 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
         ownerProfileId: ownerProfile.id,
         name: values.name,
         discountPercent: values.discountPercent,
-        validFrom: values.dates.from.toISOString(),
-        validTo: values.dates.to.toISOString(),
+        validFrom: Timestamp.fromDate(values.dates.from),
+        validTo: Timestamp.fromDate(values.dates.to),
         applicableHours: values.applicableHours.sort((a,b) => a - b),
         applicableDays: values.applicableDays.sort((a,b) => a - b),
         pitchIds: selectedPitches.map(p => p.id),

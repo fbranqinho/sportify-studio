@@ -40,7 +40,7 @@ export function MatchDetailsCard({ match, pitch, owner }: MatchDetailsCardProps)
             <Card className="md:col-span-2">
                 <CardHeader>
                     <CardTitle>{isFinished ? 'Match Summary' : 'Match Details'}</CardTitle>
-                    <CardDescription>{format(new Date(match.date), "EEEE, MMMM d, yyyy 'at' HH:mm")}</CardDescription>
+                    <CardDescription>{match.date ? format(match.date.toDate(), "EEEE, MMMM d, yyyy 'at' HH:mm") : 'Date not set'}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="grid sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">

@@ -29,8 +29,8 @@ const DetailRow = ({ icon: Icon, label, value }: { icon: React.ElementType, labe
 };
 
 export function ManagerProfileCard({ user, profile, teams, className, ...props }: ManagerProfileCardProps) {
-    const age = user.birthDate ? differenceInYears(new Date(), new Date(user.birthDate)) : "N/A";
-    const memberSince = user.createdAt ? formatDistanceToNow(new Date(user.createdAt.seconds * 1000), { addSuffix: true }) : "recently";
+    const age = user.birthDate ? differenceInYears(new Date(), user.birthDate.toDate()) : "N/A";
+    const memberSince = user.createdAt ? formatDistanceToNow(user.createdAt.toDate(), { addSuffix: true }) : "recently";
     const record = `${profile.victories}-${profile.draws}-${profile.defeats}`;
 
     return (

@@ -137,7 +137,7 @@ export const MatchCard = ({ match, hook }: { match: Match, hook: ReturnType<type
                     )}
                 </CardTitle>
                 <CardDescription className="flex items-center gap-2 pt-1">
-                    <Calendar className="h-4 w-4" /> {format(new Date(match.date), "PPP 'at' HH:mm")}
+                    <Calendar className="h-4 w-4" /> {match.date ? format(match.date.toDate(), "PPP 'at' HH:mm") : 'No date'}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">

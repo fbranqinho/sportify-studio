@@ -109,11 +109,11 @@ export function PlayerRoster({
     
 
     const handleRemindPlayer = async (player: RosterPlayer) => {
-        if (!player.id) return;
+        if (!player.id || !match.date) return;
         try {
             const notification = {
                 userId: player.id,
-                message: `Reminder: You have a pending payment for the game on ${format(new Date(match.date), "MMM d")}.`,
+                message: `Reminder: You have a pending payment for the game on ${format(match.date.toDate(), "MMM d")}.`,
                 link: '/dashboard/payments',
                 read: false,
                 createdAt: serverTimestamp() as any,

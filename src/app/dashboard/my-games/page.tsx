@@ -63,16 +63,18 @@ export default function MyGamesPage() {
     });
 
     const sorted = filtered.sort((a, b) => {
+        const dateA = a.date?.toDate().getTime() || 0;
+        const dateB = b.date?.toDate().getTime() || 0;
         switch (sortBy) {
             case 'date-asc':
-                return new Date(a.date).getTime() - new Date(b.date).getTime();
+                return dateA - dateB;
             case 'sport':
                 return (pitches.get(a.pitchRef)?.sport || '').localeCompare(pitches.get(b.pitchRef)?.sport || '');
             case 'location':
                 return (pitches.get(a.pitchRef)?.name || '').localeCompare(pitches.get(b.pitchRef)?.name || '');
             case 'date-desc':
             default:
-                 return new Date(b.date).getTime() - new Date(a.date).getTime();
+                 return dateB - dateA;
         }
     });
 

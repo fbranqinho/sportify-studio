@@ -44,7 +44,7 @@ export default function PromosPage() {
         const q = query(collection(db, "promos"), where("ownerProfileId", "==", profileId));
         const querySnapshot = await getDocs(q);
         const promosData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
-        promosData.sort((a, b) => (b.createdAt as any) - (a.createdAt as any));
+        promosData.sort((a, b) => (b.createdAt?.toDate().getTime() || 0) - (a.createdAt?.toDate().getTime() || 0));
         setPromos(promosData);
     } catch (error) {
         console.error("Error fetching promos:", error);
@@ -149,7 +149,7 @@ export default function PromosPage() {
                 </CardTitle>
                 <CardDescription className="flex items-center gap-2 pt-1 text-xs">
                   <Calendar className="h-4 w-4" /> 
-                  <span>{format(new Date(promo.validFrom), "MMM d, yyyy")} to {format(new Date(promo.validTo), "MMM d, yyyy")}</span>
+                  <span>{format(promo.validFrom.toDate(), "MMM d, yyyy")} to {format(promo.validTo.toDate(), "MMM d, yyyy")}</span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">

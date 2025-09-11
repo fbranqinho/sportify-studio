@@ -34,7 +34,7 @@ export default function PaymentsPage() {
         }
 
         return teamMatch || pitchMatch || playerMatch;
-    }).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    }).sort((a, b) => (b.date?.toDate().getTime() || 0) - (a.date?.toDate().getTime() || 0));
   }, [allPayments, searchTerm, user?.role, playerUsers]);
 
   const pendingPayments = filteredPayments.filter(p => p.status === 'Pending');

@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, getDocs, writeBatch, doc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Pitch, User, Team, Notification, Promo } from "@/types";
 
@@ -99,7 +99,7 @@ export function CreateReservationForm({ user, pitch, onReservationSuccess, selec
         // 1. Create the reservation document
         const newReservationRef = doc(collection(db, "reservations"));
         const reservationData: any = {
-            date: bookingDate.toISOString(),
+            date: Timestamp.fromDate(bookingDate),
             status: "Pending", // Initial status is always Pending
             paymentStatus: "Pending", // Default payment status
             pitchId: pitch.id,

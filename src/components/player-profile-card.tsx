@@ -30,8 +30,8 @@ const DetailRow = ({ icon: Icon, label, value }: { icon: React.ElementType, labe
 
 
 export function PlayerProfileCard({ user, profile, className, ...props }: PlayerProfileCardProps) {
-    const age = user.birthDate ? differenceInYears(new Date(), new Date(user.birthDate)) : "N/A";
-    const memberSince = profile.createdAt ? formatDistanceToNow(new Date(profile.createdAt.seconds * 1000), { addSuffix: true }) : "recently";
+    const age = user.birthDate ? differenceInYears(new Date(), user.birthDate.toDate()) : "N/A";
+    const memberSince = profile.createdAt ? formatDistanceToNow(profile.createdAt.toDate(), { addSuffix: true }) : "recently";
     const displayName = profile.nickname.charAt(0).toUpperCase() + profile.nickname.slice(1);
     
     const sortedTags = React.useMemo(() => {

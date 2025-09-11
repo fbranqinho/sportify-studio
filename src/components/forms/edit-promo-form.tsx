@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Pitch, Promo } from "@/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -65,8 +65,8 @@ export function EditPromoForm({ promo, ownerPitches, onPromoUpdated }: EditPromo
       name: promo.name,
       discountPercent: promo.discountPercent,
       dates: {
-        from: new Date(promo.validFrom),
-        to: new Date(promo.validTo),
+        from: promo.validFrom.toDate(),
+        to: promo.validTo.toDate(),
       },
       applicableHours: promo.applicableHours,
       applicableDays: promo.applicableDays,
@@ -80,8 +80,8 @@ export function EditPromoForm({ promo, ownerPitches, onPromoUpdated }: EditPromo
       await updateDoc(promoRef, {
         name: values.name,
         discountPercent: values.discountPercent,
-        validFrom: values.dates.from.toISOString(),
-        validTo: values.dates.to.toISOString(),
+        validFrom: Timestamp.fromDate(values.dates.from),
+        validTo: Timestamp.fromDate(values.dates.to),
         applicableHours: values.applicableHours.sort((a,b) => a - b),
         applicableDays: values.applicableDays.sort((a,b) => a - b),
         pitchIds: selectedPitches.map(p => p.id),

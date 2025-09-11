@@ -45,8 +45,8 @@ export default function AdminUsersPage() {
     u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.role?.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a,b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+      const dateA = a.createdAt?.toDate().getTime() || 0;
+      const dateB = b.createdAt?.toDate().getTime() || 0;
       return dateB - dateA;
   });
 
@@ -99,7 +99,7 @@ export default function AdminUsersPage() {
                   <TableCell>{user.email}</TableCell>
                   <TableCell><Badge variant="secondary">{user.role}</Badge></TableCell>
                   <TableCell>{user.profileCompleted ? 'Yes' : 'No'}</TableCell>
-                  <TableCell>{user.createdAt ? format(new Date(user.createdAt as any), 'dd/MM/yyyy') : 'N/A'}</TableCell>
+                  <TableCell>{user.createdAt ? format(user.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
