@@ -13,7 +13,6 @@ if (!admin.apps.length) {
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       }),
     });
-    console.log("Firebase Admin SDK initialized successfully.");
   } catch (error: any) {
     console.error('Firebase admin initialization error', error.stack);
   }
