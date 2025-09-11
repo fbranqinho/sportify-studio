@@ -1,5 +1,11 @@
 // src/lib/firebase-admin.ts
 import * as admin from 'firebase-admin';
+import dotenv from 'dotenv';
+
+// Explicitly load variables from .env.local into the environment
+// This ensures that server-side code always has access to the credentials.
+dotenv.config({ path: '.env.local' });
+
 
 // This new, robust pattern ensures Firebase Admin is initialized only once.
 if (!admin.apps.length) {
