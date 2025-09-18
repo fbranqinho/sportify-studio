@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------
+    // Helper Functions
+    // -------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    function isPlayer() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'PLAYER';
+    }
+
+    function isManager() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'MANAGER';
+    }
+
+    function isOwnerRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER';
+    }
+
+    // -------------------------
+    // Default deny all
+    // -------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------
+    // Users
+    // -------------------------
+    match /users/{userId} {
+      allow read, list: if isAuthenticated();
+      allow create, update: if isSelf(userId);
+      allow delete, write: if isAdmin();
+    }
+
+    // -------------------------
+    // Profiles
+    // -------------------------
+    match /playerProfiles/{profileId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isSelf(request.resource.data.userRef) || isAdmin();
+    }
+
+    match /managerProfiles/{profileId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isManager() || isAdmin();
+    }
+
+    match /ownerProfiles/{profileId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isOwnerRole() || isAdmin();
+    }
+
+    // -------------------------
+    // Teams
+    // -------------------------
+    match /teams/{teamId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isManager() && isSelf(request.resource.data.managerId) || isAdmin();
+    }
+
+    // -------------------------
+    // Pitches
+    // -------------------------
+    match /pitches/{pitchId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isOwnerRole() || isAdmin();
+    }
+
+    // -------------------------
+    // Promos
+    // -------------------------
+    match /promos/{promoId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isOwnerRole() || isAdmin();
+    }
+
+    // -------------------------
+    // Reservations
+    // -------------------------
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwnerRole();                // Owner cria reservas
+      allow update, delete: if isOwnerRole() || isAdmin(); // Owner edita e elimina
+    }
+
+    // -------------------------
+    // Team Invitations
+    // -------------------------
+    match /teamInvitations/{invitationId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isManager() || isAdmin();
+    }
+
+    // -------------------------
+    // Match Invitations
+    // -------------------------
+    match /matchInvitations/{invitationId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isManager() || isAdmin();
+    }
+
+    // -------------------------
+    // Matches
+    // -------------------------
+    match /matches/{matchId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() && isSelf(request.resource.data.managerRef) || isAdmin();
+      allow update, delete: if isManager() && isSelf(resource.data.managerRef) || isAdmin();
+
+      // Allow players to join teams or apply for match
+      allow update: if isPlayer() && (
+          request.resource.data.playerApplications == resource.data.playerApplications.concat([request.auth.uid]) ||
+          request.resource.data.teamAPlayers == resource.data.teamAPlayers.concat([request.auth.uid]) ||
+          request.resource.data.teamBPlayers == resource.data.teamBPlayers.concat([request.auth.uid])
+      );
+
+      // Subcollection for MVP votes
+      match /mvpVotes/{voteId} {
+      allow create: if isPlayer() &&
+            (request.auth.uid in resource.data.teamAPlayers || request.auth.uid in resource.data.teamBPlayers) &&
+            !exists(/databases/$(database)/documents/matches/$(matchId)/mvpVotes/$(request.auth.uid));
+            allow read: if isAuthenticated();
+      }
+    }
+
+    // -------------------------
+    // Notifications
+    // -------------------------
+    match /users/{userId}/notifications {
+      allow create: if isAuthenticated(); // qualquer utilizador pode criar
+      allow read, update, delete: if isSelf(resource.data.userId) || isAdmin();
+    }
+
+    // -------------------------
+    // Payments
+    // -------------------------
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlayer() && isSelf(resource.data.playerRef) ||
+      isManager() && isSelf(resource.data.managerRef) ||
+      isOwnerRole() && isSelf(get(/databases/$(database)/documents/ownerProfiles/$(resource.data.ownerRef)).data.userRef) ||
+      isAdmin();
+    }
+  }
+}

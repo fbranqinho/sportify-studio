@@ -1,0 +1,148 @@
+
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import type { Match, Reservation, Pitch } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
+import { deleteMatchById } from "@/lib/actions/admin";
+
+export function ManageGame({ match, onMatchUpdate, reservation, pitch }: { match: Match; onMatchUpdate: (data: Partial<Match>) => void; reservation: Reservation | null; pitch: Pitch | null; }) {
+    const { toast } = useToast();
+    const router = useRouter();
+    const isPaid = reservation?.paymentStatus === 'Paid';
+    const [isDeleting, setIsDeleting] = React.useState(false);
+
+    const handleToggleExternalPlayers = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowExternalPlayers: checked });
+            onMatchUpdate({ allowExternalPlayers: checked });
+            toast({ title: "Settings updated", description: `Players can ${checked ? 'now' : 'no longer'} apply to this game.`});
+        } catch (error) {
+            console.error("Error updating match settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
+        }
+    }
+
+    const handleToggleAllowChallenges = async (checked: boolean) => {
+        const matchRef = doc(db, "matches", match.id);
+        try {
+            await updateDoc(matchRef, { allowChallenges: checked });
+            onMatchUpdate({ allowChallenges: checked });
+            toast({ title: "Settings updated", description: `Other teams can ${checked ? 'now' : 'no longer'} challenge you for this game slot.`});
+        } catch (error) {
+            console.error("Error updating match settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not update match settings." });
+        }
+    }
+    
+    const handleDeleteGame = async () => {
+        setIsDeleting(true);
+        try {
+            const result = await deleteMatchById(match.id);
+            if(result.success) {
+                toast({ title: "Game Deleted", description: result.message });
+                router.push('/dashboard/my-games');
+            } else {
+                toast({ variant: "destructive", title: "Error", description: result.message });
+            }
+        } catch (error: any) {
+            console.error("Error deleting game:", error);
+            toast({ variant: "destructive", title: "Error", description: `An unexpected error occurred: ${error.message}` });
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Game Settings</CardTitle>
+                 <CardDescription>Manage advanced options for this game.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                 <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-external" className="text-base font-semibold">
+                            Accept External Players
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Allow players who are not in a team to apply to fill empty slots in this game.
+                        </p>
+                    </div>
+                    <Switch
+                        id="allow-external"
+                        checked={!!match.allowExternalPlayers}
+                        onCheckedChange={handleToggleExternalPlayers}
+                    />
+                </div>
+                <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="allow-challenges" className="text-base font-semibold">
+                            Accept Challenge from other teams
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Allow other teams to challenge you for this game slot.
+                        </p>
+                    </div>
+                    <Switch
+                        id="allow-challenges"
+                        checked={!!match.allowChallenges}
+                        onCheckedChange={handleToggleAllowChallenges}
+                        disabled={!!match.teamBRef}
+                    />
+                </div>
+                <div className="flex items-center justify-between space-x-2 rounded-lg border border-destructive/50 p-4">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="delete-game" className="text-base font-semibold text-destructive">
+                            Delete Game
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                        This will permanently delete the game and its associated field reservation. This action cannot be undone.
+                        </p>
+                    </div>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={isDeleting || (isPaid && !reservation?.allowCancellationsAfterPayment)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> 
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the game
+                                and its associated reservation, and refund/cancel any related payments.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteGame}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
