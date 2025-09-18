@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Rules for profile pictures
+    // The path matches the structure used in the application: `profile-pictures/{userId}/{fileName}`
+    match /profile-pictures/{userId}/{allPaths=**} {
+      // Allow anyone to read profile pictures, so they can be displayed in the app.
+      allow read;
+
+      // Only allow a user to write (upload, update, delete) to their own folder.
+      // The `userId` in the path must match the authenticated user's ID.
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
