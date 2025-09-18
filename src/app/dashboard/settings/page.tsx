@@ -1,12 +1,11 @@
-
-"use client";
+'use client';
 
 import * as React from "react";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import type { PlayerProfile, ManagerProfile, OwnerProfile } from "@/types";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditPlayerProfileForm } from "@/components/forms/edit-player-profile-form";
 import { EditManagerProfileForm } from "@/components/forms/edit-manager-profile-form";
@@ -29,9 +28,9 @@ export default function SettingsPage() {
             try {
                 let profileCollection = "";
                 switch (user.role) {
-                    case 'PLAYER': profileCollection = "playerProfiles"; break;
-                    case 'MANAGER': profileCollection = "managerProfiles"; break;
-                    case 'OWNER': profileCollection = "ownerProfiles"; break;
+                    case "PLAYER": profileCollection = "playerProfiles"; break;
+                    case "MANAGER": profileCollection = "managerProfiles"; break;
+                    case "OWNER": profileCollection = "ownerProfiles"; break;
                     default:
                         setLoading(false);
                         return;
@@ -41,8 +40,26 @@ export default function SettingsPage() {
                 const querySnapshot = await getDocs(q);
 
                 if (!querySnapshot.empty) {
-                    const docData = querySnapshot.docs[0].data();
-                    setProfileData({ id: querySnapshot.docs[0].id, ...docData });
+                    const docSnap = querySnapshot.docs[0];
+                    const docData = docSnap.data();
+
+                    switch (user.role) {
+                        case "PLAYER": {
+                            const { id: _ignore, ...rest } = docData as PlayerProfile;
+                            setProfileData({ ...(rest as Omit<PlayerProfile, "id">), id: docSnap.id });
+                            break;
+                        }
+                        case "MANAGER": {
+                            const { id: _ignore, ...rest } = docData as ManagerProfile;
+                            setProfileData({ ...(rest as Omit<ManagerProfile, "id">), id: docSnap.id });
+                            break;
+                        }
+                        case "OWNER": {
+                            const { id: _ignore, ...rest } = docData as OwnerProfile;
+                            setProfileData({ ...(rest as Omit<OwnerProfile, "id">), id: docSnap.id });
+                            break;
+                        }
+                    }
                 } else {
                     console.log(`SettingsPage: No profile found for userId: ${user.id} in ${profileCollection}`);
                     setProfileData(null);
@@ -65,7 +82,7 @@ export default function SettingsPage() {
 
         if (!profileData) {
             return (
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Settings</CardTitle>
                     </CardHeader>
@@ -77,15 +94,15 @@ export default function SettingsPage() {
         }
 
         switch (user.role) {
-            case 'PLAYER':
+            case "PLAYER":
                 return <EditPlayerProfileForm playerProfile={profileData as PlayerProfile} user={user} />;
-            case 'MANAGER':
+            case "MANAGER":
                 return <EditManagerProfileForm managerProfile={profileData as ManagerProfile} user={user} />;
-            case 'OWNER':
+            case "OWNER":
                 return <EditOwnerProfileForm ownerProfile={profileData as OwnerProfile} user={user} />;
             default:
                 return (
-                     <Card>
+                    <Card>
                         <CardHeader>
                             <CardTitle>Settings</CardTitle>
                         </CardHeader>
@@ -105,13 +122,13 @@ export default function SettingsPage() {
                     Manage your account, profile, and subscription settings.
                 </p>
             </div>
-            
+
             <div className="grid lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2">
                     {renderSettingsForms()}
                 </div>
                 <div className="lg:col-span-1">
-                     <PricingCard user={user} />
+                    <PricingCard user={user} />
                 </div>
             </div>
         </div>

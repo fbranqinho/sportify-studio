@@ -30,9 +30,9 @@ import type { PlayerPosition, DominantFoot, PlayerExperience } from "@/types";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 
-const positions: PlayerPosition[] = ["Goalkeeper", "Defender", "Midfielder", "Forward"];
-const dominantFoots: DominantFoot[] = ["left", "right", "both"];
-const experiences: PlayerExperience[] = ["Amateur", "Ex-Federated", "Federated"];
+const positions = ["Goalkeeper", "Defender", "Midfielder", "Forward"] as const;
+const dominantFoots = ["Left", "Right", "Both"] as const;
+const experiences = ["Amateur", "Ex-Federated", "Federated"] as const;
 
 const formSchema = z.object({
   nickname: z.string().min(2, { message: "Nickname must be at least 2 characters." }),
@@ -60,7 +60,7 @@ export function PlayerProfileForm({ userId }: PlayerProfileFormProps) {
       nickname: "",
       city: "",
       position: "Midfielder",
-      dominantFoot: "right",
+      dominantFoot: "Right",
       experience: "Amateur",
       height: undefined,
       weight: undefined,

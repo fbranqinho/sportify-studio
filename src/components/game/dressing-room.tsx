@@ -165,9 +165,18 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
         const playersForA = shuffled.slice(0, midPoint);
         const playersForB = shuffled.slice(midPoint);
 
-        const filledFormationA = assignPlayersToFormation({}, playersForA, tacticA, new Set());
-        const filledFormationB = assignPlayersToFormation({}, playersForB, tacticB, new Set(Object.values(filledFormationA)));
-
+        const filledFormationA = assignPlayersToFormation(
+            formationA,
+            playersForA,
+            tacticA,
+            new Set(Object.values(formationB).filter((id): id is string => !!id))
+        );
+        const filledFormationB = assignPlayersToFormation(
+            {},
+            playersForB,
+            tacticB,
+            new Set(Object.values(filledFormationA).filter((id): id is string => !!id))
+        );
         setFormationA(filledFormationA);
         setFormationB(filledFormationB);
         toast({ title: "Teams Auto-Filled!", description: "Players have been randomly assigned to both teams." });
@@ -175,12 +184,22 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
     else if (hasOpponent) {
         if (canManageTeamA) {
             const playersForA = players.filter(p => match.teamAPlayers?.includes(p.id));
-            const filledFormationA = assignPlayersToFormation(formationA, playersForA, tacticA, new Set(Object.values(formationB)));
+            const filledFormationA = assignPlayersToFormation(
+                formationA,
+                playersForA,
+                tacticA,
+                new Set(Object.values(formationB).filter((id): id is string => !!id))
+            );
             setFormationA(filledFormationA);
             toast({ title: "Team Auto-Filled!", description: "Your team's positions have been filled." });
         } else if (canManageTeamB) {
             const playersForB = players.filter(p => match.teamBPlayers?.includes(p.id));
-            const filledFormationB = assignPlayersToFormation(formationB, playersForB, tacticB, new Set(Object.values(formationA)));
+            const filledFormationB = assignPlayersToFormation(
+                formationB,
+                playersForB,
+                tacticB,
+                new Set(Object.values(formationA).filter((id): id is string => !!id))
+            );
             setFormationB(filledFormationB);
             toast({ title: "Team Auto-Filled!", description: "Your team's positions have been filled." });
         }
@@ -273,25 +292,25 @@ export function DressingRoom({ match, onUpdate, onClose, teamA, teamB, pitch, cu
     const canUpdateB = canManageTeamB || canManagePractice;
     
     if (canUpdateA) {
-      updateData.teamADetails = {
-        tactic: tacticA,
-        formation: formationA,
-        captainId: captainA || null,
-        penaltyTakerId: penaltyTakerA || null,
-        cornerTakerId: cornerTakerA || null,
-        freeKickTakerId: freeKickTakerA || null
-      };
+        updateData.teamADetails = {
+            tactic: tacticA,
+            formation: formationA,
+            captainId: captainA || undefined,
+            penaltyTakerId: penaltyTakerA || undefined,
+            cornerTakerId: cornerTakerA || undefined,
+            freeKickTakerId: freeKickTakerA || undefined
+        };
       if (isPracticeMatch) updateData.teamAPlayers = Object.values(formationA).filter((id): id is string => !!id);
     }
     if (canUpdateB) {
-      updateData.teamBDetails = { 
-          tactic: tacticB, 
-          formation: formationB,
-          captainId: captainB || null,
-          penaltyTakerId: penaltyTakerB || null,
-          cornerTakerId: cornerTakerB || null,
-          freeKickTakerId: freeKickTakerB || null
-      };
+        updateData.teamBDetails = {
+            tactic: tacticB,
+            formation: formationB,
+            captainId: captainB || undefined,
+            penaltyTakerId: penaltyTakerB || undefined,
+            cornerTakerId: cornerTakerB || undefined,
+            freeKickTakerId: freeKickTakerB || undefined
+        };
       if (isPracticeMatch) updateData.teamBPlayers = Object.values(formationB).filter((id): id is string => !!id);
     }
 

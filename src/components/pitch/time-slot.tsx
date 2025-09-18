@@ -84,7 +84,13 @@ const ApplySlot = ({ match, user }: { match: Match; user: User; }) => {
 
     if (match.managerRef) {
       const notificationRef = doc(collection(db, "users", match.managerRef, "notifications"));
-      const notification: Omit<Notification, 'id'> = { message: `${user.name} applied to your game.`, link: `/dashboard/games/${match.id}`, read: false, createdAt: serverTimestamp() as any };
+        const notification: Omit<Notification, 'id'> = {
+            userId: match.managerRef,
+            message: `${user.name} applied to your game.`,
+            link: `/dashboard/games/${match.id}`,
+            read: false,
+            createdAt: serverTimestamp() as any
+        };
       batch.set(notificationRef, notification);
     }
     
@@ -127,19 +133,20 @@ const ChallengeSlot = ({ match, user, userTeams }: { match: Match; user: User; u
     if (!challengingTeam) return;
     
     const notificationRef = doc(collection(db, "users", match.managerRef, "notifications"));
-    const notification: Omit<Notification, 'id'> = {
-        message: `The team '${challengingTeam.name}' has challenged you to a match!`,
-        link: `/dashboard/games/${match.id}`,
-        read: false,
-        createdAt: serverTimestamp() as any,
-        type: 'Challenge',
-        payload: {
-            matchId: match.id,
-            challengerTeamId: challengingTeam.id,
-            challengerTeamName: challengingTeam.name,
-            challengerManagerId: user.id,
-        }
-    };
+      const notification: Omit<Notification, 'id'> = {
+          userId: match.managerRef,
+          message: `The team '${challengingTeam.name}' has challenged you to a match!`,
+          link: `/dashboard/games/${match.id}`,
+          read: false,
+          createdAt: serverTimestamp() as any,
+          type: 'Challenge',
+          payload: {
+              matchId: match.id,
+              challengerTeamId: challengingTeam.id,
+              challengerTeamName: challengingTeam.name,
+              challengerManagerId: user.id,
+          }
+      };
     await addDoc(collection(db, "users", match.managerRef, "notifications"), notification);
     toast({ title: "Challenge Sent!" });
     setIsChallengeDialogOpen(false);

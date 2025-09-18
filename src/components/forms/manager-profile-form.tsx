@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -28,11 +27,11 @@ import { useRouter } from "next/navigation";
 import type { ManagerFootballType, Tactic } from "@/types";
 import { fut5Tactics, fut7Tactics, futsalTactics } from "@/lib/utils";
 
-const footballTypes: ManagerFootballType[] = ["fut7", "fut5", "futsal"];
+const footballTypes = ["fut7", "fut5", "futsal"] as const;
 
 const formSchema = z.object({
-  typeOfFootball: z.enum(footballTypes),
-  tactics: z.string().min(1, "You must select a tactic."),
+    typeOfFootball: z.enum(footballTypes),
+    tactics: z.string().min(1, "You must select a tactic."),
 });
 
 interface ManagerProfileFormProps {

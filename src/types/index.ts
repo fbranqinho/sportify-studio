@@ -19,7 +19,7 @@ export interface User {
   createdAt: Timestamp;
 }
 
-export type DominantFoot = "left" | "right" | "both";
+export type DominantFoot = "Left" | "Right" | "Both";
 export type PlayerPosition = "Goalkeeper" | "Defender" | "Midfielder" | "Forward";
 export type PlayerExperience = "Amateur" | "Federated" | "Ex-Federated";
 

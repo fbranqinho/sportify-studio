@@ -30,14 +30,14 @@ import type { OwnerProfile, PitchSport } from "@/types";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 
-const sports: PitchSport[] = ["fut5", "fut7", "fut11", "futsal"];
+const sports = ["fut5", "fut7", "fut11", "futsal"] as const;
 
 const formSchema = z.object({
-  name: z.string().min(2, { message: "Field name must be at least 2 characters." }),
-  sport: z.enum(sports),
-  capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
-  basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
-  allowPostGamePayments: z.boolean().default(false),
+    name: z.string().min(2, { message: "Field name must be at least 2 characters." }),
+    sport: z.enum(sports),
+    capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1." }),
+    basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number." }),
+    allowPostGamePayments: z.boolean().default(false),
 });
 
 interface CreatePitchFormProps {

@@ -106,6 +106,7 @@ export function CreatePromoForm({ ownerProfile, ownerPitches, onPromoCreated }: 
           const manager = managerDoc.data() as User;
           const newNotificationRef = doc(collection(db, "users", manager.id, "notifications"));
           const notification: Omit<Notification, 'id'> = {
+              userId: manager.id,
               message: notificationMessage,
               link: '/dashboard/games',
               read: false,

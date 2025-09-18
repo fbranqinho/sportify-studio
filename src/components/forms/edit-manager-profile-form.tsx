@@ -29,12 +29,11 @@ import type { ManagerProfile, User, ManagerFootballType, Tactic } from "@/types"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
 import { fut5Tactics, fut7Tactics, futsalTactics } from "@/lib/utils";
 
-
-const footballTypes: ManagerFootballType[] = ["fut7", "fut5", "futsal"];
+const footballTypes = ["fut7", "fut5", "futsal"] as const;
 
 const formSchema = z.object({
-  typeOfFootball: z.enum(footballTypes),
-  tactics: z.string().min(1, "You must select a tactic."),
+    typeOfFootball: z.enum(footballTypes),
+    tactics: z.string().min(1, "You must select a tactic."),
 });
 
 interface EditManagerProfileFormProps {

@@ -52,6 +52,7 @@ export function OpenGameCard({ match, user, onMouseEnter, onMouseLeave }: OpenGa
             
             // Notify manager
             const notification: Omit<Notification, 'id'> = {
+                userId: match.managerRef,
                 message: `${user.name} has applied to join your game.`,
                 link: `/dashboard/games/${match.id}`,
                 read: false,

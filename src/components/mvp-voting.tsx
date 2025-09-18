@@ -139,7 +139,8 @@ export function MvpVoting({ match, user, onMvpUpdated }: MvpVotingProps) {
         
         await batch.commit();
 
-        setUserVote({ id: voteRef.id, voterId: user.id, votedForId: selectedPlayer, timestamp: new Date() });
+        setUserVote({ id: voteRef.id, voterId: user.id, votedForId: selectedPlayer, timestamp: serverTimestamp() as any });
+
         toast({ title: "Vote Submitted!", description: "Your MVP vote has been counted."});
     } catch (error) {
         console.error("Error submitting vote: ", error);

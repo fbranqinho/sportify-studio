@@ -74,7 +74,7 @@ export function PaymentsTable({ payments, showActions, userRole, playerUsers, re
                             {showActions && (
                                 <TableCell className="text-right">
                                     {p.status === 'Pending' && userRole === 'PLAYER' && (
-                                        <PlayerPaymentButton payment={p} reservation={reservation} onPaymentProcessed={onActionProcessed} />
+                                        <PlayerPaymentButton payment={p} reservation={reservation ?? null} onPaymentProcessed={onActionProcessed} />
                                     )}
                                     {p.status === 'Pending' && userRole === 'MANAGER' && p.type === 'booking_split' && (
                                         <ManagerRemindButton payment={p} />

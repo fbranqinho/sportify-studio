@@ -60,6 +60,7 @@ export function PlayerApplications({ match, onUpdate }: { match: Match; onUpdate
 
         const newNotificationRef = doc(collection(db, "users", applicantId, "notifications"));
         const notification: Omit<Notification, 'id'> = {
+            userId: applicantId,
             message: notificationMessage,
             link: notificationLink,
             read: false,

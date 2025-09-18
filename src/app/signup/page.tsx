@@ -37,25 +37,24 @@ import { Icons } from "@/components/icons";
 import { app, db } from "@/lib/firebase";
 import type { UserRole } from "@/types";
 
-
-const roles: UserRole[] = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE", "ADMIN"];
+const roles = ["PLAYER", "MANAGER", "OWNER", "PROMOTER", "REFEREE"] as const;
 
 const formSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  role: z.enum(roles),
-  mobile: z.string().optional(),
-  birthDate: z.string().refine((val) => val, { message: "Date of birth is required." }).refine((val) => {
-    const today = new Date();
-    const birthDate = new Date(val);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age >= 18;
-  }, { message: "You must be at least 18 years old to register." }),
+    name: z.string().min(2, { message: "Name must be at least 2 characters." }),
+    email: z.string().email({ message: "Invalid email address." }),
+    password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+    role: z.enum(roles),
+    mobile: z.string().optional(),
+    birthDate: z.string().refine((val) => val, { message: "Date of birth is required." }).refine((val) => {
+        const today = new Date();
+        const birthDate = new Date(val);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age >= 18;
+    }, { message: "You must be at least 18 years old to register." }),
 });
 
 export default function SignupPage() {
@@ -94,7 +93,7 @@ export default function SignupPage() {
         role: values.role,
         mobile: values.mobile,
         birthDate: Timestamp.fromDate(new Date(values.birthDate)),
-        profileCompleted: values.role === 'ADMIN',
+        profileCompleted: false,
         createdAt: serverTimestamp() as Timestamp,
       });
 
@@ -208,11 +207,11 @@ export default function SignupPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {roles.map((r) => (
-                          <SelectItem key={r} value={r} className="font-semibold">
-                            {r.charAt(0) + r.slice(1).toLowerCase()}
-                          </SelectItem>
-                        ))}
+                          {roles.map((r) => (
+                              <SelectItem key={r} value={r} className="font-semibold">
+                                  {r.charAt(0) + r.slice(1).toLowerCase()}
+                              </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
