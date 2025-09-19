@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, writeBatch, arrayUnion, serverTimestamp, documentId } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, writeBatch, arrayUnion, serverTimestamp, documentId, getDoc } from "firebase/firestore";
 import type { Team, TeamInvitation, PlayerProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -192,42 +192,39 @@ function PlayerTeamsView() {
     fetchData();
   }, [fetchData]);
 
-
   const handleInvitationResponse = async (invitation: TeamInvitation, accepted: boolean) => {
     if (!user) return;
-    const { id: invitationId, teamId, teamName } = invitation;
 
     const batch = writeBatch(db);
-    
-    // Update invitation status
-    const invitationRef = doc(db, "teamInvitations", invitationId);
+    const invitationRef = doc(db, "teamInvitations", invitation.id);
     batch.update(invitationRef, { status: accepted ? "accepted" : "declined", respondedAt: serverTimestamp() });
-    
-    // If accepted, add player to team
-    if (accepted) {
-      try {
-        const teamRef = doc(db, "teams", teamId);
-        batch.update(teamRef, {
-          playerIds: arrayUnion(user.id),
-          players: arrayUnion({ playerId: user.id, number: null })
-        });
-        
-        await batch.commit();
-        toast({ title: "Invitation Accepted!", description: `You have joined ${teamName}.` });
 
-      } catch (error) {
-        console.error("Error accepting invitation:", error);
-        toast({ variant: "destructive", title: "Error", description: "There was a problem accepting the invitation." });
-      }
-    } else {
-        // Just decline the invitation
-        await batch.commit();
-        toast({ title: "Invitation Declined", description: `You have declined the invitation to join ${teamName}.` });
+    if (accepted) {
+        const teamRef = doc(db, "teams", invitation.teamId);
+        const teamSnap = await getDoc(teamRef);
+
+        if (!teamSnap.exists()) {
+            toast({ variant: "destructive", title: "Erro", description: "O time não existe." });
+            return;
+        }
+
+        batch.update(teamRef, { playerIds: arrayUnion(user.id) });
     }
-    // Refetch data to show the changes
+
+    try {
+        await batch.commit();
+        toast({
+            title: accepted ? "Convite aceite!" : "Invitation Declined",
+            description: accepted
+                ? `Entraste na equipa ${invitation.teamName}.`
+                : `You have declined the invitation to join ${invitation.teamName}.`,
+        });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Erro", description: "Não foi possível atualizar o convite." });
+    }
+
     fetchData();
   };
-
 
   const InvitationCard = ({ invitation }: { invitation: TeamInvitation }) => (
     <Card>
